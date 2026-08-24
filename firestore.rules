@@ -56,6 +56,10 @@ service cloud.firestore {
     match /certifications/{certId} {
       allow read, write: if true;
     }
+
+    match /system_activities/{activityId} {
+      allow read, write: if true;
+    }
   }
 }
 

@@ -33,21 +33,25 @@ function AppRoutes() {
     <Router>
       <Routes>
         {currentUser ? (
-          <Route path="/" element={<MainLayout />}>
-            <Route index element={<Dashboard />} />
-            <Route path="students" element={<Students />} />
-            <Route path="groups" element={<Groups />} />
-            <Route path="attendance/students" element={<StudentAttendance />} />
-            <Route path="student-attendance" element={<Navigate to="/attendance/students" replace />} />
-            <Route path="attendance/mentors" element={<MentorAttendance />} />
-            <Route path="mentor-attendance" element={<Navigate to="/attendance/mentors" replace />} />
-            <Route path="progress" element={<Progress />} />
-            <Route path="journals" element={<Journals />} />
-            <Route path="certifications" element={<Certifications />} />
-            <Route path="curriculum" element={<Curriculum />} />
-            <Route path="reports" element={<Reports />} />
-            <Route path="settings" element={<Settings />} />
-          </Route>
+          <>
+            <Route path="/" element={<MainLayout />}>
+              <Route index element={<Dashboard />} />
+              <Route path="students" element={<Students />} />
+              <Route path="groups" element={<Groups />} />
+              <Route path="attendance/students" element={<StudentAttendance />} />
+              <Route path="student-attendance" element={<Navigate to="/attendance/students" replace />} />
+              <Route path="attendance/mentors" element={<MentorAttendance />} />
+              <Route path="mentor-attendance" element={<Navigate to="/attendance/mentors" replace />} />
+              <Route path="progress" element={<Progress />} />
+              <Route path="journals" element={<Journals />} />
+              <Route path="certifications" element={<Certifications />} />
+              <Route path="curriculum" element={<Curriculum />} />
+              <Route path="reports" element={<Reports />} />
+              <Route path="settings" element={<Settings />} />
+            </Route>
+            <Route path="/login" element={<Navigate to="/" replace />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </>
         ) : (
           <>
             <Route path="/login" element={<Login />} />

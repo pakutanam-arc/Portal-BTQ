@@ -1,27 +1,28 @@
-import React from 'react';
-import { X } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { X, Loader2, Inbox } from 'lucide-react';
 import { cn } from '../../utils/cn';
-
-interface Activity {
-  id: string;
-  icon: string;
-  bg: string;
-  content: React.ReactNode;
-  time: string;
-}
-
-const mockActivities: Activity[] = [
-  { id: '1', icon: '✅', bg: 'bg-emerald-100', content: <><span className="font-bold text-slate-800">Mentor Kelompok 3</span> mengisi absensi harian (100% hadir).</>, time: '2 menit yang lalu' },
-  { id: '2', icon: '📈', bg: 'bg-blue-100', content: <><span className="font-bold text-slate-800">Ahmad Zaki</span> (Kel-1) naik status ke "Sangat Baik".</>, time: '15 menit yang lalu' },
-  { id: '3', icon: '📝', bg: 'bg-amber-100', content: <><span className="font-bold text-slate-800">Admin</span> memperbarui kurikulum Tahap 4.</>, time: '1 jam yang lalu' },
-  { id: '4', icon: '🔔', bg: 'bg-slate-100', content: <><span className="font-bold text-slate-800">Notifikasi:</span> 3 siswa di Kelompok 4 butuh pendampingan.</>, time: '3 jam yang lalu' },
-  { id: '5', icon: '✅', bg: 'bg-emerald-100', content: <><span className="font-bold text-slate-800">Mentor Kelompok 1</span> menyimpan laporan hafalan siswa.</>, time: '4 jam yang lalu' },
-  { id: '6', icon: '✅', bg: 'bg-emerald-100', content: <><span className="font-bold text-slate-800">Mentor Kelompok 2</span> mengisi absensi harian (90% hadir).</>, time: 'Kemarin, 15:30' },
-  { id: '7', icon: '⚠️', bg: 'bg-rose-100', content: <><span className="font-bold text-slate-800">Sistem:</span> Terdeteksi 5 siswa absen berturut-turut di Kel-7.</>, time: 'Kemarin, 14:00' },
-  { id: '8', icon: '📝', bg: 'bg-amber-100', content: <><span className="font-bold text-slate-800">Admin</span> mencetak Laporan Bulanan.</>, time: '2 hari yang lalu' },
-];
+import { getSystemActivities, SystemActivity } from '../../services/db';
 
 export function ActivityLogModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+  const [activities, setActivities] = useState<SystemActivity[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    async function fetchActivities() {
+      setLoading(true);
+      try {
+        const data = await getSystemActivities();
+        setActivities(data);
+      } catch (error) {
+        console.error(error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchActivities();
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   return (
@@ -34,22 +35,41 @@ export function ActivityLogModal({ isOpen, onClose }: { isOpen: boolean; onClose
           </button>
         </div>
         
-        <div className="p-4 overflow-y-auto flex-1 space-y-4">
-          {mockActivities.map((activity, idx) => (
-            <div key={activity.id} className="flex gap-4 items-start p-3 hover:bg-slate-50 rounded-xl transition-colors">
-              <div className={cn("w-10 h-10 rounded-full flex items-center justify-center text-sm shrink-0", activity.bg)}>
-                {activity.icon}
-              </div>
-              <div>
-                <p className="text-sm text-slate-600 leading-snug">{activity.content}</p>
-                <p className="text-slate-400 text-xs mt-1">{activity.time}</p>
-              </div>
+        <div className="p-4 overflow-y-auto flex-1 flex flex-col">
+          {loading ? (
+            <div className="flex-1 flex flex-col items-center justify-center py-12 text-[#0362D0]">
+              <Loader2 className="animate-spin mb-2" size={24} />
+              <p className="text-xs text-slate-500 font-bold">Memuat aktivitas real-time...</p>
             </div>
-          ))}
+          ) : activities.length === 0 ? (
+            <div className="flex-1 flex flex-col items-center justify-center py-16 text-center text-slate-400">
+              <Inbox size={32} className="mb-2 text-slate-300" />
+              <p className="text-xs font-bold text-slate-500">Belum ada aktivitas baru</p>
+              <p className="text-[10px] text-slate-400 mt-0.5">Seluruh aktivitas sistem dari mentor dan admin akan tercatat di sini.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {activities.map((activity) => (
+                <div key={activity.id} className="flex gap-4 items-start p-3 hover:bg-slate-50 rounded-xl transition-colors">
+                  <div className={cn("w-10 h-10 rounded-full flex items-center justify-center text-sm shrink-0", activity.bg)}>
+                    {activity.icon}
+                  </div>
+                  <div>
+                    <p className="text-sm text-slate-700 leading-snug font-medium">
+                      <span className="font-bold text-slate-900">{activity.title}</span> • {activity.description}
+                    </p>
+                    <p className="text-slate-400 text-xs mt-1">{activity.timestamp}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
         
         <div className="p-4 border-t border-slate-100 bg-slate-50 shrink-0 text-center">
-          <p className="text-xs text-slate-500">Menampilkan 8 aktivitas terakhir</p>
+          <p className="text-xs text-slate-500">
+            {loading ? 'Mengambil data...' : `Menampilkan ${activities.length} aktivitas terbaru`}
+          </p>
         </div>
       </div>
     </div>

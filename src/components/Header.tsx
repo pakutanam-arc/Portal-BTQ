@@ -205,7 +205,7 @@ export function Header() {
         {/* Academic Year Badge */}
         <div className="hidden lg:flex items-center gap-1.5 px-3 py-1 bg-[#F5F6F8] border border-[#E6E8EC] rounded-full text-[11px] font-bold text-[#172033]">
           <span className="w-2 h-2 rounded-full bg-[#C99A2E]" />
-          <span>TA 2025/2026 • Ganjil</span>
+          <span>Tahun Pelajaran 2026/2027 • Ganjil</span>
         </div>
 
         {/* Notification Bell */}

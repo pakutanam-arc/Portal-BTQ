@@ -118,6 +118,18 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["studentId", "category", "status"]
+    },
+    "SystemActivity": {
+      "title": "System Activity",
+      "description": "Log of system-wide actions and events",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["journal", "progress", "certification", "attendance"] },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["type", "title", "description", "createdAt"]
     }
   },
   "firestore": {
@@ -160,6 +172,10 @@
     "certifications/{certId}": {
       "schema": { "$ref": "#/entities/Certification" },
       "description": "Exam and graduation certifications"
+    },
+    "system_activities/{activityId}": {
+      "schema": { "$ref": "#/entities/SystemActivity" },
+      "description": "Real-time system action logging"
     }
   }
 }

@@ -30,6 +30,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      setLoading(true);
       if (user && user.email) {
         setCurrentUser(user);
         const emailLower = user.email.toLowerCase();
@@ -105,7 +106,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider value={value}>
-      {!loading && children}
+      {loading ? (
+        <div className="min-h-screen flex flex-col items-center justify-center bg-[#172033] gap-4 select-none">
+          <div className="animate-spin w-9 h-9 border-4 border-[#0362D0] border-t-transparent rounded-full shadow-md"></div>
+          <span className="text-xs font-bold text-slate-300 tracking-wider">Memverifikasi Sesi...</span>
+        </div>
+      ) : (
+        children
+      )}
     </AuthContext.Provider>
   );
 }

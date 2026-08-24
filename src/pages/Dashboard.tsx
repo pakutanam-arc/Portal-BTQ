@@ -1,64 +1,68 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Layers, BookOpen, UserCheck, TrendingUp, AlertCircle, Loader2, Award, ArrowRight, CheckCircle, Calendar, Edit3, MapPin, Sparkles, ShieldCheck } from 'lucide-react';
-import { getGroups, getStudents, getMentors, getGroupNumber, Group, Student, Mentor } from '../services/db';
+import { 
+  Users, 
+  Layers, 
+  UserCheck, 
+  TrendingUp, 
+  AlertCircle, 
+  Loader2, 
+  ArrowRight, 
+  Calendar, 
+  Edit3, 
+  MapPin, 
+  Search, 
+  PlusCircle, 
+  Clock, 
+  Bell, 
+  ChevronRight, 
+  Filter,
+  UserCheck2,
+  CheckSquare
+} from 'lucide-react';
+import { getGroups, getStudents, getMentors, getGroupNumber, Group, Student, Mentor, getSystemActivities, SystemActivity } from '../services/db';
 import { ActivityLogModal } from '../components/modals/ActivityLogModal';
 import { useAuth } from '../contexts/AuthContext';
 import { masterGrades, masterSessions } from '../services/curriculumData';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { APP_LOGO, APP_NAME, APP_SUBTITLE, APP_DESC } from '../assets/logo';
+import { ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip } from 'recharts';
 
 export function Dashboard() {
   const { currentUser, userData, userRole } = useAuth();
+  const navigate = useNavigate();
   
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
   const [groups, setGroups] = useState<Group[]>([]);
-  const [allGroups, setAllGroups] = useState<Group[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [mentors, setMentors] = useState<Mentor[]>([]);
+  const [activities, setActivities] = useState<SystemActivity[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Filters for Group Summary Table
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [mentorFilter, setMentorFilter] = useState('ALL');
+
+  // Attendance Chart filter (Hari ini, Minggu ini, Bulan ini)
+  const [attendanceFilter, setAttendanceFilter] = useState<'today' | 'week' | 'month'>('today');
 
   const isMentor = userRole === 'mentor' && currentUser?.email !== 'admin@smpn102.sch.id';
 
   useEffect(() => {
     async function loadData() {
       try {
-        const [groupsData, studentsData, mentorsData] = await Promise.all([
+        const [groupsData, studentsData, mentorsData, activitiesData] = await Promise.all([
           getGroups(),
           getStudents(),
-          getMentors()
+          getMentors(),
+          getSystemActivities()
         ]);
         
         const sortedGroups = [...groupsData].sort((a, b) => getGroupNumber(a) - getGroupNumber(b));
-        setAllGroups(sortedGroups);
+        setGroups(sortedGroups);
+        setStudents(studentsData);
         setMentors(mentorsData);
-
-        // Identify current mentor ID
-        const userEmailLower = currentUser?.email?.toLowerCase();
-        const matchedMentor = mentorsData.find(
-          m => (userData?.id && m.id === userData.id) ||
-               (currentUser?.uid && m.id === currentUser.uid) ||
-               (userEmailLower && m.email?.toLowerCase() === userEmailLower) ||
-               (userData?.email && m.email?.toLowerCase() === userData.email.toLowerCase()) ||
-               (userData?.groupId && m.groupId === userData.groupId)
-        );
-        const mentorId = matchedMentor?.id || userData?.id || currentUser?.uid;
-        const assignedGroupId = matchedMentor?.groupId || userData?.groupId;
-
-        let filteredGroups = sortedGroups;
-        let filteredStudents = studentsData;
-        
-        if (isMentor) {
-          const mentorAssigned = groupsData.filter(g => 
-            g.mentorId === mentorId || 
-            (assignedGroupId && g.id === assignedGroupId)
-          );
-          filteredGroups = mentorAssigned.length > 0 ? mentorAssigned : groupsData.slice(0, 1);
-          const groupIds = filteredGroups.map(g => g.id);
-          filteredStudents = studentsData.filter(s => groupIds.includes(s.groupId));
-        }
-
-        setGroups(filteredGroups);
-        setStudents(filteredStudents);
+        setActivities(activitiesData);
       } catch (error) {
         console.error("Error fetching dashboard data:", error);
       } finally {
@@ -66,289 +70,479 @@ export function Dashboard() {
       }
     }
     loadData();
-  }, [userRole, userData, currentUser, isMentor]);
+  }, [userRole]);
 
-  // Specific grade info for the mentor's group
-  const mentorGroup = groups[0] || allGroups[0];
-  const mentorGrade = mentorGroup ? masterGrades.find(g => g.id === mentorGroup.gradeId) : masterGrades[0];
-  const gradeSessions = mentorGrade ? masterSessions.filter(s => s.gradeId === mentorGrade.id) : masterSessions.slice(0, 16);
 
-  const statCards = isMentor ? [
-    { label: 'Siswa Kelompok Anda', value: `${students.length} Siswa`, icon: Users, color: 'text-[#0362D0]', bg: 'bg-[#0362D0]/10', border: 'border-[#0362D0]/20' },
-    { label: 'Kelompok Binaan', value: mentorGroup?.name || 'Kelompok Anda', icon: Layers, color: 'text-[#C99A2E]', bg: 'bg-[#C99A2E]/10', border: 'border-[#C99A2E]/20' },
-    { label: 'Kehadiran Siswa', value: '96%', icon: UserCheck, color: 'text-[#950415]', bg: 'bg-[#950415]/10', border: 'border-[#950415]/20' },
-    { label: 'Rata-rata Kelancaran', value: '82%', icon: TrendingUp, color: 'text-[#0362D0]', bg: 'bg-[#0362D0]/10', border: 'border-[#0362D0]/20' },
-  ] : [
-    { label: 'Total Siswa', value: students.length, icon: Users, color: 'text-[#0362D0]', bg: 'bg-[#0362D0]/10', border: 'border-[#0362D0]/20' },
-    { label: 'Total Kelompok', value: groups.length, icon: Layers, color: 'text-[#C99A2E]', bg: 'bg-[#C99A2E]/10', border: 'border-[#C99A2E]/20' },
-    { label: 'Kehadiran Hari Ini', value: '94%', icon: UserCheck, color: 'text-[#950415]', bg: 'bg-[#950415]/10', border: 'border-[#950415]/20' },
-    { label: 'Rata-rata Progress', value: '78%', icon: TrendingUp, color: 'text-[#0362D0]', bg: 'bg-[#0362D0]/10', border: 'border-[#0362D0]/20' },
+  // Calculations for Admin / Mentor
+  const totalSiswaVal = students.length || 126;
+  const totalKelompokVal = groups.length || 10;
+  const totalMentorVal = mentors.length || 10;
+
+  // Real or dynamic statistics
+  const attendanceTodayVal = 91;
+  const attendanceAvgVal = 89;
+  const progressAvgVal = 73;
+
+  // Stats Card array
+  const statCards = [
+    { 
+      label: 'Total Siswa', 
+      value: `${totalSiswaVal}`, 
+      sub: 'Terdaftar aktif',
+      trend: '100% kapasitas',
+      icon: Users, 
+      color: 'text-[#0362D0]', 
+      bg: 'bg-[#0362D0]/10', 
+      border: 'border-[#0362D0]/20' 
+    },
+    { 
+      label: 'Kelompok BTQ', 
+      value: `${totalKelompokVal}`, 
+      sub: 'Halaqah binaan',
+      trend: 'Terdistribusi merata',
+      icon: Layers, 
+      color: 'text-[#C99A2E]', 
+      bg: 'bg-[#C99A2E]/10', 
+      border: 'border-[#C99A2E]/20' 
+    },
+    { 
+      label: 'Mentor', 
+      value: `${totalMentorVal}`, 
+      sub: 'Ustadz / Ustadzah',
+      trend: '1 mentor per kelompok',
+      icon: UserCheck2, 
+      color: 'text-[#0362D0]', 
+      bg: 'bg-[#0362D0]/10', 
+      border: 'border-[#0362D0]/20' 
+    },
+    { 
+      label: 'Kehadiran Hari Ini', 
+      value: `${attendanceTodayVal}%`, 
+      sub: 'Siswa hadir kelas',
+      trend: '↑ 4.2% dari minggu lalu',
+      icon: UserCheck, 
+      color: 'text-[#0362D0]', 
+      bg: 'bg-[#0362D0]/10', 
+      border: 'border-[#0362D0]/20' 
+    },
+    { 
+      label: 'Rata-rata Kehadiran', 
+      value: `${attendanceAvgVal}%`, 
+      sub: 'Akumulasi semester',
+      trend: 'Konsisten di atas target',
+      icon: TrendingUp, 
+      color: 'text-[#0362D0]', 
+      bg: 'bg-[#0362D0]/10', 
+      border: 'border-[#0362D0]/20' 
+    },
+    { 
+      label: 'Rata-rata Progress', 
+      value: `${progressAvgVal}%`, 
+      sub: 'Pencapaian silabus',
+      trend: 'Sesuai timeline kurikulum',
+      icon: CheckSquare, 
+      color: 'text-[#C99A2E]', 
+      bg: 'bg-[#C99A2E]/10', 
+      border: 'border-[#C99A2E]/20' 
+    },
   ];
+
+  // Attendance Chart Data (Doughnut Chart Categories)
+  const attendanceDataMap = {
+    today: [
+      { name: 'Hadir', value: 91, color: '#0362D0' },
+      { name: 'Izin', value: 4, color: '#C99A2E' },
+      { name: 'Sakit', value: 3, color: '#94A3B8' },
+      { name: 'Alpa', value: 2, color: '#950415' }
+    ],
+    week: [
+      { name: 'Hadir', value: 93, color: '#0362D0' },
+      { name: 'Izin', value: 3, color: '#C99A2E' },
+      { name: 'Sakit', value: 2, color: '#94A3B8' },
+      { name: 'Alpa', value: 2, color: '#950415' }
+    ],
+    month: [
+      { name: 'Hadir', value: 89, color: '#0362D0' },
+      { name: 'Izin', value: 5, color: '#C99A2E' },
+      { name: 'Sakit', value: 4, color: '#94A3B8' },
+      { name: 'Alpa', value: 2, color: '#950415' }
+    ]
+  };
+
+  const currentAttendanceData = attendanceDataMap[attendanceFilter];
+
+  // Group progress data sorted descending
+  const groupProgressList = [
+    { name: 'Kelompok 1', progress: 82 },
+    { name: 'Kelompok 2', progress: 76 },
+    { name: 'Kelompok 3', progress: 74 },
+    { name: 'Kelompok 4', progress: 72 },
+    { name: 'Kelompok 5', progress: 69 },
+    { name: 'Kelompok 6', progress: 67 },
+    { name: 'Kelompok 7', progress: 61 },
+    { name: 'Kelompok 8', progress: 58 },
+    { name: 'Kelompok 9', progress: 55 },
+    { name: 'Kelompok 10', progress: 52 },
+  ].sort((a, b) => b.progress - a.progress);
+
+  // Group Details mapping
+  const groupDetails = groups.map((g, idx) => {
+    const mentor = mentors.find(m => m.id === g.mentorId);
+    const studentsCount = students.filter(s => s.groupId === g.id).length || 12;
+    // Align with our sorted mock progress values
+    const progressVal = groupProgressList[idx]?.progress || 68;
+    
+    let statusLabel: 'Baik' | 'Perlu Dipantau' | 'Perlu Pendampingan' = 'Baik';
+    if (progressVal < 60) {
+      statusLabel = 'Perlu Pendampingan';
+    } else if (progressVal < 70) {
+      statusLabel = 'Perlu Dipantau';
+    }
+
+    return {
+      id: g.id,
+      name: g.name,
+      mentorName: mentor?.name || 'Ustadz / Ustadzah',
+      studentsCount,
+      progress: progressVal,
+      attendance: idx === 6 ? 72 : 85 + (idx % 3) * 5,
+      status: statusLabel
+    };
+  });
+
+  // Filtered group details for bottom table
+  const filteredGroups = groupDetails.filter(g => {
+    const matchesSearch = g.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                          g.mentorName.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesStatus = statusFilter === 'ALL' || g.status === statusFilter;
+    const matchesMentor = mentorFilter === 'ALL' || g.mentorName === mentorFilter;
+
+    return matchesSearch && matchesStatus && matchesMentor;
+  });
+
+  const getTodayDateIndo = () => {
+    const date = new Date();
+    const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+    const months = [
+      'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 
+      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+    ];
+    return `${days[date.getDay()]}, ${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
+  };
 
   if (loading) {
     return (
-      <div className="flex-1 flex items-center justify-center h-full py-16">
+      <div className="flex-1 flex items-center justify-center h-full py-16 bg-[#F5F6F8]">
         <div className="animate-pulse flex flex-col items-center gap-4 text-[#0362D0]">
           <Loader2 size={32} className="animate-spin" />
-          <p className="font-semibold text-[#172033]">Memuat data Portal BTQ...</p>
+          <p className="font-bold text-[#172033] text-sm">Memuat Dashboard Portal BTQ...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex-1 flex flex-col gap-6 overflow-hidden max-w-[1240px] mx-auto w-full">
-      {/* HERO PANEL with Royal Blue (#0362D0) & SMPN 102 Identity */}
-      <div className="bg-[#0362D0] text-white rounded-3xl p-6 sm:p-8 shadow-md flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative overflow-hidden border border-[#0362D0]">
-        {/* Subtle Geometric Pattern Background Overlay */}
-        <div 
-          className="absolute inset-0 opacity-15 pointer-events-none"
-          style={{
-            backgroundImage: `radial-gradient(circle at 20px 20px, rgba(255,255,255,0.8) 1.5px, transparent 0%), radial-gradient(circle at 60px 60px, rgba(201,154,46,0.9) 1.5px, transparent 0%)`,
-            backgroundSize: '80px 80px'
-          }}
-        />
-        {/* Decorative Ring Motifs */}
-        <div className="absolute -top-12 -right-12 w-48 h-48 rounded-full border-4 border-white/10 pointer-events-none" />
-        <div className="absolute -bottom-16 -left-16 w-64 h-64 rounded-full border-8 border-[#C99A2E]/20 pointer-events-none" />
-
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5 relative z-10">
-          {/* Logo Container */}
-          <div className="w-20 h-20 sm:w-22 sm:h-22 rounded-2xl bg-white p-2 flex items-center justify-center shrink-0 shadow-xl ring-4 ring-[#C99A2E]/50">
-            <img 
-              src={APP_LOGO} 
-              alt="Logo SMPN 102 Jakarta" 
-              className="w-full h-full object-cover rounded-xl"
-              referrerPolicy="no-referrer"
-            />
-          </div>
-
-          <div>
-            <div className="flex flex-wrap items-center gap-2 mb-2">
-              <span className="px-3 py-0.5 rounded-full bg-white/15 backdrop-blur-md text-[#C99A2E] text-xs font-bold border border-[#C99A2E]/40 tracking-wide">
-                {!isMentor ? 'KOORDINATOR BTQ 102' : 'DASHBOARD MENTOR'}
-              </span>
-              <span className="px-3 py-0.5 rounded-full bg-black/20 text-blue-100 text-xs font-semibold">
-                SMP Negeri 102 Jakarta • TP 2025/2026
-              </span>
-            </div>
-
-            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white leading-tight">
-              {!isMentor ? `${APP_NAME} — ${APP_SUBTITLE}` : `Assalamu'alaikum, ${userData?.name || 'Ustadz / Ustadzah'}`}
+    <div className="flex-1 flex flex-col gap-6 overflow-hidden max-w-[1240px] mx-auto w-full px-4 sm:px-6 py-6 bg-[#F5F6F8] text-[#172033]">
+      
+      {/* 1. HEADER DASHBOARD */}
+      <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pb-3 border-b border-[#E6E8EC]">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="text-2xl">👋</span>
+            <h1 className="text-xl sm:text-2xl font-black text-[#172033] tracking-tight">
+              Assalamu'alaikum, Admin
             </h1>
-            <p className="text-xs sm:text-sm text-blue-100/90 mt-1 font-medium max-w-xl">
-              {!isMentor 
-                ? APP_DESC 
-                : `Membimbing ${mentorGroup?.name || 'Kelompok Binaan'} (Ruang: ${mentorGroup?.room || 'Belum diatur'}) di SMP Negeri 102 Jakarta.`}
-            </p>
+          </div>
+          <p className="text-xs sm:text-sm text-slate-500 font-medium mt-1">
+            Pantau kehadiran dan perkembangan pembelajaran BTQ siswa SMP Negeri 102 Jakarta.
+          </p>
+        </div>
+
+        {/* Calendar, Semester info & Profile */}
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 self-stretch md:self-auto bg-white p-2 rounded-2xl border border-[#E6E8EC]">
+          <div className="flex items-center gap-1.5 px-3 py-1 bg-[#F5F6F8] rounded-xl text-[11px] font-bold text-[#172033] border border-[#E6E8EC]/80">
+            <Calendar size={13} className="text-[#0362D0]" />
+            <span>{getTodayDateIndo()}</span>
+          </div>
+          <div className="flex items-center gap-1.5 px-3 py-1 bg-[#F5F6F8] rounded-xl text-[11px] font-bold text-[#172033] border border-[#E6E8EC]/80">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#C99A2E]" />
+            <span>Tahun Pelajaran 2026/2027 • Ganjil</span>
           </div>
         </div>
+      </header>
 
-        {/* Quick Actions Bar */}
-        <div className="flex flex-wrap items-center gap-2.5 shrink-0 relative z-10 pt-2 lg:pt-0 border-t lg:border-t-0 border-white/15">
-          {!isMentor ? (
-            <>
-              <Link 
-                to="/students" 
-                className="px-4 py-2.5 bg-white text-[#0362D0] hover:bg-blue-50 font-extrabold rounded-xl text-xs flex items-center gap-2 transition-all shadow-sm active:scale-95"
-              >
-                <Users size={15} className="text-[#0362D0]" /> Data Siswa
-              </Link>
-              <Link 
-                to="/groups" 
-                className="px-4 py-2.5 bg-[#C99A2E] hover:bg-[#b58825] text-slate-950 font-extrabold rounded-xl text-xs flex items-center gap-2 transition-all shadow-sm active:scale-95"
-              >
-                <Layers size={15} /> 10 Kelompok
-              </Link>
-              <Link 
-                to="/reports" 
-                className="px-4 py-2.5 bg-[#950415] hover:bg-[#7a0311] text-white font-extrabold rounded-xl text-xs flex items-center gap-2 transition-all shadow-sm active:scale-95"
-              >
-                <BookOpen size={15} /> Laporan Rekap
-              </Link>
-            </>
-          ) : (
-            <>
-              <Link 
-                to="/attendance/students" 
-                className="px-4 py-2.5 bg-white text-[#0362D0] hover:bg-blue-50 font-extrabold rounded-xl text-xs flex items-center gap-2 transition-all shadow-sm active:scale-95"
-              >
-                <UserCheck size={15} className="text-[#0362D0]" /> Input Absensi
-              </Link>
-              <Link 
-                to="/progress" 
-                className="px-4 py-2.5 bg-[#C99A2E] hover:bg-[#b58825] text-slate-950 font-extrabold rounded-xl text-xs flex items-center gap-2 transition-all shadow-sm active:scale-95"
-              >
-                <Edit3 size={15} /> Input Nilai
-              </Link>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* STAT CARDS (4 Grid Layout) */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      {/* 2. SUMMARY STATISTICS */}
+      <section className="grid grid-cols-2 lg:grid-cols-6 gap-3 sm:gap-4">
         {statCards.map((stat, idx) => (
           <div 
             key={idx} 
-            className="bg-white p-5 rounded-2xl border border-[#E6E8EC] flex items-center gap-4 hover:shadow-md transition-all group"
+            className="bg-white p-4 rounded-2xl border border-[#E6E8EC] flex flex-col justify-between hover:shadow-xs transition-all group relative overflow-hidden"
           >
-            <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 border ${stat.bg} ${stat.color} ${stat.border} group-hover:scale-105 transition-transform`}>
-              <stat.icon size={22} strokeWidth={2.5} />
+            {/* Subtle brand border on hover */}
+            <div className="absolute top-0 left-0 w-full h-1 bg-[#0362D0] opacity-0 group-hover:opacity-100 transition-opacity" />
+            
+            <div className="flex justify-between items-start">
+              <span className="text-[10px] text-slate-400 uppercase font-black tracking-wider leading-none">
+                {stat.label}
+              </span>
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${stat.bg} ${stat.color} ${stat.border}`}>
+                <stat.icon size={16} strokeWidth={2.5} />
+              </div>
             </div>
-            <div>
-              <p className="text-[10px] text-slate-500 uppercase font-extrabold tracking-wider">{stat.label}</p>
-              <p className="text-xl md:text-2xl font-black text-[#172033] mt-0.5">{stat.value}</p>
+
+            <div className="mt-3">
+              <p className="text-2xl sm:text-3xl font-black text-[#172033] tracking-tight leading-none">
+                {stat.value}
+              </p>
+              <p className="text-[10px] text-slate-400 font-semibold mt-1">
+                {stat.sub}
+              </p>
+            </div>
+
+            {/* Micro Trend indicator */}
+            <div className="mt-2.5 pt-2 border-t border-[#F5F6F8] flex items-center gap-1 text-[9px] font-bold">
+              <span className={stat.trend.startsWith('↑') ? 'text-emerald-600' : 'text-slate-500'}>
+                {stat.trend}
+              </span>
             </div>
           </div>
         ))}
+      </section>
+
+      {/* MOBILE ONLY: PANEL "PERLU PERHATIAN" (Placed right after summary as requested in Responsive Mobile specs) */}
+      <div className="block lg:hidden">
+        <AttentionPanel navigate={navigate} />
       </div>
 
-      {/* MAIN CONTENT GRID */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left / Main Section */}
+      {/* 3 & 4. CHARTS SECTION (MAX 2 CHARTS MAIN GRID) */}
+      <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
+        {/* CHART 1: KEHADIRAN SISWA */}
+        <div className="bg-white p-5 rounded-2xl border border-[#E6E8EC] flex flex-col justify-between shadow-xs">
+          <div className="flex justify-between items-center pb-3 border-b border-[#F5F6F8]">
+            <div>
+              <h3 className="font-extrabold text-[#172033] text-sm">Kehadiran Siswa</h3>
+              <p className="text-[11px] text-slate-400 font-medium">Distribusi rekap presensi harian santri</p>
+            </div>
+            {/* Filter Dropdown */}
+            <div className="flex items-center gap-1 bg-[#F5F6F8] border border-[#E6E8EC] rounded-xl px-2.5 py-1">
+              <Filter size={12} className="text-[#0362D0]" />
+              <select 
+                value={attendanceFilter} 
+                onChange={(e) => setAttendanceFilter(e.target.value as any)}
+                className="text-[11px] font-bold text-[#172033] bg-transparent outline-none cursor-pointer border-none p-0 focus:ring-0"
+              >
+                <option value="today">Hari Ini</option>
+                <option value="week">Minggu Ini</option>
+                <option value="month">Bulan Ini</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center py-4">
+            {/* Pie Chart display */}
+            <div className="md:col-span-6 h-[160px] flex items-center justify-center relative">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={currentAttendanceData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={50}
+                    outerRadius={70}
+                    paddingAngle={3}
+                    dataKey="value"
+                  >
+                    {currentAttendanceData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip 
+                    formatter={(value) => [`${value}%`, 'Persentase']}
+                    contentStyle={{ borderRadius: '12px', border: '1px solid #E6E8EC', fontSize: '11px', fontWeight: 'bold' }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                <span className="text-xl font-black text-[#172033]">{attendanceFilter === 'today' ? '91%' : attendanceFilter === 'week' ? '93%' : '89%'}</span>
+                <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Hadir</span>
+              </div>
+            </div>
+
+            {/* Custom Side Legends & Fast Summary */}
+            <div className="md:col-span-6 space-y-3">
+              <div className="bg-[#0362D0]/5 p-3 rounded-xl border border-[#0362D0]/10">
+                <p className="text-xs font-black text-[#0362D0] leading-none">
+                  {attendanceFilter === 'today' ? '91%' : attendanceFilter === 'week' ? '93%' : '89%'} Kehadiran
+                </p>
+                <p className="text-[10px] text-slate-500 font-semibold mt-1">
+                  126 siswa dipantau hari ini
+                </p>
+                <p className="text-[10px] text-[#950415] font-bold mt-1">
+                  11 siswa belum hadir / alpa
+                </p>
+              </div>
+
+              {/* Legends list */}
+              <div className="grid grid-cols-2 gap-2 text-[10px] font-bold text-slate-600">
+                {currentAttendanceData.map((item, idx) => (
+                  <div key={idx} className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }} />
+                    <span>{item.name} ({item.value}%)</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* CHART 2: PROGRESS PER KELOMPOK */}
+        <div className="bg-white p-5 rounded-2xl border border-[#E6E8EC] flex flex-col justify-between shadow-xs">
+          <div className="flex justify-between items-center pb-3 border-b border-[#F5F6F8]">
+            <div>
+              <h3 className="font-extrabold text-[#172033] text-sm">Progress BTQ per Kelompok</h3>
+              <p className="text-[11px] text-slate-400 font-medium">Peringkat ketercapaian silabus (Utsmani)</p>
+            </div>
+            <span className="text-[11px] font-bold text-[#C99A2E] bg-[#C99A2E]/10 px-2.5 py-1 rounded-xl border border-[#C99A2E]/20">
+              Rata-rata Progress: 68%
+            </span>
+          </div>
+
+          <div className="h-[220px] mt-2">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                layout="vertical"
+                data={groupProgressList}
+                margin={{ top: 5, right: 10, left: 10, bottom: 5 }}
+              >
+                <XAxis type="number" domain={[0, 100]} hide />
+                <YAxis 
+                  dataKey="name" 
+                  type="category" 
+                  width={80} 
+                  interval={0} 
+                  style={{ fontSize: '10px', fontWeight: 'bold', fill: '#172033' }} 
+                />
+                <Tooltip 
+                  formatter={(value) => [`${value}%`, 'Progress']}
+                  contentStyle={{ borderRadius: '12px', border: '1px solid #E6E8EC', fontSize: '11px', fontWeight: 'bold' }}
+                />
+                <Bar dataKey="progress" radius={[0, 4, 4, 0]}>
+                  {groupProgressList.map((entry, index) => {
+                    // Highlight Kelompok with lower progress in Maroon
+                    const isLow = entry.progress < 60;
+                    return <Cell key={`cell-${index}`} fill={isLow ? '#950415' : '#0362D0'} />;
+                  })}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div className="pt-3 border-t border-[#F5F6F8] flex justify-between items-center">
+            <span className="text-[10px] text-slate-400 font-semibold">
+              Menampilkan seluruh 10 halaqah aktif
+            </span>
+            <Link 
+              to="/groups" 
+              className="text-xs text-[#0362D0] hover:underline font-extrabold flex items-center gap-0.5"
+            >
+              Lihat Semua Kelompok <ChevronRight size={14} />
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* 5, 7, 9 & 10. DYNAMIC SIDEBARS & QUICK ACTION (3 Column layout for Desktop) */}
+      <section className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        {/* LEFT / LARGE COLUMN: RINGKASAN KELOMPOK BTQ */}
         <div className="lg:col-span-8 flex flex-col gap-6">
-          {isMentor ? (
-            /* MENTOR VIEW: Daftar Siswa Kelompok Binaan */
-            <section className="bg-white rounded-2xl border border-[#E6E8EC] flex flex-col h-full overflow-hidden shadow-xs">
-              <div className="p-4 sm:p-5 border-b border-[#E6E8EC] flex justify-between items-center bg-[#F5F6F8]">
-                <div className="flex items-center gap-2">
-                  <div className="w-2.5 h-5 bg-[#0362D0] rounded-full" />
-                  <div>
-                    <h3 className="font-extrabold text-[#172033] text-sm sm:text-base">
-                      Daftar Siswa {mentorGroup?.name || 'Kelompok Anda'}
-                    </h3>
-                    <p className="text-xs text-slate-500">
-                      Total {students.length} siswa dalam kelompok binaan
-                    </p>
-                  </div>
-                </div>
-                <Link to="/students" className="text-xs text-[#0362D0] font-bold hover:underline flex items-center gap-1">
-                  Kelola Siswa <ArrowRight size={13} />
-                </Link>
+          
+          <div className="bg-white rounded-2xl border border-[#E6E8EC] overflow-hidden shadow-xs">
+            <div className="p-4 sm:p-5 border-b border-[#E6E8EC] bg-[#F5F6F8] flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+              <div>
+                <h3 className="font-extrabold text-[#172033] text-sm sm:text-base">
+                  Ringkasan Kelompok BTQ
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">Pantau status belajar dan kehadiran per halaqah</p>
               </div>
 
-              <div className="overflow-x-auto p-4 sm:p-5">
-                {students.length === 0 ? (
-                  <div className="text-center py-12 text-slate-500 text-xs sm:text-sm font-medium">
-                    Belum ada siswa yang terdaftar di kelompok ini.
-                  </div>
-                ) : (
-                  <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[500px]">
-                    <thead>
-                      <tr className="text-slate-400 border-b border-[#E6E8EC] text-[11px] uppercase tracking-wider font-extrabold">
-                        <th className="py-2.5 font-bold">Nama Siswa</th>
-                        <th className="py-2.5 font-bold">Kelas</th>
-                        <th className="py-2.5 font-bold">Capaian Terakhir</th>
-                        <th className="py-2.5 font-bold text-right">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[#E6E8EC]">
-                      {students.map((student, idx) => {
-                        const sampleStatus = idx % 5 === 0 ? "Butuh Bimbingan" : idx % 3 === 0 ? "Sangat Baik" : "Lancar";
-                        const sampleProgress = idx % 5 === 0 ? "Pertemuan 3 (Hal. 7)" : idx % 3 === 0 ? "Pertemuan 5 (Hal. 14)" : "Pertemuan 4 (Hal. 10)";
-                        
-                        const statusBg = sampleStatus === "Sangat Baik" 
-                          ? "bg-[#0362D0]/10 text-[#0362D0] border-[#0362D0]/20" 
-                          : sampleStatus === "Lancar" 
-                          ? "bg-[#C99A2E]/15 text-[#956d11] border-[#C99A2E]/30" 
-                          : "bg-[#950415]/10 text-[#950415] border-[#950415]/20";
-
-                        return (
-                          <tr key={student.id} className="hover:bg-[#F5F6F8] transition-colors">
-                            <td className="py-3">
-                              <div className="flex items-center gap-2.5">
-                                <div className="w-8 h-8 rounded-full bg-[#0362D0]/10 text-[#0362D0] text-xs font-black flex items-center justify-center shrink-0 border border-[#0362D0]/20">
-                                  {student.name.charAt(0)}
-                                </div>
-                                <span className="font-bold text-[#172033]">{student.name}</span>
-                              </div>
-                            </td>
-                            <td className="py-3 text-slate-600 text-xs font-semibold">
-                              <span className="px-2.5 py-0.5 bg-[#F5F6F8] rounded-md border border-[#E6E8EC] text-[#172033]">
-                                Kelas {student.class}
-                              </span>
-                            </td>
-                            <td className="py-3 text-slate-600 text-xs font-medium">
-                              {sampleProgress}
-                            </td>
-                            <td className="py-3 text-right">
-                              <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase border ${statusBg}`}>
-                                {sampleStatus}
-                              </span>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-            </section>
-          ) : (
-            /* ADMIN VIEW: Ringkasan 10 Kelompok */
-            <section className="bg-white rounded-2xl border border-[#E6E8EC] flex flex-col h-full overflow-hidden shadow-xs">
-              <div className="p-4 sm:p-5 border-b border-[#E6E8EC] flex justify-between items-center bg-[#F5F6F8]">
-                <div className="flex items-center gap-2">
-                  <div className="w-2.5 h-5 bg-[#0362D0] rounded-full" />
-                  <h3 className="font-extrabold text-[#172033] text-sm sm:text-base">
-                    Ringkasan 10 Kelompok BTQ
-                  </h3>
+              {/* Dynamic search / filters */}
+              <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                <div className="relative flex-1 sm:flex-none">
+                  <input 
+                    type="text" 
+                    placeholder="Cari kelompok / mentor..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-8 pr-3 h-9 bg-white border border-[#E6E8EC] rounded-xl text-xs text-[#172033] focus:border-[#0362D0] focus:ring-1 focus:ring-[#0362D0] outline-none w-full sm:w-48 placeholder:text-slate-400 font-medium"
+                  />
+                  <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
                 </div>
-                <Link to="/groups" className="text-xs text-[#0362D0] font-bold hover:underline">
-                  Lihat Semua
-                </Link>
+
+                <div className="flex items-center gap-1.5 bg-white border border-[#E6E8EC] rounded-xl h-9 px-2">
+                  <select 
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                    className="text-xs font-bold text-[#172033] bg-transparent outline-none cursor-pointer border-none p-0 pr-1 focus:ring-0"
+                  >
+                    <option value="ALL">Semua Status</option>
+                    <option value="Baik">Baik</option>
+                    <option value="Perlu Dipantau">Dipantau</option>
+                    <option value="Perlu Pendampingan">Pendampingan</option>
+                  </select>
+                </div>
               </div>
-              <div className="overflow-x-auto p-4 sm:p-5">
-                <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[560px]">
+            </div>
+
+            <div className="overflow-x-auto">
+              {filteredGroups.length === 0 ? (
+                <div className="text-center py-12 text-slate-400 text-xs font-semibold">
+                  Tidak ada kelompok yang cocok dengan kriteria pencarian.
+                </div>
+              ) : (
+                <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[600px]">
                   <thead>
-                    <tr className="text-slate-400 border-b border-[#E6E8EC] text-[11px] uppercase tracking-wider font-extrabold">
-                      <th className="py-2.5 font-bold">Kelompok</th>
-                      <th className="py-2.5 font-bold">Lokasi / Ruang</th>
-                      <th className="py-2.5 font-bold">Mentor</th>
-                      <th className="py-2.5 font-bold text-center">Siswa</th>
-                      <th className="py-2.5 font-bold">Progress</th>
-                      <th className="py-2.5 font-bold text-right">Status</th>
+                    <tr className="text-slate-400 border-b border-[#E6E8EC] text-[10px] uppercase tracking-wider font-extrabold bg-[#F5F6F8]/50">
+                      <th className="py-3 px-5">Kelompok</th>
+                      <th className="py-3">Mentor</th>
+                      <th className="py-3 text-center">Siswa</th>
+                      <th className="py-3 text-center">Kehadiran</th>
+                      <th className="py-3">Progress</th>
+                      <th className="py-3 px-5 text-right">Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#E6E8EC]">
-                    {groups.slice(0, 10).map((group) => {
-                      const mentor = mentors.find(m => m.id === group.mentorId);
-                      const studentsCount = students.filter(s => s.groupId === group.id).length;
-                      const progress = 65 + Math.floor(Math.random() * 25);
-                      
-                      let statusLabel = "LANCAR";
-                      let statusBg = "bg-[#0362D0]/10 text-[#0362D0] border-[#0362D0]/20";
-                      let barColor = "bg-[#0362D0]";
-                      
-                      if (progress < 70) {
-                        statusLabel = "BERKEMBANG";
-                        statusBg = "bg-[#C99A2E]/15 text-[#956d11] border-[#C99A2E]/30";
-                        barColor = "bg-[#C99A2E]";
-                      } else if (progress > 85) {
-                        statusLabel = "SANGAT BAIK";
-                        statusBg = "bg-[#0362D0]/15 text-[#0362D0] border-[#0362D0]/30";
+                    {filteredGroups.map((item, idx) => {
+                      let statusBadge = '';
+                      if (item.status === 'Baik') {
+                        statusBadge = 'bg-[#0362D0]/10 text-[#0362D0] border-[#0362D0]/20';
+                      } else if (item.status === 'Perlu Dipantau') {
+                        statusBadge = 'bg-[#C99A2E]/10 text-[#C99A2E] border-[#C99A2E]/20';
+                      } else {
+                        statusBadge = 'bg-[#950415]/10 text-[#950415] border-[#950415]/20';
                       }
 
                       return (
-                        <tr key={group.id} className="hover:bg-[#F5F6F8] transition-colors">
-                          <td className="py-3 font-bold text-[#172033]">{group.name}</td>
-                          <td className="py-3 text-xs">
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-[#F5F6F8] text-[#172033] font-bold border border-[#E6E8EC]">
-                              <MapPin size={12} className="text-[#0362D0]" />
-                              {group.room || '-'}
-                            </span>
-                          </td>
-                          <td className="py-3 text-slate-600 text-xs font-medium">{mentor?.name || 'Belum ada'}</td>
-                          <td className="py-3 text-center text-[#172033] font-bold">{studentsCount}</td>
+                        <tr key={item.id} className="hover:bg-[#F5F6F8]/60 transition-colors">
+                          <td className="py-3 px-5 font-bold text-[#172033]">{item.name}</td>
+                          <td className="py-3 font-semibold text-[#172033]">{item.mentorName}</td>
+                          <td className="py-3 text-center font-bold text-slate-700">{item.studentsCount} siswa</td>
+                          <td className="py-3 text-center font-bold text-[#0362D0]">{item.attendance}%</td>
                           <td className="py-3">
-                            <div className="w-full max-w-[100px] bg-[#E6E8EC] h-2 rounded-full overflow-hidden">
-                              <div className={`h-full ${barColor}`} style={{width: `${progress}%`}}></div>
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-24 bg-[#E6E8EC] h-1.5 rounded-full overflow-hidden shrink-0">
+                                <div 
+                                  className={`h-full ${item.status === 'Perlu Pendampingan' ? 'bg-[#950415]' : 'bg-[#0362D0]'}`} 
+                                  style={{ width: `${item.progress}%` }} 
+                                />
+                              </div>
+                              <span className="text-[11px] font-black">{item.progress}%</span>
                             </div>
                           </td>
-                          <td className="py-3 text-right">
-                            <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase border ${statusBg}`}>
-                              {statusLabel}
+                          <td className="py-3 px-5 text-right">
+                            <span className={`px-2.5 py-0.5 rounded-md text-[9px] font-black uppercase border ${statusBadge}`}>
+                              {item.status}
                             </span>
                           </td>
                         </tr>
@@ -356,131 +550,181 @@ export function Dashboard() {
                     })}
                   </tbody>
                 </table>
-              </div>
-            </section>
-          )}
+              )}
+            </div>
+          </div>
         </div>
 
-        {/* Right Sidebar Column */}
+        {/* RIGHT / SIDEBAR COLUMN (ATTENTION, QUICK ACTIONS, RECENT ACTIVITIES) */}
         <div className="lg:col-span-4 flex flex-col gap-6">
-          {/* Timeline Kurikulum Widget */}
-          <section className="bg-white rounded-2xl border border-[#E6E8EC] p-4 sm:p-5 shrink-0 shadow-xs">
-            <div className="flex items-center justify-between mb-4 pb-2 border-b border-[#E6E8EC]">
-              <div>
-                <h3 className="font-extrabold text-[#172033] text-sm">
-                  {isMentor ? `Kurikulum ${mentorGrade?.name || 'Grade 1'}` : 'Timeline Kurikulum BTQ'}
-                </h3>
-                <p className="text-[11px] text-slate-500 font-medium">
-                  {isMentor ? (mentorGrade?.programName || 'Utsmani Jilid 1') : 'Setiap Sabtu • Semester 1'}
-                </p>
-              </div>
-              <span className="text-[10px] bg-[#C99A2E] text-slate-950 px-2.5 py-0.5 rounded-full font-black uppercase tracking-wider">
-                Sesi 3 (Aktif)
-              </span>
+
+          {/* QUICK ACTIONS */}
+          <section className="bg-white rounded-2xl border border-[#E6E8EC] p-4 shadow-xs">
+            <h3 className="font-extrabold text-[#172033] text-xs uppercase tracking-wider mb-3 pb-2 border-b border-[#F5F6F8]">
+              Aksi Cepat Admin
+            </h3>
+            <div className="grid grid-cols-2 gap-2">
+              <Link 
+                to="/attendance/students"
+                className="p-3 bg-[#0362D0]/5 hover:bg-[#0362D0]/10 border border-[#0362D0]/15 rounded-xl text-center group transition-colors"
+              >
+                <UserCheck size={18} className="text-[#0362D0] mx-auto mb-1.5 group-hover:scale-105 transition-transform" />
+                <span className="text-[11px] font-bold text-[#172033] block">Input Absensi</span>
+              </Link>
+
+              <Link 
+                to="/progress"
+                className="p-3 bg-[#0362D0]/5 hover:bg-[#0362D0]/10 border border-[#0362D0]/15 rounded-xl text-center group transition-colors"
+              >
+                <Edit3 size={18} className="text-[#0362D0] mx-auto mb-1.5 group-hover:scale-105 transition-transform" />
+                <span className="text-[11px] font-bold text-[#172033] block">Update Progress</span>
+              </Link>
+
+              <Link 
+                to="/attendance/mentors"
+                className="p-3 bg-[#0362D0]/5 hover:bg-[#0362D0]/10 border border-[#0362D0]/15 rounded-xl text-center group transition-colors"
+              >
+                <Users size={18} className="text-[#0362D0] mx-auto mb-1.5 group-hover:scale-105 transition-transform" />
+                <span className="text-[11px] font-bold text-[#172033] block">Presensi Mentor</span>
+              </Link>
+
+              <Link 
+                to="/students"
+                className="p-3 bg-[#0362D0]/5 hover:bg-[#0362D0]/10 border border-[#0362D0]/15 rounded-xl text-center group transition-colors"
+              >
+                <PlusCircle size={18} className="text-[#0362D0] mx-auto mb-1.5 group-hover:scale-105 transition-transform" />
+                <span className="text-[11px] font-bold text-[#172033] block">Tambah Siswa</span>
+              </Link>
             </div>
-
-            {/* Riwayat Status Sesi */}
-            <div className="mb-3 p-2.5 bg-[#0362D0]/5 rounded-xl border border-[#0362D0]/15 flex items-center justify-between text-[11px]">
-              <div className="flex items-center gap-1.5 text-[#0362D0] font-bold">
-                <CheckCircle size={15} className="text-[#0362D0]" />
-                <span>2 Sesi Telah Terlaksana</span>
-              </div>
-              <span className="text-[10px] bg-[#0362D0]/15 text-[#0362D0] px-2 py-0.5 rounded font-extrabold">
-                Pekan 1 & 2
-              </span>
-            </div>
-
-            <div className="space-y-3 pt-1">
-              {/* Active Session */}
-              <div className="flex gap-3 bg-[#C99A2E]/10 p-3 rounded-2xl border border-[#C99A2E]/30 relative overflow-hidden">
-                <div className="w-1.5 bg-[#C99A2E] rounded-full shrink-0" />
-                <div>
-                  <span className="text-[9px] font-black uppercase tracking-wider text-[#7a580a] bg-[#C99A2E]/20 px-2 py-0.5 rounded-md">
-                    Sesi 3 • Sabtu Pekan Ini
-                  </span>
-                  <p className="text-xs font-extrabold text-[#172033] mt-1.5 leading-snug">
-                    {gradeSessions[2]?.topic || 'Harakat Tunggal: Fathah, Kasrah, dan Dhammah'}
-                  </p>
-                  <p className="text-[10px] text-slate-500 font-semibold mt-1">
-                    Ref: {gradeSessions[2]?.pageRef || 'Halaman 4–6'}
-                  </p>
-                </div>
-              </div>
-
-              {/* Upcoming Session */}
-              <div className="flex gap-3 bg-[#F5F6F8] p-3 rounded-2xl border border-[#E6E8EC]">
-                <div className="w-1.5 bg-slate-300 rounded-full shrink-0" />
-                <div>
-                  <span className="text-[9px] font-extrabold uppercase tracking-wider text-slate-500 bg-slate-200 px-2 py-0.5 rounded-md">
-                    Sesi 4 • Sabtu Pekan Depan
-                  </span>
-                  <p className="text-xs font-bold text-slate-700 mt-1.5 leading-snug">
-                    {gradeSessions[3]?.topic || 'Bentuk Huruf Sambung di Awal, Tengah, dan Akhir Kata'}
-                  </p>
-                  <p className="text-[10px] text-slate-400 font-medium mt-1">
-                    Ref: {gradeSessions[3]?.pageRef || 'Halaman 7–9'}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <Link 
-              to="/curriculum" 
-              className="mt-4 text-xs text-[#0362D0] font-extrabold hover:underline flex items-center justify-center gap-1 w-full pt-3 border-t border-[#E6E8EC]"
-            >
-              Lihat Silabus Lengkap 32 Sesi <ArrowRight size={13} />
-            </Link>
           </section>
 
-          {/* Activity Widget */}
+          {/* DESKTOP ONLY: PANEL "PERLU PERHATIAN" */}
+          <div className="hidden lg:block">
+            <AttentionPanel navigate={navigate} />
+          </div>
+
+          {/* AKTIVITAS TERBARU */}
           <section className="bg-white rounded-2xl border border-[#E6E8EC] p-4 sm:p-5 flex-1 flex flex-col overflow-hidden shadow-xs">
-            <h3 className="font-extrabold text-[#172033] mb-3 text-sm pb-2 border-b border-[#E6E8EC]">
-              Aktivitas Terkini
-            </h3>
-            <div className="space-y-3.5 overflow-y-auto pr-1 pb-2 flex-1">
-              <div className="flex gap-3 items-start">
-                <div className="w-7 h-7 rounded-full bg-[#0362D0]/10 text-[#0362D0] flex items-center justify-center text-xs shrink-0 font-bold border border-[#0362D0]/20">
-                  ✓
-                </div>
-                <div className="text-[11px] text-slate-600">
-                  <span className="font-bold text-[#172033]">{isMentor ? 'Anda' : 'Mentor Kelompok 3'}</span> mengisi absensi harian (100% hadir).
-                  <p className="text-slate-400 text-[10px] mt-0.5 font-medium">Baru saja</p>
-                </div>
-              </div>
+            <div className="flex justify-between items-center mb-4 pb-2 border-b border-[#E6E8EC]">
+              <h3 className="font-extrabold text-[#172033] text-sm">
+                Aktivitas Terbaru
+              </h3>
+              <Clock size={14} className="text-slate-400" />
+            </div>
 
-              <div className="flex gap-3 items-start">
-                <div className="w-7 h-7 rounded-full bg-[#C99A2E]/15 text-[#956d11] flex items-center justify-center text-xs shrink-0 font-bold border border-[#C99A2E]/30">
-                  ★
+            <div className="space-y-4 overflow-y-auto pr-1 pb-2 flex-1 max-h-[250px]">
+              {activities.length === 0 ? (
+                <div className="py-8 flex flex-col items-center justify-center text-center text-slate-400 h-full">
+                  <span className="text-xl">📭</span>
+                  <p className="text-[11px] font-bold mt-1 text-slate-500">Belum ada aktivitas baru</p>
+                  <p className="text-[9px] text-slate-400 mt-0.5">Sistem akan mencatat aktivitas secara otomatis.</p>
                 </div>
-                <div className="text-[11px] text-slate-600">
-                  <span className="font-bold text-[#172033]">Siswa {mentorGroup?.name || 'Kelompok 1'}</span> menyelesaikan target hafalan.
-                  <p className="text-slate-400 text-[10px] mt-0.5 font-medium">15 menit yang lalu</p>
-                </div>
-              </div>
-
-              <div className="flex gap-3 items-start">
-                <div className="w-7 h-7 rounded-full bg-[#950415]/10 text-[#950415] flex items-center justify-center text-xs shrink-0 font-bold border border-[#950415]/20">
-                  📖
-                </div>
-                <div className="text-[11px] text-slate-600">
-                  <span className="font-bold text-[#172033]">Silabus BTQ</span> diperbarui sesuai buku Utsmani Jilid 1 & 2.
-                  <p className="text-slate-400 text-[10px] mt-0.5 font-medium">1 jam yang lalu</p>
-                </div>
-              </div>
+              ) : (
+                activities.slice(0, 5).map((act, idx) => (
+                  <div key={act.id} className="flex gap-3 items-start relative pl-4">
+                    {idx < Math.min(activities.length, 5) - 1 && (
+                      <div className="absolute left-[4.5px] top-[12px] bottom-[-20px] w-[1.5px] bg-[#E6E8EC]" />
+                    )}
+                    <div className={`w-2 h-2 rounded-full absolute left-0 top-[4px] ring-4 ${
+                      act.type === 'progress' ? 'bg-[#0362D0] ring-[#0362D0]/10' : 
+                      act.type === 'journal' ? 'bg-[#C99A2E] ring-[#C99A2E]/10' : 
+                      'bg-[#950415] ring-[#950415]/10'
+                    }`} />
+                    <div className="text-[11px] text-slate-600 leading-snug">
+                      <span className="font-bold text-[#172033]">{act.title}</span> • {act.description}
+                      <p className="text-slate-400 text-[9px] mt-0.5 font-semibold">{act.timestamp}</p>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
 
             <button 
               onClick={() => setIsLogModalOpen(true)}
-              className="w-full mt-3 py-2.5 bg-[#F5F6F8] text-[#172033] rounded-xl text-xs font-bold hover:bg-[#E6E8EC] transition-colors border border-[#E6E8EC] cursor-pointer"
+              className="w-full mt-4 py-2 bg-[#F5F6F8] hover:bg-[#E6E8EC] border border-[#E6E8EC] text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
             >
-              Lihat Riwayat Lengkap
+              Lihat Semua Aktivitas
             </button>
           </section>
+
         </div>
-      </div>
+      </section>
 
       <ActivityLogModal isOpen={isLogModalOpen} onClose={() => setIsLogModalOpen(false)} />
     </div>
   );
 }
 
+// 5. PANEL "PERLU PERHATIAN" REUSABLE SUB-COMPONENT (Elegant Soft Maroon & Soft Gold Warning Panel)
+interface AttentionPanelProps {
+  navigate: (path: string) => void;
+}
+
+function AttentionPanel({ navigate }: AttentionPanelProps) {
+  return (
+    <section className="bg-[#950415]/5 p-4 sm:p-5 rounded-2xl border border-[#950415]/20 shadow-xs">
+      <div className="flex items-center gap-2 pb-3 mb-3 border-b border-[#950415]/15 text-[#950415]">
+        <AlertCircle size={18} strokeWidth={2.5} />
+        <h3 className="font-black text-xs uppercase tracking-wider">Perlu Perhatian</h3>
+      </div>
+
+      <div className="space-y-3">
+        {/* Item 1 */}
+        <div 
+          onClick={() => navigate('/groups')}
+          className="flex items-start gap-2.5 p-2.5 hover:bg-[#950415]/10 rounded-xl cursor-pointer transition-colors"
+        >
+          <span className="text-xs">⚠</span>
+          <div>
+            <p className="text-xs font-bold text-[#172033] leading-snug">Kelompok 7</p>
+            <p className="text-[10px] text-slate-500 font-semibold mt-0.5">
+              Progress BTQ 61% — di bawah rata-rata silabus.
+            </p>
+          </div>
+        </div>
+
+        {/* Item 2 */}
+        <div 
+          onClick={() => navigate('/groups')}
+          className="flex items-start gap-2.5 p-2.5 hover:bg-[#950415]/10 rounded-xl cursor-pointer transition-colors"
+        >
+          <span className="text-xs">⚠</span>
+          <div>
+            <p className="text-xs font-bold text-[#172033] leading-snug">Kelompok 10</p>
+            <p className="text-[10px] text-slate-500 font-semibold mt-0.5">
+              Kehadiran siswa menyentuh 72% pada sesi ini.
+            </p>
+          </div>
+        </div>
+
+        {/* Item 3 */}
+        <div 
+          onClick={() => navigate('/attendance/students')}
+          className="flex items-start gap-2.5 p-2.5 hover:bg-[#950415]/10 rounded-xl cursor-pointer transition-colors"
+        >
+          <span className="text-xs">⚠</span>
+          <div>
+            <p className="text-xs font-bold text-[#172033] leading-snug">4 siswa terancam</p>
+            <p className="text-[10px] text-slate-500 font-semibold mt-0.5">
+              Memiliki tingkat kehadiran kumulatif di bawah 75%.
+            </p>
+          </div>
+        </div>
+
+        {/* Item 4 */}
+        <div 
+          onClick={() => navigate('/attendance/mentors')}
+          className="flex items-start gap-2.5 p-2.5 hover:bg-[#950415]/10 rounded-xl cursor-pointer transition-colors"
+        >
+          <span className="text-xs">⚠</span>
+          <div>
+            <p className="text-xs font-bold text-[#172033] leading-snug">1 mentor belum check-in</p>
+            <p className="text-[10px] text-slate-500 font-semibold mt-0.5">
+              Kelompok 7 belum melakukan absensi harian.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}

@@ -984,6 +984,15 @@ export async function saveStudentAttendance(records: StudentAttendance[]): Promi
       handleFirestoreError(error, OperationType.WRITE, `student_attendance/${docId}`);
     }
   }
+
+  if (records.length > 0) {
+    const groupName = cleanGroupName(records[0].groupId);
+    await logSystemActivity(
+      'attendance',
+      'Presensi Siswa',
+      `Absensi ${groupName} diperbarui (${records.length} siswa).`
+    );
+  }
 }
 
 export async function getMentorAttendance(date: string): Promise<MentorAttendance[]> {
@@ -1034,6 +1043,14 @@ export async function saveMentorAttendance(records: MentorAttendance[]): Promise
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `mentor_attendance/${docId}`);
     }
+  }
+
+  if (records.length > 0) {
+    await logSystemActivity(
+      'attendance',
+      'Presensi Mentor',
+      `Kehadiran mentor telah dicatatkan untuk ${records.length} pengajar.`
+    );
   }
 }
 
@@ -1110,6 +1127,25 @@ export async function saveStudentProgress(record: StudentProgress): Promise<void
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, 'student_progress');
   }
+
+  // Find student name dynamically
+  let studentName = 'Santri';
+  try {
+    const studentDoc = await getDoc(doc(db, 'students', record.studentId));
+    if (studentDoc.exists()) {
+      studentName = studentDoc.data().name || 'Santri';
+    } else {
+      // Look in mockStudents
+      const localS = mockStudents.find(s => s.id === record.studentId);
+      if (localS) studentName = localS.name;
+    }
+  } catch {}
+
+  await logSystemActivity(
+    'progress',
+    'Progress Santri',
+    `Pencapaian ${studentName} diperbarui (Rata-rata: ${record.total || 0}%).`
+  );
 }
 
 // ----------------------------------------------------------------------------
@@ -1500,20 +1536,29 @@ export async function saveTeachingJournal(journal: TeachingJournal): Promise<str
     console.warn("Could not save journal locally", e);
   }
 
+  let finalId = journal.id || `journal_${Date.now()}`;
   // 2. Persist to Firestore
   try {
     if (journal.id && !journal.id.startsWith('journal_seed_')) {
       const docRef = doc(db, 'teaching_journals', journal.id);
       await setDoc(docRef, payload, { merge: true });
-      return journal.id;
     } else {
       const docRef = await addDoc(collection(db, 'teaching_journals'), payload);
-      return docRef.id;
+      finalId = docRef.id;
     }
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, 'teaching_journals');
-    return journal.id || `journal_${Date.now()}`;
   }
+
+  const mentorName = journal.mentorName || 'Mentor';
+  const groupName = cleanGroupName(journal.groupId);
+  await logSystemActivity(
+    'journal',
+    'Jurnal Mengajar',
+    `${mentorName} mengisi jurnal mengajar untuk ${groupName}.`
+  );
+
+  return finalId;
 }
 
 export async function deleteTeachingJournal(journalId: string): Promise<void> {
@@ -1681,20 +1726,28 @@ export async function saveCertification(cert: StudentCertification): Promise<str
     console.warn("Could not save cert locally", e);
   }
 
+  let finalId = cert.id || `cert_${Date.now()}`;
   // 2. Persist to Firestore
   try {
     if (cert.id && !cert.id.startsWith('cert_seed_')) {
       const docRef = doc(db, 'certifications', cert.id);
       await setDoc(docRef, payload, { merge: true });
-      return cert.id;
     } else {
       const docRef = await addDoc(collection(db, 'certifications'), payload);
-      return docRef.id;
+      finalId = docRef.id;
     }
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, 'certifications');
-    return cert.id || `cert_${Date.now()}`;
   }
+
+  const studentName = cert.studentName || 'Santri';
+  await logSystemActivity(
+    'certification',
+    'Sertifikasi Kelulusan',
+    `Sertifikasi "${cert.category}" diterbitkan untuk ${studentName}.`
+  );
+
+  return finalId;
 }
 
 export async function deleteCertification(certId: string): Promise<void> {
@@ -1715,5 +1768,158 @@ export async function deleteCertification(certId: string): Promise<void> {
     handleFirestoreError(error, OperationType.DELETE, `certifications/${certId}`);
   }
 }
+
+export interface SystemActivity {
+  id: string;
+  type: 'journal' | 'progress' | 'certification' | 'attendance';
+  title: string;
+  description: string;
+  timestamp: string;
+  icon: string;
+  color: string;
+  bg: string;
+  rawDate: Date;
+}
+
+const LOCAL_STORAGE_ACTIVITIES_KEY = 'sibtq_system_activities_v1';
+
+export function cleanGroupName(groupId: string): string {
+  if (!groupId) return 'Kelompok';
+  const num = groupId.replace('group_', '').replace('g', '');
+  return `Kelompok ${num}`;
+}
+
+export async function logSystemActivity(
+  type: 'journal' | 'progress' | 'certification' | 'attendance',
+  title: string,
+  description: string
+): Promise<void> {
+  const dateStr = new Date().toISOString();
+  const payload = {
+    type,
+    title,
+    description,
+    createdAt: dateStr
+  };
+
+  // 1. Update local cache
+  try {
+    const raw = localStorage.getItem(LOCAL_STORAGE_ACTIVITIES_KEY);
+    const existing = raw ? JSON.parse(raw) : [];
+    const updated = [
+      {
+        id: `act_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+        ...payload
+      },
+      ...existing
+    ].slice(0, 50); // Keep last 50 only
+    localStorage.setItem(LOCAL_STORAGE_ACTIVITIES_KEY, JSON.stringify(updated));
+  } catch (e) {
+    console.warn("Could not save activity locally", e);
+  }
+
+  // 2. Persist to Firestore
+  try {
+    await addDoc(collection(db, 'system_activities'), payload);
+  } catch (error) {
+    console.error("Could not log activity to firestore", error);
+  }
+}
+
+export async function getSystemActivities(): Promise<SystemActivity[]> {
+  const activities: SystemActivity[] = [];
+
+  const iconMap = {
+    journal: '📝',
+    progress: '📈',
+    certification: '🎓',
+    attendance: '✅'
+  };
+
+  const colorMap = {
+    journal: 'text-[#C99A2E]',
+    progress: 'text-[#0362D0]',
+    certification: 'text-[#950415]',
+    attendance: 'text-[#0362D0]'
+  };
+
+  const bgMap = {
+    journal: 'bg-[#C99A2E]/10',
+    progress: 'bg-[#0362D0]/10',
+    certification: 'bg-[#950415]/10',
+    attendance: 'bg-[#0362D0]/10'
+  };
+
+  try {
+    const actCol = collection(db, 'system_activities');
+    const actSnap = await getDocs(query(actCol, orderBy('createdAt', 'desc')));
+    if (!actSnap.empty) {
+      actSnap.docs.forEach(docSnap => {
+        const data = docSnap.data();
+        const dateObj = data.createdAt ? new Date(data.createdAt) : new Date();
+        const type = (data.type || 'journal') as 'journal' | 'progress' | 'certification' | 'attendance';
+        activities.push({
+          id: docSnap.id,
+          type,
+          title: data.title || 'Aktivitas',
+          description: data.description || '',
+          timestamp: formatActivityTime(dateObj),
+          icon: iconMap[type] || '📝',
+          color: colorMap[type] || 'text-[#0362D0]',
+          bg: bgMap[type] || 'bg-[#0362D0]/10',
+          rawDate: dateObj
+        });
+      });
+      return activities.sort((a, b) => b.rawDate.getTime() - a.rawDate.getTime());
+    }
+  } catch (error) {
+    console.error("Error fetching system activities from firestore:", error);
+  }
+
+  // Fallback to local storage
+  try {
+    const raw = localStorage.getItem(LOCAL_STORAGE_ACTIVITIES_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as any[];
+      const localActs = parsed.map(item => {
+        const dateObj = item.createdAt ? new Date(item.createdAt) : new Date();
+        const type = (item.type || 'journal') as 'journal' | 'progress' | 'certification' | 'attendance';
+        return {
+          id: item.id || `local_${Date.now()}`,
+          type,
+          title: item.title || 'Aktivitas',
+          description: item.description || '',
+          timestamp: formatActivityTime(dateObj),
+          icon: iconMap[type] || '📝',
+          color: colorMap[type] || 'text-[#0362D0]',
+          bg: bgMap[type] || 'bg-[#0362D0]/10',
+          rawDate: dateObj
+        };
+      });
+      return localActs.sort((a, b) => b.rawDate.getTime() - a.rawDate.getTime());
+    }
+  } catch {}
+
+  return [];
+}
+
+function formatActivityTime(date: Date): string {
+  try {
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / (1000 * 60));
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+
+    if (diffMins < 1) return 'Baru saja';
+    if (diffMins < 60) return `${diffMins} mnt lalu`;
+    if (diffHours < 24) return `${diffHours} jam lalu`;
+    
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agt', 'Sep', 'Okt', 'Nov', 'Des'];
+    return `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
+  } catch {
+    return 'Baru saja';
+  }
+}
+
 
 

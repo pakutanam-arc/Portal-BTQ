@@ -179,7 +179,7 @@ export function Login() {
                   <input
                     type="text"
                     required
-                    placeholder="Masukkan username (contoh: admin, ahmad)"
+                    placeholder="Masukkan username (contoh: alumni1, alumni2)"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     className="w-full pl-10 pr-4 py-2.5 bg-[#F5F6F8] border border-[#E6E8EC] rounded-2xl text-xs sm:text-sm font-medium text-[#172033] placeholder:text-slate-400 focus:bg-white focus:border-[#0362D0] focus:ring-4 focus:ring-[#0362D0]/15 outline-none transition-all"
@@ -253,7 +253,7 @@ export function Login() {
               <span className="text-[#950415]">SMP Negeri 102 Jakarta</span>
             </div>
             <p className="text-[10px] text-slate-400 mt-0.5">
-              Sistem Informasi Administrasi & Pembelajaran BTQ • Tahun Ajaran 2025/2026
+              Sistem Informasi Administrasi & Pembelajaran BTQ • Tahun Pelajaran 2026/2027
             </p>
           </div>
         </div>
