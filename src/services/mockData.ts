@@ -2,16 +2,16 @@ import { Student, Group, Mentor, StudentAttendance, MentorAttendance, Progress, 
 import { addDays, format, subDays, subMonths } from 'date-fns';
 
 export const mockMentors: Mentor[] = [
-  { id: 'm1', name: 'Ustadz Ahmad Fauzi', email: 'ahmad@smpn102.sch.id', status: 'Aktif', groupId: 'g1' },
-  { id: 'm2', name: 'Ustadzah Siti Aminah', email: 'siti@smpn102.sch.id', status: 'Aktif', groupId: 'g2' },
-  { id: 'm3', name: 'Ustadz Budi Santoso', email: 'budi@smpn102.sch.id', status: 'Aktif', groupId: 'g3' },
-  { id: 'm4', name: 'Ustadzah Nurul Hidayah', email: 'nurul@smpn102.sch.id', status: 'Aktif', groupId: 'g4' },
-  { id: 'm5', name: 'Ustadz Hasan Basri', email: 'hasan@smpn102.sch.id', status: 'Aktif', groupId: 'g5' },
-  { id: 'm6', name: 'Ustadzah Fatimah', email: 'fatimah@smpn102.sch.id', status: 'Aktif', groupId: 'g6' },
-  { id: 'm7', name: 'Ustadz Zainal Abidin', email: 'zainal@smpn102.sch.id', status: 'Aktif', groupId: 'g7' },
-  { id: 'm8', name: 'Ustadzah Aisyah', email: 'aisyah@smpn102.sch.id', status: 'Aktif', groupId: 'g8' },
-  { id: 'm9', name: 'Ustadz Rahman', email: 'rahman@smpn102.sch.id', status: 'Aktif', groupId: 'g9' },
-  { id: 'm10', name: 'Ustadzah Khadijah', email: 'khadijah@smpn102.sch.id', status: 'Aktif', groupId: 'g10' },
+  { id: 'm1', name: 'Kak Ahmad Fauzi', email: 'ahmad@smpn102.sch.id', status: 'Aktif', groupId: 'g1' },
+  { id: 'm2', name: 'Kak Siti Aminah', email: 'siti@smpn102.sch.id', status: 'Aktif', groupId: 'g2' },
+  { id: 'm3', name: 'Kak Budi Santoso', email: 'budi@smpn102.sch.id', status: 'Aktif', groupId: 'g3' },
+  { id: 'm4', name: 'Kak Nurul Hidayah', email: 'nurul@smpn102.sch.id', status: 'Aktif', groupId: 'g4' },
+  { id: 'm5', name: 'Kak Hasan Basri', email: 'hasan@smpn102.sch.id', status: 'Aktif', groupId: 'g5' },
+  { id: 'm6', name: 'Kak Fatimah', email: 'fatimah@smpn102.sch.id', status: 'Aktif', groupId: 'g6' },
+  { id: 'm7', name: 'Kak Zainal Abidin', email: 'zainal@smpn102.sch.id', status: 'Aktif', groupId: 'g7' },
+  { id: 'm8', name: 'Kak Aisyah', email: 'aisyah@smpn102.sch.id', status: 'Aktif', groupId: 'g8' },
+  { id: 'm9', name: 'Kak Rahman', email: 'rahman@smpn102.sch.id', status: 'Aktif', groupId: 'g9' },
+  { id: 'm10', name: 'Kak Khadijah', email: 'khadijah@smpn102.sch.id', status: 'Aktif', groupId: 'g10' },
 ];
 
 export const mockGroups: Group[] = Array.from({ length: 10 }).map((_, i) => ({

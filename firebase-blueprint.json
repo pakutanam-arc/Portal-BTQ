@@ -1,0 +1,165 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profiles (Admins, Mentors)",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "mentor"] },
+        "phone": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "name", "role", "createdAt"]
+    },
+    "Group": {
+      "title": "Group",
+      "description": "A BTQ study group",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "maxLength": 100 },
+        "mentorId": { "type": "string" },
+        "schedule": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "mentorId", "createdAt"]
+    },
+    "Student": {
+      "title": "Student",
+      "description": "A student enrolled in BTQ",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "maxLength": 100 },
+        "nis": { "type": "string", "maxLength": 50 },
+        "groupId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "nis", "groupId", "createdAt"]
+    },
+    "StudentAttendance": {
+      "title": "Student Attendance",
+      "description": "Daily attendance record for a student",
+      "type": "object",
+      "properties": {
+        "studentId": { "type": "string" },
+        "groupId": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "status": { "type": "string", "enum": ["Hadir", "Izin", "Sakit", "Alpa"] },
+        "notes": { "type": "string", "maxLength": 500 },
+        "recordedBy": { "type": "string" }
+      },
+      "required": ["studentId", "groupId", "date", "status", "recordedBy"]
+    },
+    "Progress": {
+      "title": "Progress",
+      "description": "Learning progress for a student",
+      "type": "object",
+      "properties": {
+        "studentId": { "type": "string" },
+        "date": { "type": "string", "format": "date-time" },
+        "reading": { "type": "number" },
+        "tajwid": { "type": "number" },
+        "memorization": { "type": "number" },
+        "writing": { "type": "number" },
+        "total": { "type": "number" },
+        "recordedBy": { "type": "string" }
+      },
+      "required": ["studentId", "date", "reading", "tajwid", "memorization", "writing", "total", "recordedBy"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "App notification and alerts",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "maxLength": 150 },
+        "message": { "type": "string", "maxLength": 500 },
+        "type": { "type": "string", "enum": ["info", "warning", "success", "alert"] },
+        "targetRole": { "type": "string", "enum": ["all", "admin", "mentor"] },
+        "link": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "createdBy": { "type": "string" }
+      },
+      "required": ["title", "message", "type", "targetRole", "createdAt"]
+    },
+    "Journal": {
+      "title": "Journal",
+      "description": "Mentor teaching journals for Saturday sessions",
+      "type": "object",
+      "properties": {
+        "groupId": { "type": "string" },
+        "sessionId": { "type": "string" },
+        "date": { "type": "string", "format": "date-time" },
+        "materialTaught": { "type": "string" },
+        "pagesCovered": { "type": "string" },
+        "studentObstacles": { "type": "string" },
+        "nextPlan": { "type": "string" },
+        "attendanceNote": { "type": "string" },
+        "mentorId": { "type": "string" },
+        "mentorName": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["groupId", "date", "materialTaught", "mentorId", "createdAt"]
+    },
+    "Certification": {
+      "title": "Certification",
+      "description": "Exam status and completion certificates for students",
+      "type": "object",
+      "properties": {
+        "studentId": { "type": "string" },
+        "groupId": { "type": "string" },
+        "category": { "type": "string", "enum": ["Khatam Iqro/Tilawati", "Tasmi' Juz 30", "Tasmi' Juz 'Amma Pilihan", "Ujian Kenaikan Tingkat", "Khatam Al-Qur'an 30 Juz"] },
+        "status": { "type": "string", "enum": ["Persiapan", "Siap Ujian", "Lulus Bersertifikat", "Perbaikan"] },
+        "score": { "type": "number" },
+        "notes": { "type": "string" },
+        "certificateNumber": { "type": "string" },
+        "completedDate": { "type": "string" },
+        "examinerName": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["studentId", "category", "status"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Profiles of admins and mentors"
+    },
+    "groups/{groupId}": {
+      "schema": { "$ref": "#/entities/Group" },
+      "description": "BTQ Groups"
+    },
+    "students/{studentId}": {
+      "schema": { "$ref": "#/entities/Student" },
+      "description": "Students in BTQ"
+    },
+    "student_attendance/{attendanceId}": {
+      "schema": { "$ref": "#/entities/StudentAttendance" },
+      "description": "Attendance records for students"
+    },
+    "mentor_attendance/{attendanceId}": {
+      "schema": { "$ref": "#/entities/StudentAttendance" },
+      "description": "Attendance records for mentors"
+    },
+    "student_progress/{progressId}": {
+      "schema": { "$ref": "#/entities/Progress" },
+      "description": "Progress assessment records for students"
+    },
+    "progress/{progressId}": {
+      "schema": { "$ref": "#/entities/Progress" },
+      "description": "Progress records for students"
+    },
+    "notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/Notification" },
+      "description": "Real-time system and admin notifications"
+    },
+    "teaching_journals/{journalId}": {
+      "schema": { "$ref": "#/entities/Journal" },
+      "description": "Mentoring session journal entries"
+    },
+    "certifications/{certId}": {
+      "schema": { "$ref": "#/entities/Certification" },
+      "description": "Exam and graduation certifications"
+    }
+  }
+}
