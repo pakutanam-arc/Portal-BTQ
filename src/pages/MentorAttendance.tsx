@@ -21,8 +21,14 @@ export function MentorAttendance() {
     async function loadMentors() {
       try {
         const mentorsData = await getMentors();
-        setMentors(mentorsData);
-        if (mentorsData.length === 0) {
+        // Client-side natural numerical sorting to ensure 100% correct display order
+        const sortedMentors = [...mentorsData].sort((a, b) => {
+          const numA = parseInt(a.name.replace(/\D/g, ''), 10) || 0;
+          const numB = parseInt(b.name.replace(/\D/g, ''), 10) || 0;
+          return numA - numB;
+        });
+        setMentors(sortedMentors);
+        if (sortedMentors.length === 0) {
           setLoading(false);
         }
       } catch (error) {
@@ -145,7 +151,7 @@ export function MentorAttendance() {
             </div>
             <div className="flex items-center gap-2 bg-[#0362D0]/10 px-4 py-2.5 rounded-2xl border border-[#0362D0]/20 text-[#0362D0] text-xs font-bold">
               <Calendar size={14} />
-              <span>Jadwal Wajib: <strong>Setiap Hari Sabtu (07.30 - 09.00 WIB)</strong></span>
+              <span>Jadwal Wajib: <strong>Setiap Hari Sabtu (07:15 - 08:00 WIB)</strong></span>
             </div>
           </div>
         </div>

@@ -24,7 +24,7 @@ export interface CurriculumSession {
 
 export const CURRICULUM_CONFIG = {
   scheduleDay: 'Sabtu',
-  scheduleTime: '07.30 - 09.00 WIB',
+  scheduleTime: '07:15 - 08:00 WIB',
   totalSessions: 32,
   sessionsPerSemester: 16,
   completedSessionsCount: 2, // Sudah 2x pertemuan terlaksana

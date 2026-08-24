@@ -4,7 +4,7 @@ import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Badge } from '../components/ui/Badge';
-import { getGroups, getMentors, getStudents, Group, Mentor, Student } from '../services/db';
+import { getGroups, getMentors, getStudents, getGroupNumber, Group, Mentor, Student } from '../services/db';
 import { useAuth } from '../contexts/AuthContext';
 import { masterGrades } from '../services/curriculumData';
 import { doc, updateDoc } from 'firebase/firestore';
@@ -36,7 +36,8 @@ export function Groups() {
           getStudents()
         ]);
         
-        let filteredGroups = groupsData;
+        const sortedGroups = [...groupsData].sort((a, b) => getGroupNumber(a) - getGroupNumber(b));
+        let filteredGroups = sortedGroups;
         if (isMentor) {
           const userEmailLower = currentUser?.email?.toLowerCase();
           const matchedMentor = mentorsData.find(

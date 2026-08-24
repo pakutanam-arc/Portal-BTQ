@@ -228,7 +228,7 @@ export function StudentAttendance() {
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-black text-[#172033] tracking-tight">Presensi Kehadiran Santri</h1>
             <span className="px-3 py-0.5 rounded-full bg-[#0362D0]/10 text-[#0362D0] text-xs font-black border border-[#0362D0]/20">
-              Sesi Sabtu (07.30 - 09.00 WIB)
+              Sesi Sabtu (07:15 - 08:00 WIB)
             </span>
           </div>
           <p className="text-slate-500 mt-1 text-xs sm:text-sm font-medium">
@@ -363,7 +363,7 @@ export function StudentAttendance() {
               <div className="shrink-0 flex items-center gap-2">
                 <span className="px-3 py-1 rounded-full bg-white border border-[#E6E8EC] text-[#172033] text-[11px] font-bold flex items-center gap-1 shadow-2xs">
                   <Clock size={12} className="text-[#0362D0]" />
-                  Sabtu, 07.30 - 09.00 WIB
+                  Sabtu, 07:15 - 08:00 WIB
                 </span>
               </div>
             </div>

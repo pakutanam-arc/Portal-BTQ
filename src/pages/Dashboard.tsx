@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Users, Layers, BookOpen, UserCheck, TrendingUp, AlertCircle, Loader2, Award, ArrowRight, CheckCircle, Calendar, Edit3, MapPin, Sparkles, ShieldCheck } from 'lucide-react';
-import { getGroups, getStudents, getMentors, Group, Student, Mentor } from '../services/db';
+import { getGroups, getStudents, getMentors, getGroupNumber, Group, Student, Mentor } from '../services/db';
 import { ActivityLogModal } from '../components/modals/ActivityLogModal';
 import { useAuth } from '../contexts/AuthContext';
 import { masterGrades, masterSessions } from '../services/curriculumData';
@@ -28,7 +28,8 @@ export function Dashboard() {
           getMentors()
         ]);
         
-        setAllGroups(groupsData);
+        const sortedGroups = [...groupsData].sort((a, b) => getGroupNumber(a) - getGroupNumber(b));
+        setAllGroups(sortedGroups);
         setMentors(mentorsData);
 
         // Identify current mentor ID
@@ -43,7 +44,7 @@ export function Dashboard() {
         const mentorId = matchedMentor?.id || userData?.id || currentUser?.uid;
         const assignedGroupId = matchedMentor?.groupId || userData?.groupId;
 
-        let filteredGroups = groupsData;
+        let filteredGroups = sortedGroups;
         let filteredStudents = studentsData;
         
         if (isMentor) {

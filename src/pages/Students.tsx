@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Plus, Filter, Download, Upload, Users, GraduationCap, ShieldCheck } from 'lucide-react';
-import { Card, CardContent } from '../components/ui/Card';
+import { Search, Plus, Download, Upload, Users, Edit3, Trash2, X, Check, AlertCircle } from 'lucide-react';
+import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/Table';
-import { Badge } from '../components/ui/Badge';
-import { getStudents, getGroups, getMentors, Student, Group } from '../services/db';
+import { subscribeToStudents, addStudent, updateStudent, deleteStudent, getGroups, getMentors, Student, Group } from '../services/db';
 import { useAuth } from '../contexts/AuthContext';
 
 export function Students() {
@@ -18,20 +17,33 @@ export function Students() {
   const [classFilter, setClassFilter] = useState('');
   const [groupFilter, setGroupFilter] = useState('');
 
+  // Modal State
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingStudent, setEditingStudent] = useState<Student | null>(null);
+  const [formData, setFormData] = useState({
+    name: '',
+    nis: '',
+    class: '7A',
+    gender: 'L',
+    groupId: 'g1',
+    status: 'Aktif'
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+
   const isMentor = userRole === 'mentor' && currentUser?.email !== 'admin@smpn102.sch.id';
 
   useEffect(() => {
-    async function loadData() {
+    let unsubscribe: (() => void) | null = null;
+
+    async function initData() {
       try {
-        const [studentsData, groupsData, mentorsData] = await Promise.all([
-          getStudents(),
+        const [groupsData, mentorsData] = await Promise.all([
           getGroups(),
           getMentors()
         ]);
 
         let finalGroups = groupsData;
-        let finalStudents = studentsData;
-
         if (isMentor) {
           const matchedMentor = mentorsData.find(
             m => (userData?.id && m.id === userData.id) ||
@@ -40,24 +52,104 @@ export function Students() {
           );
           const mentorId = matchedMentor?.id || userData?.id || currentUser?.uid;
           finalGroups = groupsData.filter(g => g.mentorId === mentorId);
-          const groupIds = finalGroups.map(g => g.id);
-          finalStudents = studentsData.filter(s => groupIds.includes(s.groupId));
         }
-
-        setStudents(finalStudents);
         setGroups(finalGroups);
+
+        // Subscribe to real-time updates from Firebase Firestore
+        unsubscribe = subscribeToStudents((allStudents) => {
+          let finalStudents = allStudents;
+          if (isMentor) {
+            const groupIds = finalGroups.map(g => g.id);
+            finalStudents = allStudents.filter(s => groupIds.includes(s.groupId));
+          }
+          setStudents(finalStudents);
+          setLoading(false);
+        });
       } catch (error) {
-        console.error("Error fetching data:", error);
-      } finally {
+        console.error("Error initializing real-time data:", error);
         setLoading(false);
       }
     }
-    loadData();
+
+    initData();
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
   }, [userRole, userData, currentUser, isMentor]);
+
+  const handleOpenAdd = () => {
+    setEditingStudent(null);
+    setFormData({
+      name: '',
+      nis: '',
+      class: '7A',
+      gender: 'L',
+      groupId: groups.length > 0 ? groups[0].id : 'g1',
+      status: 'Aktif'
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleOpenEdit = (student: Student) => {
+    setEditingStudent(student);
+    setFormData({
+      name: student.name,
+      nis: student.nis || '',
+      class: student.class || '7A',
+      gender: student.gender || 'L',
+      groupId: student.groupId || 'g1',
+      status: student.status || 'Aktif'
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.name.trim()) return;
+
+    setIsSubmitting(true);
+    try {
+      if (editingStudent) {
+        await updateStudent(editingStudent.id, {
+          name: formData.name.trim().toUpperCase(),
+          nis: formData.nis.trim(),
+          class: formData.class,
+          gender: formData.gender,
+          groupId: formData.groupId,
+          status: formData.status
+        });
+      } else {
+        await addStudent({
+          name: formData.name.trim().toUpperCase(),
+          nis: formData.nis.trim() || `102${String(Math.floor(1000 + Math.random() * 9000))}`,
+          class: formData.class,
+          gender: formData.gender,
+          groupId: formData.groupId,
+          status: formData.status
+        });
+      }
+      setIsModalOpen(false);
+    } catch (err) {
+      console.error("Error saving student:", err);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (studentId: string) => {
+    try {
+      await deleteStudent(studentId);
+      setDeleteConfirmId(null);
+    } catch (err) {
+      console.error("Error deleting student:", err);
+    }
+  };
 
   const filteredStudents = students.filter(student => {
     const matchesSearch = student.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          (student.class && student.class.toLowerCase().includes(searchTerm.toLowerCase()));
+                          (student.class && student.class.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                          (student.nis && student.nis.includes(searchTerm));
     const matchesClass = classFilter ? student.class?.includes(classFilter) : true;
     const matchesGroup = groupFilter ? student.groupId === groupFilter : true;
     
@@ -65,14 +157,14 @@ export function Students() {
   });
 
   return (
-    <div className="space-y-6 max-w-[1240px] mx-auto">
+    <div className="space-y-6 max-w-[1240px] mx-auto pb-12">
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-3xl border border-[#E6E8EC] shadow-xs">
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-black text-[#172033] tracking-tight">Data Santri BTQ</h1>
             <span className="px-3 py-0.5 rounded-full bg-[#0362D0]/10 text-[#0362D0] text-xs font-black border border-[#0362D0]/20">
-              SMP Negeri 102 Jakarta
+              Realtime Firebase
             </span>
           </div>
           <p className="text-slate-500 mt-1 text-xs sm:text-sm font-medium">
@@ -86,7 +178,7 @@ export function Students() {
           <Button variant="outline" size="sm" className="hidden sm:flex border-[#E6E8EC] text-[#172033] hover:bg-[#F5F6F8] font-bold">
             <Upload size={15} className="mr-2 text-[#C99A2E]" /> Import Excel
           </Button>
-          <Button size="sm" className="bg-[#0362D0] hover:bg-[#0252b3] text-white font-bold shadow-xs">
+          <Button size="sm" onClick={handleOpenAdd} className="bg-[#0362D0] hover:bg-[#0252b3] text-white font-bold shadow-xs">
             <Plus size={16} className="mr-1.5" /> Tambah Santri
           </Button>
         </div>
@@ -96,7 +188,7 @@ export function Students() {
         <div className="p-4 border-b border-[#E6E8EC] bg-[#F5F6F8]/50 flex flex-col sm:flex-row gap-4 justify-between items-center">
           <div className="w-full sm:max-w-xs">
             <Input 
-              placeholder="Cari nama atau kelas santri..." 
+              placeholder="Cari nama, NIS, atau kelas santri..." 
               icon={<Search size={16} className="text-[#0362D0]" />}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -130,7 +222,7 @@ export function Students() {
           <div className="py-16 flex justify-center">
             <div className="animate-pulse flex flex-col items-center gap-4 text-[#0362D0]">
               <Users size={32} />
-              <p className="font-semibold text-[#172033]">Memuat data santri...</p>
+              <p className="font-semibold text-[#172033]">Memuat data santri dari Firebase...</p>
             </div>
           </div>
         ) : (
@@ -148,6 +240,8 @@ export function Students() {
             <TableBody>
               {filteredStudents.map((student, idx) => {
                 const group = groups.find(g => g.id === student.groupId);
+                const isDeleting = deleteConfirmId === student.id;
+
                 return (
                   <TableRow key={student.id} className="group hover:bg-[#F5F6F8]/60 transition-colors border-b border-[#E6E8EC]/80">
                     <TableCell className="text-center text-slate-500 font-bold text-xs">{idx + 1}</TableCell>
@@ -177,9 +271,36 @@ export function Students() {
                       </span>
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="sm" className="text-[#0362D0] hover:bg-[#0362D0]/10 font-bold text-xs">
-                        Detail
-                      </Button>
+                      {isDeleting ? (
+                        <div className="flex items-center justify-end gap-1.5">
+                          <span className="text-[11px] font-bold text-rose-600 mr-1">Hapus?</span>
+                          <Button size="xs" className="bg-rose-600 hover:bg-rose-700 text-white font-bold" onClick={() => handleDelete(student.id)}>
+                            <Check size={12} />
+                          </Button>
+                          <Button size="xs" variant="outline" className="border-slate-300" onClick={() => setDeleteConfirmId(null)}>
+                            <X size={12} />
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-end gap-1">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => handleOpenEdit(student)}
+                            className="text-[#0362D0] hover:bg-[#0362D0]/10 font-bold text-xs"
+                          >
+                            <Edit3 size={14} className="mr-1" /> Edit
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => setDeleteConfirmId(student.id)}
+                            className="text-rose-600 hover:bg-rose-50 font-bold text-xs"
+                          >
+                            <Trash2 size={14} className="mr-1" /> Hapus
+                          </Button>
+                        </div>
+                      )}
                     </TableCell>
                   </TableRow>
                 );
@@ -205,7 +326,103 @@ export function Students() {
           </div>
         )}
       </Card>
+
+      {/* Modal Tambah / Edit Santri */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white rounded-3xl max-w-md w-full border border-[#E6E8EC] shadow-2xl p-6 space-y-5 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex justify-between items-center border-b border-[#E6E8EC] pb-4">
+              <h3 className="text-lg font-black text-[#172033]">
+                {editingStudent ? 'Edit Data Santri' : 'Tambah Santri Baru'}
+              </h3>
+              <button onClick={() => setIsModalOpen(false)} className="p-1 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100">
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-extrabold text-[#172033] mb-1">Nama Lengkap Santri</label>
+                <Input 
+                  required
+                  placeholder="Contoh: MUHAMMAD FAIZ"
+                  value={formData.name}
+                  onChange={e => setFormData({ ...formData, name: e.target.value })}
+                  className="font-semibold text-sm"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-extrabold text-[#172033] mb-1">NIS (Opsional)</label>
+                  <Input 
+                    placeholder="Contoh: 1020123"
+                    value={formData.nis}
+                    onChange={e => setFormData({ ...formData, nis: e.target.value })}
+                    className="font-medium text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-extrabold text-[#172033] mb-1">Jenis Kelamin</label>
+                  <Select 
+                    value={formData.gender}
+                    onChange={e => setFormData({ ...formData, gender: e.target.value })}
+                    className="font-medium text-xs"
+                  >
+                    <option value="L">Laki-laki (L)</option>
+                    <option value="P">Perempuan (P)</option>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-extrabold text-[#172033] mb-1">Kelas</label>
+                  <Input 
+                    placeholder="Contoh: 7A, 8B, 9D"
+                    value={formData.class}
+                    onChange={e => setFormData({ ...formData, class: e.target.value.toUpperCase() })}
+                    className="font-medium text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-extrabold text-[#172033] mb-1">Status</label>
+                  <Select 
+                    value={formData.status}
+                    onChange={e => setFormData({ ...formData, status: e.target.value })}
+                    className="font-medium text-xs"
+                  >
+                    <option value="Aktif">Aktif</option>
+                    <option value="Non-Aktif">Non-Aktif</option>
+                  </Select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-extrabold text-[#172033] mb-1">Kelompok BTQ</label>
+                <Select 
+                  value={formData.groupId}
+                  onChange={e => setFormData({ ...formData, groupId: e.target.value })}
+                  className="font-medium text-xs"
+                >
+                  {groups.map(g => (
+                    <option key={g.id} value={g.id}>{g.name}</option>
+                  ))}
+                </Select>
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2 border-t border-[#E6E8EC]">
+                <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)} className="font-bold border-[#E6E8EC]">
+                  Batal
+                </Button>
+                <Button type="submit" disabled={isSubmitting} className="bg-[#0362D0] hover:bg-[#0252b3] text-white font-bold">
+                  {isSubmitting ? 'Saving...' : editingStudent ? 'Simpan Perubahan' : 'Tambah Santri'}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
-

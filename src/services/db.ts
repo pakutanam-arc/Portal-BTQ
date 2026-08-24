@@ -110,38 +110,296 @@ function saveLocalAttendance(records: StudentAttendance[]) {
   }
 }
 
+// Helper to parse group number for sorting
+export function getGroupNumber(group: { name?: string; id?: string }): number {
+  const matchName = group.name?.match(/\d+/);
+  if (matchName) return parseInt(matchName[0], 10);
+  const matchId = group.id?.match(/\d+/);
+  if (matchId) return parseInt(matchId[0], 10);
+  return 0;
+}
+
 // Fetch all groups
 export async function getGroups(): Promise<Group[]> {
   try {
     const q = query(collection(db, 'groups'));
     const snapshot = await getDocs(q);
     if (!snapshot.empty) {
-      return snapshot.docs.map(doc => {
+      const items = snapshot.docs.map(doc => {
         const data = doc.data() as Group;
-        const gNum = parseInt(doc.id.replace(/\D/g, '') || '1');
-        const gradeId = gNum <= 4 ? 'grade1' : gNum <= 8 ? 'grade2' : 'grade3';
-        return { id: doc.id, gradeId, ...data };
+        const gNum = getGroupNumber({ id: doc.id, ...data }) || 1;
+        const gradeId = (gNum === 7 || gNum === 8 || doc.id === 'g7' || doc.id === 'g8' || doc.id === 'group_7' || doc.id === 'group_8')
+          ? 'grade1'
+          : (gNum === 4 || doc.id === 'g4' || doc.id === 'group_4')
+          ? 'grade2'
+          : (data.gradeId || (gNum <= 3 ? 'grade1' : gNum <= 8 ? 'grade2' : 'grade3'));
+        return { id: doc.id, ...data, schedule: 'Sabtu, 07:15 - 08:00', gradeId };
       });
+      return items.sort((a, b) => getGroupNumber(a) - getGroupNumber(b));
     }
   } catch (error) {
     handleFirestoreError(error, OperationType.LIST, 'groups');
   }
 
   // Fallback to initial groups
-  return mockGroups.map(g => {
-    const gNum = parseInt(g.id.replace(/\D/g, '') || '1');
-    const gradeId = gNum <= 4 ? 'grade1' : gNum <= 8 ? 'grade2' : 'grade3';
-    return { ...g, gradeId };
+  const sortedMock = [...mockGroups].sort((a, b) => getGroupNumber(a) - getGroupNumber(b));
+  return sortedMock.map(g => {
+    const gNum = getGroupNumber(g) || 1;
+    const gradeId = (gNum === 7 || gNum === 8 || g.id === 'g7' || g.id === 'g8' || g.id === 'group_7' || g.id === 'group_8')
+      ? 'grade1'
+      : (gNum === 4 || g.id === 'g4' || g.id === 'group_4')
+      ? 'grade2'
+      : ((g as { gradeId?: string }).gradeId || (gNum <= 3 ? 'grade1' : gNum <= 8 ? 'grade2' : 'grade3'));
+    return { ...g, schedule: 'Sabtu, 07:15 - 08:00', gradeId };
   });
 }
 
 // Fetch all students
 export async function getStudents(): Promise<Student[]> {
+  const g1NewNames = new Set([
+    'KRESNA AFIF FATHURRAHMAN',
+    'MUHAMMAD AZKA AOZORA',
+    'ARFAN DIMAS WICAKSONO',
+    'ALFABIANO SAPUTRA',
+    'ARYA BIMA',
+    'MUHAMAD IKHSAN',
+    'MUHAMMAD FIRLY SINICHI',
+    'RANDHI RIZKYANDRA',
+    'MUHAMMAD ZIDAN ALFAREZEL',
+    'DHANA HARDIANSYAH',
+    'GILANG ZULFADLI AQILA',
+    'AHMAD NUR FADLY',
+  ]);
+
+  const g2NewNames = new Set([
+    'ANDRI PRASETYA KHARISMA PANTOW',
+    'DAFFA ADITYA PRATAMA',
+    'NATHAN RAUF PUTERA IRAWAN',
+    'SAKHA ABIMANYU FIRJATULLAH',
+    'DWI KURNIA PUTRA PRASETYO',
+    'NAUFAN HIDAYAT',
+    'MUHAMMAD ALVI FERDIANSAH',
+    'HAFUZA SAMHIMGA ACUZIO',
+    'MUHAMAD AZBIN MARSA',
+    'RAFA ABIYU PRAMUDYA',
+    'MAULANA MALIK IBRAHIM',
+    'MUHAMMAD OKTO SYAHPUTRA',
+  ]);
+
+  const g3NewNames = new Set([
+    'MUHAMMAD RAFFI',
+    'PUTRA ARIFIANSYAH',
+    'MUHAMMAD IRFAN ANANTA',
+    'MUHAMAD RISKI',
+    'MIKEL ARFA DASILVA',
+    'BARA PUTRA AWI',
+    'HAFIZ ALI AKBAR',
+    'MUAMAR KHADAFI',
+    'RADITYA WIDJAYA',
+    'RAFFA DWI KURNIAWAN',
+    'RIZKY RAHMAN',
+    'MUHAMMAD ALAN AGASTHYA',
+    'ARYANUGRAH ZAHY SUJANA',
+    'MUHAMAD REYHAN',
+    'RIZQI HOIRULLOH',
+  ]);
+
+  const g4NewNames = new Set([
+    'MUHAMAD ABBYZAR IQSANI',
+    'GALANG MAHARDIKA WIBOWO',
+    'ALMERO DASTAN ANANTHA',
+    'ALTHAF ZIARFA SAPUTRA',
+    'AL FATHAR ARDIANSYAH',
+    'AUFAN ACHMAD MAHGRON',
+    'GIRI MAULANA',
+    'MUHAMMAD RAFI AL-DYANI',
+    'FATIAN HADIANSYAH',
+    'GHANI YAZID KHAIRY',
+    'MUHAMMAD SHIDQII AL HARITS',
+    'VIRGIAWAN AL HAKIM',
+    'ARSHA MASHUDINI',
+    'AHMAD AUFAR AL HAFIZH',
+    'ADEODATUSSAVA OMAR SASONGKO',
+  ]);
+
+  const g5NewNames = new Set([
+    'RANGGA PUTRA PRATAMA',
+    "MUHAMMAD GAFFI RICHIE AL 'FAIDZIN",
+    'MUHAMMAD MAMERU',
+    'MUHAMMAD AKRAM KAMIL',
+    'RIZKY SATRIA ATMOJO',
+    'ADELINO RICKY PERMANA',
+    'MUHAMMAD ZIDAN NURACHMANSYAH',
+    'MUHAMAD DANANG PRATAMA',
+    'RANDY SYUGHANDI RIDINANTA',
+    'RUBY ALTHAFI GINANJAR',
+    'MUHAMMAD SYARIF',
+    'EVANDRA RADITYA',
+  ]);
+
+  const g6NewNames = new Set([
+    'RIZKI MAULANA',
+    'MAULANA YUSUF',
+    'IBRAHIM ARYAWINATA',
+    'A IAS FERDI SURYA JAYA',
+    'ACHMAD HANIF RIZKY PRATAMA',
+    'IRZA DWI PUTRA',
+    'RAJAWALI TAHTA BUWANA PANGESTU',
+    'MUAZAM RAZIQ PARIKESIT',
+    'MUHAMMAD FATIR ANUGRAH',
+    'GERHAN RAFQI MAULANA PUTRA',
+    'DIMAS PANGGALIH BUDOYO',
+    'ARDIANSYAH',
+    'MUHAMMAD HAIKAL SURYA PUTRA',
+    'FARIS HAZMAN NAZIR',
+    'RAIHAN MANDALA PUTRA RAMBE',
+  ]);
+
+  const g7NewNames = new Set([
+    'SHESYA MEIDA ANJELI',
+    'AIKO ARNELITA ARIANTO',
+    'ARIVANESSA MAURAHMADHANIA',
+    'LATIFAH QOLBI',
+    'NAURA PUTRI ANDINI',
+    'JASMINE AMIRA CALISTA',
+    'LAILA NURAINI',
+    'MADINAH PUTRI AZZAHRAH',
+    'SCRIBBIE CHANDHEA WAHYUDI',
+    'RIZKI NUR FITRA',
+    'KAIVALYA MUIZEE REDIANSYAH',
+    'MARISA KINARA PUTRI',
+    'SYAKINAH PUTRI GAUTAMA',
+    'ZAHRA HERAWATI',
+  ]);
+
+  const g8NewNames = new Set([
+    'ANINDYA RIZKY PUTRI ARDITA',
+    'FEIYAZ ALMAHYRA ATHANTRI',
+    'GHAZIYA HAFIZA ANANDITA',
+    'JASMIN PUTRI JAMILAH',
+    'NAFISAH DWI DAMAYANTI',
+    'JIHAN TALITA ULFA',
+    'SALSABILA',
+    'SYAHQILLA ALMA DWIFA',
+    'ROINA RAMADANI',
+    'TAURA HUMAIRA TAUFIQO PUTRI',
+    'NAURA MAWADDAH',
+    'ZAINA FATHIYYAH AZZAHRA',
+    'AJENG SETYA NINGRUM',
+    'ALEXA GRISELDA SACA',
+  ]);
+
+  const g9NewNames = new Set([
+    'AISYAH MALIKA PUTRI',
+    'SOFIA MAHARANI',
+    'NAURAH AUFA SALAM',
+    'CAEISHA PUTRI RAMADHANI',
+    'ANNISA WARDHANI GUSTI',
+    'SAFIRA YULIANTI',
+    'NURIL FATHIYAH',
+    'KHAERUNISA AULIA',
+    'NAYLA PUTRI BERLIAN',
+    'SALSABILAH PUTRI CHANIAGO',
+    'SHEILA KHANSA CHAIRUNNISA',
+    'RORO DIAN AYU',
+    'RAMADHANI FITRIA NINGSIH',
+    'KANASYA NUR FATWA AULIA',
+    'SALSABILAH RAMADHANI',
+    'ZIFANA LATISA',
+    'NUR AINI SALWA NABILA',
+    'TANIA ADZRA SABRINA',
+    'AISHA SELVIRA DANIKA',
+    'RAISA ROXANNE MAHESWARI',
+    'BEIBY AMEERA',
+    'EVELIN VARISTA',
+  ]);
+
+  const g10NewNames = new Set([
+    'FATIR AZKA NUGROHO',
+    'FATHIA AZIZAH HERMA',
+    'RADEN RORO GIZKHA ARTNES',
+    'AHSAN ATHAYA PUTRA INSAN',
+    'MUHAMMAD IKHSAN AFLAH FAEYZAN',
+    'JASMINE AL KHANSA QAISARA',
+    'MUHAMMAD GHIFARI ISKANDAR',
+    'NOVAL DWI PERMANA',
+    'APPLEYNA ULFA',
+    'NAURA DHANIA AMANDA',
+    'SALSABILA FACHNA',
+    'CALLISTA AMADEA',
+    'ALVARO ARIQ PRADITA',
+    'FAEYZA IMANSAH SHAKI JANATHAN',
+    'MUHAMMAD FAQIH',
+    'NURUL ALYA SIERRA',
+    'FIRSYA ZAHRA RATIFA',
+    'TIARA APRILIA',
+    'MUHAMMAD FAHRI AL MUSLIM',
+    'REFAN RAMADHAN',
+    'AHMAD FAIZ DARMAWAN',
+    'HANA PUTRI QONITA',
+    'ARJUNA HANDARU WIDODO',
+    'DANNA EVRYL LYO',
+    'EVANIA WIRAWAN',
+    'MUHAMMAD KHABIB',
+  ]);
+
   try {
     const q = query(collection(db, 'students'));
     const snapshot = await getDocs(q);
     if (!snapshot.empty) {
-      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student));
+      let items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student));
+      // Check if Firestore contains legacy g1, g2, g3, g4, g5, g6, or g7 students that are not in the new lists
+      const hasLegacyG1 = items.some(s => (s.groupId === 'g1' || s.groupId === 'group_1') && !g1NewNames.has(s.name));
+      if (hasLegacyG1) {
+        const g1MockStudents = mockStudents.filter(s => s.groupId === 'g1');
+        items = items.filter(s => s.groupId !== 'g1' && s.groupId !== 'group_1').concat(g1MockStudents);
+      }
+      const hasLegacyG2 = items.some(s => (s.groupId === 'g2' || s.groupId === 'group_2') && !g2NewNames.has(s.name));
+      if (hasLegacyG2) {
+        const g2MockStudents = mockStudents.filter(s => s.groupId === 'g2');
+        items = items.filter(s => s.groupId !== 'g2' && s.groupId !== 'group_2').concat(g2MockStudents);
+      }
+      const hasLegacyG3 = items.some(s => (s.groupId === 'g3' || s.groupId === 'group_3') && !g3NewNames.has(s.name));
+      if (hasLegacyG3) {
+        const g3MockStudents = mockStudents.filter(s => s.groupId === 'g3');
+        items = items.filter(s => s.groupId !== 'g3' && s.groupId !== 'group_3').concat(g3MockStudents);
+      }
+      const hasLegacyG4 = items.some(s => (s.groupId === 'g4' || s.groupId === 'group_4') && !g4NewNames.has(s.name));
+      if (hasLegacyG4) {
+        const g4MockStudents = mockStudents.filter(s => s.groupId === 'g4');
+        items = items.filter(s => s.groupId !== 'g4' && s.groupId !== 'group_4').concat(g4MockStudents);
+      }
+      const hasLegacyG5 = items.some(s => (s.groupId === 'g5' || s.groupId === 'group_5') && !g5NewNames.has(s.name));
+      if (hasLegacyG5) {
+        const g5MockStudents = mockStudents.filter(s => s.groupId === 'g5');
+        items = items.filter(s => s.groupId !== 'g5' && s.groupId !== 'group_5').concat(g5MockStudents);
+      }
+      const hasLegacyG6 = items.some(s => (s.groupId === 'g6' || s.groupId === 'group_6') && !g6NewNames.has(s.name));
+      if (hasLegacyG6) {
+        const g6MockStudents = mockStudents.filter(s => s.groupId === 'g6');
+        items = items.filter(s => s.groupId !== 'g6' && s.groupId !== 'group_6').concat(g6MockStudents);
+      }
+      const hasLegacyG7 = items.some(s => (s.groupId === 'g7' || s.groupId === 'group_7') && !g7NewNames.has(s.name));
+      if (hasLegacyG7) {
+        const g7MockStudents = mockStudents.filter(s => s.groupId === 'g7');
+        items = items.filter(s => s.groupId !== 'g7' && s.groupId !== 'group_7').concat(g7MockStudents);
+      }
+      const hasLegacyG8 = items.some(s => (s.groupId === 'g8' || s.groupId === 'group_8') && !g8NewNames.has(s.name));
+      if (hasLegacyG8) {
+        const g8MockStudents = mockStudents.filter(s => s.groupId === 'g8');
+        items = items.filter(s => s.groupId !== 'g8' && s.groupId !== 'group_8').concat(g8MockStudents);
+      }
+      const hasLegacyG9 = items.some(s => (s.groupId === 'g9' || s.groupId === 'group_9') && !g9NewNames.has(s.name));
+      if (hasLegacyG9) {
+        const g9MockStudents = mockStudents.filter(s => s.groupId === 'g9');
+        items = items.filter(s => s.groupId !== 'g9' && s.groupId !== 'group_9').concat(g9MockStudents);
+      }
+      const hasLegacyG10 = items.some(s => (s.groupId === 'g10' || s.groupId === 'group_10') && !g10NewNames.has(s.name));
+      if (hasLegacyG10) {
+        const g10MockStudents = mockStudents.filter(s => s.groupId === 'g10');
+        items = items.filter(s => s.groupId !== 'g10' && s.groupId !== 'group_10').concat(g10MockStudents);
+      }
+      return items;
     }
   } catch (error) {
     handleFirestoreError(error, OperationType.LIST, 'students');
@@ -150,30 +408,516 @@ export async function getStudents(): Promise<Student[]> {
   return mockStudents;
 }
 
+// Real-time listener for students collection
+export function subscribeToStudents(callback: (students: Student[]) => void): () => void {
+  const colRef = collection(db, 'students');
+  return onSnapshot(colRef, (snapshot) => {
+    if (!snapshot.empty) {
+      const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student));
+      callback(items);
+    } else {
+      callback(mockStudents);
+    }
+  }, (error) => {
+    handleFirestoreError(error, OperationType.LIST, 'students');
+    callback(mockStudents);
+  });
+}
+
+export async function addStudent(studentData: Omit<Student, 'id'>): Promise<string> {
+  const payload = {
+    ...studentData,
+    gender: (studentData.gender === 'P' ? 'P' : 'L') as 'L' | 'P',
+    status: (studentData.status || 'Aktif') as 'Aktif' | 'Nonaktif',
+    createdAt: new Date().toISOString()
+  };
+  try {
+    const docRef = await addDoc(collection(db, 'students'), payload);
+    const newStudent = { id: docRef.id, ...payload } as any;
+    const existingIdx = mockStudents.findIndex(s => s.id === docRef.id);
+    if (existingIdx >= 0) {
+      mockStudents[existingIdx] = newStudent;
+    } else {
+      mockStudents.unshift(newStudent);
+    }
+    return docRef.id;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, 'students');
+    const newId = `s_${Date.now()}`;
+    const newStudent = { id: newId, ...payload } as any;
+    mockStudents.unshift(newStudent);
+    return newId;
+  }
+}
+
+export async function updateStudent(id: string, studentData: Partial<Student>): Promise<void> {
+  try {
+    const docRef = doc(db, 'students', id);
+    await setDoc(docRef, studentData, { merge: true });
+    const idx = mockStudents.findIndex(s => s.id === id);
+    if (idx >= 0) {
+      mockStudents[idx] = { ...mockStudents[idx], ...studentData } as any;
+    }
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `students/${id}`);
+    const idx = mockStudents.findIndex(s => s.id === id);
+    if (idx >= 0) {
+      mockStudents[idx] = { ...mockStudents[idx], ...studentData } as any;
+    }
+  }
+}
+
+export async function deleteStudent(id: string): Promise<void> {
+  try {
+    await deleteDoc(doc(db, 'students', id));
+    const idx = mockStudents.findIndex(s => s.id === id);
+    if (idx >= 0) {
+      mockStudents.splice(idx, 1);
+    }
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `students/${id}`);
+    const idx = mockStudents.findIndex(s => s.id === id);
+    if (idx >= 0) {
+      mockStudents.splice(idx, 1);
+    }
+  }
+}
+
 // Fetch all mentors
 export async function getMentors(): Promise<Mentor[]> {
+  const mentorMappingData = [
+    { id: 'm1', groupId: 'g1', name: 'Kak Alumni 1', oldEmail: 'ahmad@smpn102.sch.id', newEmail: 'alumni1@smpn102.sch.id' },
+    { id: 'm2', groupId: 'g2', name: 'Kak Alumni 2', oldEmail: 'siti@smpn102.sch.id', newEmail: 'alumni2@smpn102.sch.id' },
+    { id: 'm3', groupId: 'g3', name: 'Kak Alumni 3', oldEmail: 'budi@smpn102.sch.id', newEmail: 'alumni3@smpn102.sch.id' },
+    { id: 'm4', groupId: 'g4', name: 'Kak Alumni 4', oldEmail: 'nurul@smpn102.sch.id', newEmail: 'alumni4@smpn102.sch.id' },
+    { id: 'm5', groupId: 'g5', name: 'Kak Alumni 5', oldEmail: 'hasan@smpn102.sch.id', newEmail: 'alumni5@smpn102.sch.id' },
+    { id: 'm6', groupId: 'g6', name: 'Kak Alumni 6', oldEmail: 'fatimah@smpn102.sch.id', newEmail: 'alumni6@smpn102.sch.id' },
+    { id: 'm7', groupId: 'g7', name: 'Kak Alumni 7', oldEmail: 'zainal@smpn102.sch.id', newEmail: 'alumni7@smpn102.sch.id' },
+    { id: 'm8', groupId: 'g8', name: 'Kak Alumni 8', oldEmail: 'aisyah@smpn102.sch.id', newEmail: 'alumni8@smpn102.sch.id' },
+    { id: 'm9', groupId: 'g9', name: 'Kak Alumni 9', oldEmail: 'rahman@smpn102.sch.id', newEmail: 'alumni9@smpn102.sch.id' },
+    { id: 'm10', groupId: 'g10', name: 'Kak Alumni 10', oldEmail: 'khadijah@smpn102.sch.id', newEmail: 'alumni10@smpn102.sch.id' },
+  ];
+
   try {
     const q = query(collection(db, 'users'), where('role', '==', 'mentor'));
     const snapshot = await getDocs(q);
     if (!snapshot.empty) {
-      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Mentor));
+      const items = snapshot.docs.map(docSnapshot => {
+        const data = docSnapshot.data() as any;
+        const emailLower = data.email?.toLowerCase();
+        
+        const matched = mentorMappingData.find(
+          m => data.groupId === m.groupId || 
+               docSnapshot.id === m.id || 
+               emailLower === m.oldEmail || 
+               emailLower === m.newEmail
+        );
+
+        if (matched) {
+          if (data.email !== matched.newEmail || data.name !== matched.name) {
+            updateDoc(doc(db, 'users', docSnapshot.id), {
+              email: matched.newEmail,
+              name: matched.name
+            }).catch(e => console.warn("Error auto-updating mentor in Firestore:", e));
+          }
+          return {
+            id: docSnapshot.id,
+            ...data,
+            name: matched.name,
+            email: matched.newEmail
+          } as Mentor;
+        }
+        return { id: docSnapshot.id, ...data } as Mentor;
+      });
+
+      return items.sort((a, b) => {
+        const numA = parseInt(a.name.replace(/\D/g, ''), 10) || 0;
+        const numB = parseInt(b.name.replace(/\D/g, ''), 10) || 0;
+        return numA - numB;
+      });
     }
   } catch (error) {
     handleFirestoreError(error, OperationType.LIST, 'users');
   }
 
-  return mockMentors.map(m => ({
-    id: m.id,
-    name: m.name,
-    email: m.email,
-    role: 'mentor',
-    status: m.status,
-    groupId: m.groupId,
-  }));
+  const list = mockMentors.map(m => {
+    const matched = mentorMappingData.find(md => md.id === m.id || md.groupId === m.groupId);
+    return {
+      id: m.id,
+      name: matched ? matched.name : m.name,
+      email: matched ? matched.newEmail : m.email,
+      role: 'mentor',
+      status: m.status,
+      groupId: m.groupId,
+    };
+  });
+
+  return list.sort((a, b) => {
+    const numA = parseInt(a.name.replace(/\D/g, ''), 10) || 0;
+    const numB = parseInt(b.name.replace(/\D/g, ''), 10) || 0;
+    return numA - numB;
+  });
 }
 
 // Fetch students for a specific group
 export async function getStudentsByGroup(groupId: string): Promise<Student[]> {
+  const g1NewNames = new Set([
+    'KRESNA AFIF FATHURRAHMAN',
+    'MUHAMMAD AZKA AOZORA',
+    'ARFAN DIMAS WICAKSONO',
+    'ALFABIANO SAPUTRA',
+    'ARYA BIMA',
+    'MUHAMAD IKHSAN',
+    'MUHAMMAD FIRLY SINICHI',
+    'RANDHI RIZKYANDRA',
+    'MUHAMMAD ZIDAN ALFAREZEL',
+    'DHANA HARDIANSYAH',
+    'GILANG ZULFADLI AQILA',
+    'AHMAD NUR FADLY',
+  ]);
+
+  const g2NewNames = new Set([
+    'ANDRI PRASETYA KHARISMA PANTOW',
+    'DAFFA ADITYA PRATAMA',
+    'NATHAN RAUF PUTERA IRAWAN',
+    'SAKHA ABIMANYU FIRJATULLAH',
+    'DWI KURNIA PUTRA PRASETYO',
+    'NAUFAN HIDAYAT',
+    'MUHAMMAD ALVI FERDIANSAH',
+    'HAFUZA SAMHIMGA ACUZIO',
+    'MUHAMAD AZBIN MARSA',
+    'RAFA ABIYU PRAMUDYA',
+    'MAULANA MALIK IBRAHIM',
+    'MUHAMMAD OKTO SYAHPUTRA',
+  ]);
+
+  const g3NewNames = new Set([
+    'MUHAMMAD RAFFI',
+    'PUTRA ARIFIANSYAH',
+    'MUHAMMAD IRFAN ANANTA',
+    'MUHAMAD RISKI',
+    'MIKEL ARFA DASILVA',
+    'BARA PUTRA AWI',
+    'HAFIZ ALI AKBAR',
+    'MUAMAR KHADAFI',
+    'RADITYA WIDJAYA',
+    'RAFFA DWI KURNIAWAN',
+    'RIZKY RAHMAN',
+    'MUHAMMAD ALAN AGASTHYA',
+    'ARYANUGRAH ZAHY SUJANA',
+    'MUHAMAD REYHAN',
+    'RIZQI HOIRULLOH',
+  ]);
+
+  const g4NewNames = new Set([
+    'MUHAMAD ABBYZAR IQSANI',
+    'GALANG MAHARDIKA WIBOWO',
+    'ALMERO DASTAN ANANTHA',
+    'ALTHAF ZIARFA SAPUTRA',
+    'AL FATHAR ARDIANSYAH',
+    'AUFAN ACHMAD MAHGRON',
+    'GIRI MAULANA',
+    'MUHAMMAD RAFI AL-DYANI',
+    'FATIAN HADIANSYAH',
+    'GHANI YAZID KHAIRY',
+    'MUHAMMAD SHIDQII AL HARITS',
+    'VIRGIAWAN AL HAKIM',
+    'ARSHA MASHUDINI',
+    'AHMAD AUFAR AL HAFIZH',
+    'ADEODATUSSAVA OMAR SASONGKO',
+  ]);
+
+  const g5NewNames = new Set([
+    'RANGGA PUTRA PRATAMA',
+    "MUHAMMAD GAFFI RICHIE AL 'FAIDZIN",
+    'MUHAMMAD MAMERU',
+    'MUHAMMAD AKRAM KAMIL',
+    'RIZKY SATRIA ATMOJO',
+    'ADELINO RICKY PERMANA',
+    'MUHAMMAD ZIDAN NURACHMANSYAH',
+    'MUHAMAD DANANG PRATAMA',
+    'RANDY SYUGHANDI RIDINANTA',
+    'RUBY ALTHAFI GINANJAR',
+    'MUHAMMAD SYARIF',
+    'EVANDRA RADITYA',
+  ]);
+
+  const g6NewNames = new Set([
+    'RIZKI MAULANA',
+    'MAULANA YUSUF',
+    'IBRAHIM ARYAWINATA',
+    'A IAS FERDI SURYA JAYA',
+    'ACHMAD HANIF RIZKY PRATAMA',
+    'IRZA DWI PUTRA',
+    'RAJAWALI TAHTA BUWANA PANGESTU',
+    'MUAZAM RAZIQ PARIKESIT',
+    'MUHAMMAD FATIR ANUGRAH',
+    'GERHAN RAFQI MAULANA PUTRA',
+    'DIMAS PANGGALIH BUDOYO',
+    'ARDIANSYAH',
+    'MUHAMMAD HAIKAL SURYA PUTRA',
+    'FARIS HAZMAN NAZIR',
+    'RAIHAN MANDALA PUTRA RAMBE',
+  ]);
+
+  const g7NewNames = new Set([
+    'SHESYA MEIDA ANJELI',
+    'AIKO ARNELITA ARIANTO',
+    'ARIVANESSA MAURAHMADHANIA',
+    'LATIFAH QOLBI',
+    'NAURA PUTRI ANDINI',
+    'JASMINE AMIRA CALISTA',
+    'LAILA NURAINI',
+    'MADINAH PUTRI AZZAHRAH',
+    'SCRIBBIE CHANDHEA WAHYUDI',
+    'RIZKI NUR FITRA',
+    'KAIVALYA MUIZEE REDIANSYAH',
+    'MARISA KINARA PUTRI',
+    'SYAKINAH PUTRI GAUTAMA',
+    'ZAHRA HERAWATI',
+  ]);
+
+  const g8NewNames = new Set([
+    'ANINDYA RIZKY PUTRI ARDITA',
+    'FEIYAZ ALMAHYRA ATHANTRI',
+    'GHAZIYA HAFIZA ANANDITA',
+    'JASMIN PUTRI JAMILAH',
+    'NAFISAH DWI DAMAYANTI',
+    'JIHAN TALITA ULFA',
+    'SALSABILA',
+    'SYAHQILLA ALMA DWIFA',
+    'ROINA RAMADANI',
+    'TAURA HUMAIRA TAUFIQO PUTRI',
+    'NAURA MAWADDAH',
+    'ZAINA FATHIYYAH AZZAHRA',
+    'AJENG SETYA NINGRUM',
+    'ALEXA GRISELDA SACA',
+  ]);
+
+  const g9NewNames = new Set([
+    'AISYAH MALIKA PUTRI',
+    'SOFIA MAHARANI',
+    'NAURAH AUFA SALAM',
+    'CAEISHA PUTRI RAMADHANI',
+    'ANNISA WARDHANI GUSTI',
+    'SAFIRA YULIANTI',
+    'NURIL FATHIYAH',
+    'KHAERUNISA AULIA',
+    'NAYLA PUTRI BERLIAN',
+    'SALSABILAH PUTRI CHANIAGO',
+    'SHEILA KHANSA CHAIRUNNISA',
+    'RORO DIAN AYU',
+    'RAMADHANI FITRIA NINGSIH',
+    'KANASYA NUR FATWA AULIA',
+    'SALSABILAH RAMADHANI',
+    'ZIFANA LATISA',
+    'NUR AINI SALWA NABILA',
+    'TANIA ADZRA SABRINA',
+    'AISHA SELVIRA DANIKA',
+    'RAISA ROXANNE MAHESWARI',
+    'BEIBY AMEERA',
+    'EVELIN VARISTA',
+  ]);
+
+  const g10NewNames = new Set([
+    'FATIR AZKA NUGROHO',
+    'FATHIA AZIZAH HERMA',
+    'RADEN RORO GIZKHA ARTNES',
+    'AHSAN ATHAYA PUTRA INSAN',
+    'MUHAMMAD IKHSAN AFLAH FAEYZAN',
+    'JASMINE AL KHANSA QAISARA',
+    'MUHAMMAD GHIFARI ISKANDAR',
+    'NOVAL DWI PERMANA',
+    'APPLEYNA ULFA',
+    'NAURA DHANIA AMANDA',
+    'SALSABILA FACHNA',
+    'CALLISTA AMADEA',
+    'ALVARO ARIQ PRADITA',
+    'FAEYZA IMANSAH SHAKI JANATHAN',
+    'MUHAMMAD FAQIH',
+    'NURUL ALYA SIERRA',
+    'FIRSYA ZAHRA RATIFA',
+    'TIARA APRILIA',
+    'MUHAMMAD FAHRI AL MUSLIM',
+    'REFAN RAMADHAN',
+    'AHMAD FAIZ DARMAWAN',
+    'HANA PUTRI QONITA',
+    'ARJUNA HANDARU WIDODO',
+    'DANNA EVRYL LYO',
+    'EVANIA WIRAWAN',
+    'MUHAMMAD KHABIB',
+  ]);
+
+  if (groupId === 'g1' || groupId === 'group_1') {
+    try {
+      const q = query(collection(db, 'students'), where('groupId', 'in', ['g1', 'group_1']));
+      const snapshot = await getDocs(q);
+      if (!snapshot.empty) {
+        const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student));
+        const hasLegacyG1 = items.some(s => !g1NewNames.has(s.name));
+        if (!hasLegacyG1) {
+          return items;
+        }
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.LIST, 'students');
+    }
+    return mockStudents.filter(s => s.groupId === 'g1');
+  }
+
+  if (groupId === 'g2' || groupId === 'group_2') {
+    try {
+      const q = query(collection(db, 'students'), where('groupId', 'in', ['g2', 'group_2']));
+      const snapshot = await getDocs(q);
+      if (!snapshot.empty) {
+        const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student));
+        const hasLegacyG2 = items.some(s => !g2NewNames.has(s.name));
+        if (!hasLegacyG2) {
+          return items;
+        }
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.LIST, 'students');
+    }
+    return mockStudents.filter(s => s.groupId === 'g2');
+  }
+
+  if (groupId === 'g3' || groupId === 'group_3') {
+    try {
+      const q = query(collection(db, 'students'), where('groupId', 'in', ['g3', 'group_3']));
+      const snapshot = await getDocs(q);
+      if (!snapshot.empty) {
+        const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student));
+        const hasLegacyG3 = items.some(s => !g3NewNames.has(s.name));
+        if (!hasLegacyG3) {
+          return items;
+        }
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.LIST, 'students');
+    }
+    return mockStudents.filter(s => s.groupId === 'g3');
+  }
+
+  if (groupId === 'g4' || groupId === 'group_4') {
+    try {
+      const q = query(collection(db, 'students'), where('groupId', 'in', ['g4', 'group_4']));
+      const snapshot = await getDocs(q);
+      if (!snapshot.empty) {
+        const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student));
+        const hasLegacyG4 = items.some(s => !g4NewNames.has(s.name));
+        if (!hasLegacyG4) {
+          return items;
+        }
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.LIST, 'students');
+    }
+    return mockStudents.filter(s => s.groupId === 'g4');
+  }
+
+  if (groupId === 'g5' || groupId === 'group_5') {
+    try {
+      const q = query(collection(db, 'students'), where('groupId', 'in', ['g5', 'group_5']));
+      const snapshot = await getDocs(q);
+      if (!snapshot.empty) {
+        const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student));
+        const hasLegacyG5 = items.some(s => !g5NewNames.has(s.name));
+        if (!hasLegacyG5) {
+          return items;
+        }
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.LIST, 'students');
+    }
+    return mockStudents.filter(s => s.groupId === 'g5');
+  }
+
+  if (groupId === 'g6' || groupId === 'group_6') {
+    try {
+      const q = query(collection(db, 'students'), where('groupId', 'in', ['g6', 'group_6']));
+      const snapshot = await getDocs(q);
+      if (!snapshot.empty) {
+        const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student));
+        const hasLegacyG6 = items.some(s => !g6NewNames.has(s.name));
+        if (!hasLegacyG6) {
+          return items;
+        }
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.LIST, 'students');
+    }
+    return mockStudents.filter(s => s.groupId === 'g6');
+  }
+
+  if (groupId === 'g7' || groupId === 'group_7') {
+    try {
+      const q = query(collection(db, 'students'), where('groupId', 'in', ['g7', 'group_7']));
+      const snapshot = await getDocs(q);
+      if (!snapshot.empty) {
+        const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student));
+        const hasLegacyG7 = items.some(s => !g7NewNames.has(s.name));
+        if (!hasLegacyG7) {
+          return items;
+        }
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.LIST, 'students');
+    }
+    return mockStudents.filter(s => s.groupId === 'g7');
+  }
+
+  if (groupId === 'g8' || groupId === 'group_8') {
+    try {
+      const q = query(collection(db, 'students'), where('groupId', 'in', ['g8', 'group_8']));
+      const snapshot = await getDocs(q);
+      if (!snapshot.empty) {
+        const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student));
+        const hasLegacyG8 = items.some(s => !g8NewNames.has(s.name));
+        if (!hasLegacyG8) {
+          return items;
+        }
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.LIST, 'students');
+    }
+    return mockStudents.filter(s => s.groupId === 'g8');
+  }
+
+  if (groupId === 'g9' || groupId === 'group_9') {
+    try {
+      const q = query(collection(db, 'students'), where('groupId', 'in', ['g9', 'group_9']));
+      const snapshot = await getDocs(q);
+      if (!snapshot.empty) {
+        const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student));
+        const hasLegacyG9 = items.some(s => !g9NewNames.has(s.name));
+        if (!hasLegacyG9) {
+          return items;
+        }
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.LIST, 'students');
+    }
+    return mockStudents.filter(s => s.groupId === 'g9');
+  }
+
+  if (groupId === 'g10' || groupId === 'group_10') {
+    try {
+      const q = query(collection(db, 'students'), where('groupId', 'in', ['g10', 'group_10']));
+      const snapshot = await getDocs(q);
+      if (!snapshot.empty) {
+        const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student));
+        const hasLegacyG10 = items.some(s => !g10NewNames.has(s.name));
+        if (!hasLegacyG10) {
+          return items;
+        }
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.LIST, 'students');
+    }
+    return mockStudents.filter(s => s.groupId === 'g10');
+  }
+
   try {
     const q = query(collection(db, 'students'), where('groupId', '==', groupId));
     const snapshot = await getDocs(q);
@@ -325,10 +1069,16 @@ export async function getAllStudentProgress(): Promise<StudentProgress[]> {
 
   return mockProgress.map(p => {
     const student = mockStudents.find(s => s.id === p.studentId);
+    const scores: number[] = [];
+    if (p.reading && p.reading > 0) scores.push(p.reading);
+    if (p.tajwid && p.tajwid > 0) scores.push(p.tajwid);
+    if (p.memorization && p.memorization > 0) scores.push(p.memorization);
+    if (p.writing && p.writing > 0) scores.push(p.writing);
+    
     return {
       ...p,
       groupId: student?.groupId || 'g1',
-      total: Math.round((p.reading + p.tajwid + p.memorization + p.writing) / 4),
+      total: scores.length > 0 ? Math.round(scores.reduce((sum, s) => sum + s, 0) / scores.length) : 0,
     };
   });
 }
@@ -383,7 +1133,7 @@ const LOCAL_READ_NOTIFS_KEY = 'sibtq_read_notifications_v1';
 
 const defaultSeedNotifications: Omit<AppNotification, 'id'>[] = [
   {
-    title: 'Jadwal Bimbingan Sabtu (07.30 - 09.00 WIB)',
+    title: 'Jadwal Bimbingan Sabtu (07:15 - 08:00 WIB)',
     message: 'Pengingat: Kegiatan Bimbingan BTQ SMPN 102 Jakarta dilaksanakan setiap hari Sabtu. Mohon seluruh mentor hadir tepat waktu.',
     type: 'info',
     targetRole: 'all',
@@ -675,7 +1425,7 @@ const defaultSeedJournals: TeachingJournal[] = [
     nextPlan: 'Melanjutkan Tilawati Jilid 3 Hal 6-10 dan mulai setoran hafalan Al-Falaq & Al-Lahab.',
     attendanceSummary: 'Hadir 5 dari 5 santri.',
     mentorId: 'mentor_1',
-    mentorName: 'Ustadz Ahmad Fauzi, S.Pd.I',
+    mentorName: 'Kak Alumni 1',
     createdAt: '2026-08-01T09:30:00.000Z'
   },
   {
@@ -835,7 +1585,7 @@ const defaultSeedCertifications: StudentCertification[] = [
     status: 'Siap Ujian',
     score: 88,
     notes: 'Hafalan An-Naba s.d An-Nas lancar, tajwid mad jaiz munfashil perlu sedikit pemantapan.',
-    examinerName: 'Ustadz Ahmad Fauzi, S.Pd.I',
+    examinerName: 'Kak Alumni 1',
     updatedAt: '2026-08-20T10:00:00.000Z'
   },
   {

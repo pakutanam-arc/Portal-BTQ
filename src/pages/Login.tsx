@@ -57,12 +57,6 @@ export function Login() {
     }
   };
 
-  const handleQuickFill = (user: string, pass: string = '12345678') => {
-    setUsername(user);
-    setPassword(pass);
-    setError('');
-  };
-
   return (
     <div className="min-h-screen relative flex items-center justify-center p-4 sm:p-6 lg:p-8 bg-[#172033] overflow-hidden select-none">
       {/* Dynamic Background Atmosphere */}
@@ -95,7 +89,7 @@ export function Login() {
           <div className="absolute -bottom-20 -right-20 w-64 h-64 rounded-full border-8 border-[#C99A2E]/20 pointer-events-none" />
 
           {/* Top Tag */}
-          <div className="relative z-10">
+          <div className="relative z-10 flex justify-center">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/15 backdrop-blur-md border border-white/20 text-white text-[11px] font-bold tracking-wide">
               <Building2 size={13} className="text-[#C99A2E]" />
               <span>SMP NEGERI 102 JAKARTA</span>
@@ -103,10 +97,10 @@ export function Login() {
           </div>
 
           {/* Middle Logo & Info */}
-          <div className="relative z-10 my-8 text-center lg:text-left">
+          <div className="relative z-10 my-8 text-center flex flex-col items-center">
             {/* Logo SMPN 102 */}
             <div className="relative inline-block mb-6">
-              <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl p-2 bg-white shadow-xl ring-4 ring-[#C99A2E]/50 mx-auto lg:mx-0">
+              <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl p-2 bg-white shadow-xl ring-4 ring-[#C99A2E]/50 mx-auto">
                 <img 
                   src={APP_LOGO} 
                   alt="Logo SMPN 102 Jakarta" 
@@ -119,25 +113,25 @@ export function Login() {
               </div>
             </div>
 
-            <div className="font-serif text-white/90 text-xs sm:text-sm tracking-wide mb-1.5 font-bold">
+            <div className="font-serif text-white/90 text-xs sm:text-sm tracking-wide mb-1.5 font-bold text-center">
               بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ
             </div>
 
-            <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight leading-tight">
+            <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight leading-tight text-center">
               {APP_NAME}
             </h1>
-            <h2 className="text-sm sm:text-base font-bold text-[#C99A2E] tracking-tight mt-0.5">
+            <h2 className="text-sm sm:text-base font-bold text-[#C99A2E] tracking-tight mt-0.5 text-center">
               {APP_SUBTITLE}
             </h2>
-            <p className="text-xs text-blue-100/90 font-medium mt-3 leading-relaxed max-w-sm">
+            <p className="text-xs text-blue-100/90 font-medium mt-3 leading-relaxed max-w-sm mx-auto text-center">
               {APP_DESC}
             </p>
           </div>
 
           {/* Bottom Accent */}
-          <div className="relative z-10 pt-4 border-t border-white/20 flex items-center gap-2 text-[11px] text-blue-100/80 font-medium">
+          <div className="relative z-10 pt-4 border-t border-white/20 flex items-center justify-center gap-2 text-[11px] text-blue-100/80 font-medium text-center">
             <ShieldCheck size={14} className="text-[#C99A2E]" />
-            <span>Sistem Administrasi Resmi Sekolah</span>
+            <span>Sistem administrasi terintegrasi</span>
           </div>
         </div>
 
@@ -152,48 +146,6 @@ export function Login() {
               <p className="text-xs text-slate-500 mt-1 font-medium">
                 Silakan masukkan kredensial akun Anda untuk melanjutkan.
               </p>
-            </div>
-
-            {/* Quick Fill Buttons */}
-            <div className="mb-6 p-2 bg-[#F5F6F8] border border-[#E6E8EC] rounded-2xl">
-              <div className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1.5 px-1">
-                Akses Cepat Pengguna Demo:
-              </div>
-              <div className="grid grid-cols-3 gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => handleQuickFill('admin')}
-                  className={`py-1.5 px-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-                    username === 'admin' 
-                      ? 'bg-[#0362D0] text-white shadow-xs' 
-                      : 'bg-white text-[#172033] hover:bg-slate-100 border border-[#E6E8EC]'
-                  }`}
-                >
-                  <span>Admin</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleQuickFill('ahmad')}
-                  className={`py-1.5 px-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-                    username === 'ahmad' 
-                      ? 'bg-[#0362D0] text-white shadow-xs' 
-                      : 'bg-white text-[#172033] hover:bg-slate-100 border border-[#E6E8EC]'
-                  }`}
-                >
-                  <span>Mentor 1</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleQuickFill('nurul')}
-                  className={`py-1.5 px-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-                    username === 'nurul' 
-                      ? 'bg-[#0362D0] text-white shadow-xs' 
-                      : 'bg-white text-[#172033] hover:bg-slate-100 border border-[#E6E8EC]'
-                  }`}
-                >
-                  <span>Mentor 2</span>
-                </button>
-              </div>
             </div>
 
             {/* Error Banner */}
@@ -325,24 +277,18 @@ export function Login() {
 
             <div className="space-y-3 text-xs text-slate-600 leading-relaxed">
               <p>
-                Akses sistem Portal BTQ diberikan kepada <strong>Administrator / Koordinator BTQ</strong> dan <strong>Mentor Pembimbing</strong>:
+                Akses Portal BTQ diperuntukkan bagi <strong>Koordinator BTQ</strong>, <strong>Administrator</strong>, dan <strong>Mentor Pembimbing</strong> resmi SMP Negeri 102 Jakarta.
               </p>
-              <div className="bg-[#F5F6F8] p-3 rounded-2xl border border-[#E6E8EC] space-y-2">
-                <div>
-                  <strong className="text-[#172033] block">Akun Administrator:</strong>
-                  <span>Username: <code className="bg-white px-1.5 py-0.5 rounded border border-[#E6E8EC] font-bold">admin</code></span>
+              <div className="bg-[#F5F6F8] p-3.5 rounded-2xl border border-[#E6E8EC] space-y-2">
+                <div className="font-extrabold text-[#172033]">
+                  Petunjuk Akses & Masalah Sandi:
                 </div>
-                <div>
-                  <strong className="text-[#172033] block">Akun Mentor:</strong>
-                  <span>Username: <code className="bg-white px-1.5 py-0.5 rounded border border-[#E6E8EC] font-bold">ahmad</code>, <code className="bg-white px-1.5 py-0.5 rounded border border-[#E6E8EC] font-bold">nurul</code></span>
-                </div>
-                <div className="pt-1 text-[11px] text-slate-500">
-                  Kata sandi bawaan: <code className="bg-white px-1.5 py-0.5 rounded border border-[#E6E8EC] font-bold">12345678</code>
-                </div>
+                <ul className="list-disc list-inside space-y-1 text-slate-600 font-medium">
+                  <li>Gunakan username atau email resmi yang telah terdaftar.</li>
+                  <li>Apabila Anda lupa kata sandi, silakan hubungi Koordinator BTQ atau Tim IT Sekolah.</li>
+                  <li>Pengajuan akun mentor baru dilakukan melalui Tim Administrasi Rohis 102.</li>
+                </ul>
               </div>
-              <p className="text-[11px] text-slate-400">
-                Jika membutuhkan masalah reset password, silakan hubungi Koordinator BTQ SMP Negeri 102 Jakarta.
-              </p>
             </div>
 
             <button

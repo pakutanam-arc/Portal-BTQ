@@ -28,6 +28,7 @@ export interface Group {
   mentorId: string;
   schedule: string;
   room: string;
+  gradeId?: string;
 }
 
 export interface Mentor {
@@ -62,6 +63,9 @@ export interface MentorAttendance {
 export interface Progress {
   id: string;
   studentId: string;
+  groupId?: string;
+  sessionId?: string;
+  semester?: number;
   date: string;
   reading: number; // 0-100
   tajwid: number; // 0-100

@@ -94,6 +94,16 @@ export function Progress() {
     }
   }, [gradeId, selectedSemester, availableSessions, selectedSessionId]);
 
+  // Helper to calculate average of non-zero scores
+  const calculateProgressAverage = (record: Partial<StudentProgress>) => {
+    const scores: number[] = [];
+    if (record.reading && record.reading > 0) scores.push(Number(record.reading));
+    if (record.tajwid && record.tajwid > 0) scores.push(Number(record.tajwid));
+    if (record.memorization && record.memorization > 0) scores.push(Number(record.memorization));
+    if (record.writing && record.writing > 0) scores.push(Number(record.writing));
+    return scores.length > 0 ? Math.round(scores.reduce((sum, s) => sum + s, 0) / scores.length) : 0;
+  };
+
   // Load progress for selected group and session
   useEffect(() => {
     async function loadSessionProgress() {
@@ -107,6 +117,7 @@ export function Progress() {
         
         const stateMap: Record<string, Partial<StudentProgress>> = {};
         records.forEach(r => {
+          r.total = calculateProgressAverage(r);
           stateMap[r.studentId] = r;
         });
         setSessionProgress(stateMap);
@@ -118,14 +129,12 @@ export function Progress() {
   }, [selectedGroupId, selectedSessionId]);
 
   const handleScoreChange = (studentId: string, field: keyof StudentProgress, value: string) => {
-    const numValue = Math.min(100, Math.max(0, parseInt(value) || 0));
+    const numValue = value === '' ? 0 : Math.min(100, Math.max(0, parseInt(value) || 0));
     setSessionProgress(prev => {
       const current = prev[studentId] || { reading: 0, tajwid: 0, memorization: 0, writing: 0 };
       const updated = { ...current, [field]: numValue };
       
-      updated.total = Math.round(
-        ((updated.reading || 0) + (updated.tajwid || 0) + (updated.memorization || 0) + (updated.writing || 0)) / 4
-      );
+      updated.total = calculateProgressAverage(updated);
       
       return { ...prev, [studentId]: updated };
     });
@@ -187,6 +196,7 @@ export function Progress() {
       const records = allProgress.filter(pr => pr.groupId === selectedGroupId && pr.sessionId === selectedSessionId);
       const stateMap: Record<string, Partial<StudentProgress>> = {};
       records.forEach(r => {
+        r.total = calculateProgressAverage(r);
         stateMap[r.studentId] = r;
       });
       setSessionProgress(stateMap);
@@ -314,7 +324,7 @@ export function Progress() {
                           type="number" 
                           min="0" max="100" 
                           className="text-center h-9 px-1 font-bold text-xs border-[#E6E8EC]"
-                          value={p.reading}
+                          value={p.reading === 0 || p.reading === '' || p.reading === undefined ? '' : p.reading}
                           onChange={(e) => handleScoreChange(student.id, 'reading', e.target.value)}
                         />
                       </TableCell>
@@ -323,7 +333,7 @@ export function Progress() {
                           type="number" 
                           min="0" max="100" 
                           className="text-center h-9 px-1 font-bold text-xs border-[#E6E8EC]"
-                          value={p.tajwid}
+                          value={p.tajwid === 0 || p.tajwid === '' || p.tajwid === undefined ? '' : p.tajwid}
                           onChange={(e) => handleScoreChange(student.id, 'tajwid', e.target.value)}
                         />
                       </TableCell>
@@ -332,7 +342,7 @@ export function Progress() {
                           type="number" 
                           min="0" max="100" 
                           className="text-center h-9 px-1 font-bold text-xs border-[#E6E8EC]"
-                          value={p.memorization}
+                          value={p.memorization === 0 || p.memorization === '' || p.memorization === undefined ? '' : p.memorization}
                           onChange={(e) => handleScoreChange(student.id, 'memorization', e.target.value)}
                         />
                       </TableCell>
@@ -341,7 +351,7 @@ export function Progress() {
                           type="number" 
                           min="0" max="100" 
                           className="text-center h-9 px-1 font-bold text-xs border-[#E6E8EC]"
-                          value={p.writing}
+                          value={p.writing === 0 || p.writing === '' || p.writing === undefined ? '' : p.writing}
                           onChange={(e) => handleScoreChange(student.id, 'writing', e.target.value)}
                         />
                       </TableCell>

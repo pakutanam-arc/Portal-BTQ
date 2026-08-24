@@ -51,7 +51,7 @@ export function Curriculum() {
                 <Calendar size={12} /> Setiap Hari Sabtu
               </span>
               <span className="px-3 py-1 rounded-full bg-white/10 text-slate-100 text-xs font-bold border border-white/10">
-                Pukul 07.30 - 09.00 WIB
+                Pukul 07:15 - 08:00 WIB
               </span>
               <span className="px-3 py-1 rounded-full bg-[#0362D0]/40 text-blue-100 text-xs font-black border border-blue-300/30">
                 Status: 2 Sesi Pertemuan Terlaksana
