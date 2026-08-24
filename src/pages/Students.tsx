@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Plus, Filter, Download, Upload, Users } from 'lucide-react';
+import { Search, Plus, Filter, Download, Upload, Users, GraduationCap, ShieldCheck } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
@@ -65,25 +65,39 @@ export function Students() {
   });
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <div className="space-y-6 max-w-[1240px] mx-auto">
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-3xl border border-[#E6E8EC] shadow-xs">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Data Siswa</h1>
-          <p className="text-gray-500 mt-1 text-sm">Kelola data seluruh siswa peserta BTQ</p>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-black text-[#172033] tracking-tight">Data Santri BTQ</h1>
+            <span className="px-3 py-0.5 rounded-full bg-[#0362D0]/10 text-[#0362D0] text-xs font-black border border-[#0362D0]/20">
+              SMP Negeri 102 Jakarta
+            </span>
+          </div>
+          <p className="text-slate-500 mt-1 text-xs sm:text-sm font-medium">
+            Direktori peserta bimbingan Baca Tulis Al-Qur'an dan alokasi kelompok
+          </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" className="hidden sm:flex"><Download size={16} className="mr-2" /> Export</Button>
-          <Button variant="outline" size="sm" className="hidden sm:flex"><Upload size={16} className="mr-2" /> Import</Button>
-          <Button size="sm"><Plus size={16} className="mr-2" /> Tambah Siswa</Button>
+          <Button variant="outline" size="sm" className="hidden sm:flex border-[#E6E8EC] text-[#172033] hover:bg-[#F5F6F8] font-bold">
+            <Download size={15} className="mr-2 text-[#0362D0]" /> Export Data
+          </Button>
+          <Button variant="outline" size="sm" className="hidden sm:flex border-[#E6E8EC] text-[#172033] hover:bg-[#F5F6F8] font-bold">
+            <Upload size={15} className="mr-2 text-[#C99A2E]" /> Import Excel
+          </Button>
+          <Button size="sm" className="bg-[#0362D0] hover:bg-[#0252b3] text-white font-bold shadow-xs">
+            <Plus size={16} className="mr-1.5" /> Tambah Santri
+          </Button>
         </div>
       </div>
 
-      <Card>
-        <div className="p-4 border-b border-gray-100 flex flex-col sm:flex-row gap-4">
+      <Card className="border border-[#E6E8EC] rounded-3xl overflow-hidden shadow-xs bg-white">
+        <div className="p-4 border-b border-[#E6E8EC] bg-[#F5F6F8]/50 flex flex-col sm:flex-row gap-4 justify-between items-center">
           <div className="w-full sm:max-w-xs">
             <Input 
-              placeholder="Cari nama siswa..." 
-              icon={<Search size={16} />}
+              placeholder="Cari nama atau kelas santri..." 
+              icon={<Search size={16} className="text-[#0362D0]" />}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -92,7 +106,7 @@ export function Students() {
             <Select 
               value={classFilter}
               onChange={(e) => setClassFilter(e.target.value)}
-              className="w-full sm:w-[120px]"
+              className="w-full sm:w-[130px] font-medium text-xs"
             >
               <option value="">Semua Kelas</option>
               <option value="7">Kelas 7</option>
@@ -102,69 +116,78 @@ export function Students() {
             <Select 
               value={groupFilter}
               onChange={(e) => setGroupFilter(e.target.value)}
-              className="w-full sm:w-[160px]"
+              className="w-full sm:w-[170px] font-medium text-xs"
             >
               <option value="">Semua Kelompok</option>
               {groups.map(g => (
                 <option key={g.id} value={g.id}>{g.name}</option>
               ))}
             </Select>
-            <Button variant="outline" className="col-span-2 sm:col-span-1 px-3 flex justify-center bg-white" title="Filter Lainnya"><Filter size={16} /><span className="sm:hidden ml-2">Filter Lainnya</span></Button>
           </div>
         </div>
 
         {loading ? (
-          <div className="py-12 flex justify-center">
-            <div className="animate-pulse flex flex-col items-center gap-4 text-emerald-600">
+          <div className="py-16 flex justify-center">
+            <div className="animate-pulse flex flex-col items-center gap-4 text-[#0362D0]">
               <Users size={32} />
-              <p>Memuat data siswa...</p>
+              <p className="font-semibold text-[#172033]">Memuat data santri...</p>
             </div>
           </div>
         ) : (
           <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-16 text-center">No</TableHead>
-                <TableHead>Nama Siswa</TableHead>
-                <TableHead className="text-center">Kelas</TableHead>
-                <TableHead>Kelompok</TableHead>
-                <TableHead className="text-center">Status</TableHead>
-                <TableHead className="text-right">Aksi</TableHead>
+            <TableHeader className="bg-[#F5F6F8]">
+              <TableRow className="border-b border-[#E6E8EC]">
+                <TableHead className="w-16 text-center font-black text-[#172033] text-xs">No</TableHead>
+                <TableHead className="font-black text-[#172033] text-xs">Nama Santri</TableHead>
+                <TableHead className="text-center font-black text-[#172033] text-xs">Kelas</TableHead>
+                <TableHead className="font-black text-[#172033] text-xs">Kelompok BTQ</TableHead>
+                <TableHead className="text-center font-black text-[#172033] text-xs">Status</TableHead>
+                <TableHead className="text-right font-black text-[#172033] text-xs">Aksi</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredStudents.map((student, idx) => {
                 const group = groups.find(g => g.id === student.groupId);
                 return (
-                  <TableRow key={student.id} className="group cursor-pointer hover:bg-gray-50/50">
-                    <TableCell className="text-center text-gray-500">{idx + 1}</TableCell>
+                  <TableRow key={student.id} className="group hover:bg-[#F5F6F8]/60 transition-colors border-b border-[#E6E8EC]/80">
+                    <TableCell className="text-center text-slate-500 font-bold text-xs">{idx + 1}</TableCell>
                     <TableCell>
-                      <div className="font-medium text-gray-900">{student.name}</div>
-                      <div className="text-xs text-gray-500">{student.gender === 'L' ? 'Laki-laki' : 'Perempuan'}</div>
+                      <div className="font-extrabold text-[#172033] text-sm">{student.name}</div>
+                      <div className="text-[11px] text-slate-500 font-medium">
+                        NIS: {student.nis || '-'} • {student.gender === 'L' ? 'Laki-laki' : 'Perempuan'}
+                      </div>
                     </TableCell>
                     <TableCell className="text-center">
-                      <span className="px-2.5 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200/60 rounded-md text-xs font-bold">
+                      <span className="px-2.5 py-1 bg-[#0362D0]/10 text-[#0362D0] border border-[#0362D0]/20 rounded-md text-xs font-black inline-block">
                         Kelas {student.class || '-'}
                       </span>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="neutral" className="font-normal">{group?.name || '-'}</Badge>
+                      <span className="px-2.5 py-1 bg-[#F5F6F8] text-[#172033] border border-[#E6E8EC] rounded-md text-xs font-bold inline-block">
+                        {group?.name || 'Belum Ada Kelompok'}
+                      </span>
                     </TableCell>
                     <TableCell className="text-center">
-                      <Badge variant={student.status === 'Aktif' ? 'success' : 'danger'}>
+                      <span className={`px-2.5 py-1 text-[10px] font-black uppercase rounded-md border ${
+                        student.status === 'Aktif' 
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                          : 'bg-rose-50 text-rose-700 border-rose-200'
+                      }`}>
                         {student.status || 'Aktif'}
-                      </Badge>
+                      </span>
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="sm" className="opacity-0 group-hover:opacity-100 transition-opacity">Detail</Button>
+                      <Button variant="ghost" size="sm" className="text-[#0362D0] hover:bg-[#0362D0]/10 font-bold text-xs">
+                        Detail
+                      </Button>
                     </TableCell>
                   </TableRow>
                 );
               })}
               {filteredStudents.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-gray-500">
-                    Tidak ada data siswa yang ditemukan.
+                  <TableCell colSpan={6} className="text-center py-12 text-slate-500 font-medium">
+                    Tidak ada data santri yang ditemukan.
                   </TableCell>
                 </TableRow>
               )}
@@ -173,11 +196,11 @@ export function Students() {
         )}
         
         {!loading && (
-          <div className="p-4 border-t border-gray-100 flex items-center justify-between text-sm text-gray-500">
-            <div>Menampilkan {filteredStudents.length} dari {students.length} siswa</div>
+          <div className="p-4 border-t border-[#E6E8EC] bg-[#F5F6F8]/50 flex items-center justify-between text-xs font-bold text-slate-600">
+            <div>Menampilkan {filteredStudents.length} dari {students.length} santri</div>
             <div className="flex gap-1">
-              <Button variant="outline" size="sm" disabled>Prev</Button>
-              <Button variant="outline" size="sm" disabled>Next</Button>
+              <Button variant="outline" size="sm" disabled className="text-xs font-bold border-[#E6E8EC]">Prev</Button>
+              <Button variant="outline" size="sm" disabled className="text-xs font-bold border-[#E6E8EC]">Next</Button>
             </div>
           </div>
         )}
@@ -185,3 +208,4 @@ export function Students() {
     </div>
   );
 }
+

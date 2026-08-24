@@ -1,1 +1,50 @@
 @import "tailwindcss";
+
+@theme {
+  --color-royal-blue: #0362D0;
+  --color-royal-blue-hover: #0252b3;
+  --color-brand-maroon: #950415;
+  --color-brand-maroon-hover: #7b0311;
+  --color-brand-gold: #C99A2E;
+  --color-brand-gold-light: #f7eed7;
+  --color-dark-navy: #172033;
+  --color-soft-gray: #F5F6F8;
+  --color-brand-border: #E6E8EC;
+}
+
+@layer base {
+  body {
+    background-color: #F5F6F8;
+    color: #172033;
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  }
+}
+
+/* Subtle Islamic Geometric Pattern background */
+.bg-islamic-pattern {
+  background-image: radial-gradient(rgba(201, 154, 46, 0.15) 1px, transparent 1px), radial-gradient(rgba(3, 98, 208, 0.1) 1px, transparent 1px);
+  background-size: 24px 24px;
+  background-position: 0 0, 12px 12px;
+}
+
+.bg-geometric-dark {
+  background-image: radial-gradient(rgba(201, 154, 46, 0.2) 1.5px, transparent 1.5px), radial-gradient(rgba(255, 255, 255, 0.08) 1.5px, transparent 1.5px);
+  background-size: 28px 28px;
+  background-position: 0 0, 14px 14px;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #F5F6F8;
+}
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}

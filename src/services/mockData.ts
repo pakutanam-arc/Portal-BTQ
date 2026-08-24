@@ -14,12 +14,25 @@ export const mockMentors: Mentor[] = [
   { id: 'm10', name: 'Kak Khadijah', email: 'khadijah@smpn102.sch.id', status: 'Aktif', groupId: 'g10' },
 ];
 
+const groupRooms: Record<number, string> = {
+  1: 'Mushola',
+  2: 'Mushola',
+  3: 'Mushola',
+  4: '9A',
+  5: '9B',
+  6: '9C',
+  7: 'Perpustakaan',
+  8: 'Perpustakaan',
+  9: '7C lantai 1',
+  10: '9D',
+};
+
 export const mockGroups: Group[] = Array.from({ length: 10 }).map((_, i) => ({
   id: `g${i + 1}`,
   name: `Kelompok ${i + 1}`,
   mentorId: `m${i + 1}`,
   schedule: i % 2 === 0 ? 'Senin, 15:30 - 17:00' : 'Rabu, 15:30 - 17:00',
-  room: `Ruang ${101 + i}`,
+  room: groupRooms[i + 1] || `Ruang ${101 + i}`,
 }));
 
 const firstNamesL = ['Budi', 'Andi', 'Rizky', 'Fajar', 'Hendra', 'Aditya', 'Dimas', 'Eko', 'Ilham', 'Deni', 'Arif', 'Bayu', 'Gilang', 'Rian', 'Fauzan'];

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Save, CheckCircle, RotateCcw, MessageSquare, Loader2, BookOpen, Users, UserCheck, AlertCircle, Sparkles, Clock, Check } from 'lucide-react';
+import { Calendar, Save, CheckCircle, RotateCcw, MessageSquare, Loader2, BookOpen, Users, UserCheck, AlertCircle, Sparkles, Clock, Check, ShieldCheck } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Select } from '../components/ui/Select';
@@ -221,46 +221,51 @@ export function StudentAttendance() {
   const alpaCount = attendanceList.filter(a => a.status === 'Alpa').length;
 
   return (
-    <div className="space-y-6 relative pb-12">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <div className="space-y-6 max-w-[1240px] mx-auto pb-12">
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-3xl border border-[#E6E8EC] shadow-xs">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Absensi Kehadiran Siswa</h1>
-          <p className="text-gray-500 mt-1 text-sm">
-            Pencatatan kehadiran bimbingan BTQ SMPN 102 Jakarta • Pelaksanaan setiap hari <strong>Sabtu (07.30 - 09.00 WIB)</strong>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-black text-[#172033] tracking-tight">Presensi Kehadiran Santri</h1>
+            <span className="px-3 py-0.5 rounded-full bg-[#0362D0]/10 text-[#0362D0] text-xs font-black border border-[#0362D0]/20">
+              Sesi Sabtu (07.30 - 09.00 WIB)
+            </span>
+          </div>
+          <p className="text-slate-500 mt-1 text-xs sm:text-sm font-medium">
+            Formulir pencatatan presensi tatap muka cepat untuk mentor bimbingan BTQ SMPN 102 Jakarta
           </p>
         </div>
       </div>
 
       {/* Mentor Info Banner if Mentor logged in */}
       {isMentor && (
-        <div className="bg-gradient-to-r from-emerald-800 to-teal-900 text-white rounded-2xl p-5 shadow-sm border border-emerald-700">
+        <div className="bg-gradient-to-r from-[#172033] via-[#0362D0] to-[#172033] text-white rounded-3xl p-6 shadow-md border border-[#E6E8EC]">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="space-y-1">
               <div className="flex items-center gap-2">
-                <span className="px-2.5 py-0.5 rounded-full bg-emerald-700/80 text-emerald-100 text-xs font-semibold uppercase tracking-wider border border-emerald-500/30">
+                <span className="px-2.5 py-0.5 rounded-full bg-[#C99A2E] text-slate-950 text-xs font-extrabold uppercase tracking-wider">
                   Panel Mentor
                 </span>
-                <span className="px-2.5 py-0.5 rounded-full bg-amber-400 text-emerald-950 text-xs font-bold flex items-center gap-1">
-                  <Calendar size={12} /> Setiap Sabtu
+                <span className="px-2.5 py-0.5 rounded-full bg-white/20 text-white text-xs font-bold flex items-center gap-1">
+                  <Calendar size={12} /> Bimbingan Sabtu
                 </span>
               </div>
-              <h2 className="text-lg font-bold">
+              <h2 className="text-lg font-black">
                 Selamat Datang, {userData?.name || currentMentorObj?.name || 'Ustadz/ah Mentor'}
               </h2>
-              <p className="text-xs text-emerald-100/90 leading-relaxed">
-                Kelompok Binaan: <strong>{currentGroupObj?.name || 'Kelompok 1'}</strong> • Program: <strong>{currentGradeObj?.name} ({currentGradeObj?.programName})</strong>
+              <p className="text-xs text-slate-200 font-medium">
+                Kelompok: <strong>{currentGroupObj?.name || 'Kelompok 1'}</strong> • Program: <strong>{currentGradeObj?.name} ({currentGradeObj?.programName})</strong>
               </p>
             </div>
-            <div className="flex items-center gap-3 bg-emerald-950/40 p-3 rounded-xl border border-emerald-700/40">
+            <div className="flex items-center gap-3 bg-white/10 p-3 rounded-2xl border border-white/20 backdrop-blur-xs">
               <div className="text-center px-3">
-                <p className="text-[10px] text-emerald-300 uppercase font-semibold">Total Santri</p>
-                <p className="text-lg font-bold text-white">{totalCount}</p>
+                <p className="text-[10px] text-slate-300 uppercase font-extrabold">Total Santri</p>
+                <p className="text-xl font-black text-white">{totalCount}</p>
               </div>
-              <div className="w-px h-8 bg-emerald-700"></div>
+              <div className="w-px h-8 bg-white/20"></div>
               <div className="text-center px-3">
-                <p className="text-[10px] text-emerald-300 uppercase font-semibold">Sesi Aktif</p>
-                <p className="text-lg font-bold text-amber-300">Sesi 3 (Sabtu)</p>
+                <p className="text-[10px] text-slate-300 uppercase font-extrabold">Ruang Belajar</p>
+                <p className="text-sm font-bold text-[#C99A2E]">{currentGroupObj?.room || 'Ruang 102'}</p>
               </div>
             </div>
           </div>
@@ -268,15 +273,15 @@ export function StudentAttendance() {
       )}
 
       {/* Main Filter & Control Card */}
-      <Card>
-        <div className="p-4 border-b border-gray-100 bg-gray-50/50">
+      <Card className="border border-[#E6E8EC] rounded-3xl overflow-hidden shadow-xs bg-white">
+        <div className="p-5 border-b border-[#E6E8EC] bg-[#F5F6F8]/60">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-gray-700 uppercase">Kelompok Binaan</label>
+              <label className="text-xs font-black text-[#172033] uppercase tracking-wider">Kelompok Bimbingan</label>
               <Select 
                 value={selectedGroup}
                 onChange={(e) => setSelectedGroup(e.target.value)}
-                className="w-full"
+                className="w-full font-bold text-xs"
               >
                 {groups.map(g => {
                   const isAssigned = isMentor && (
@@ -295,21 +300,21 @@ export function StudentAttendance() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-gray-700 uppercase">Tanggal Pertemuan (Sabtu)</label>
+              <label className="text-xs font-black text-[#172033] uppercase tracking-wider">Tanggal Bimbingan</label>
               <Input 
                 type="date" 
                 value={selectedDate}
                 onChange={(e) => setSelectedDate(e.target.value)}
-                icon={<Calendar size={16} />}
+                icon={<Calendar size={16} className="text-[#0362D0]" />}
               />
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-gray-700 uppercase">Semester</label>
+              <label className="text-xs font-black text-[#172033] uppercase tracking-wider">Semester</label>
               <Select 
                 value={selectedSemester.toString()}
                 onChange={(e) => setSelectedSemester(parseInt(e.target.value))}
-                className="w-full"
+                className="w-full font-bold text-xs"
               >
                 <option value="1">Semester 1 (Pertemuan 1 – 16)</option>
                 <option value="2">Semester 2 (Pertemuan 17 – 32)</option>
@@ -317,11 +322,11 @@ export function StudentAttendance() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-gray-700 uppercase">Materi Sesi (Kurikulum)</label>
+              <label className="text-xs font-black text-[#172033] uppercase tracking-wider">Materi Kurikulum</label>
               <Select 
                 value={selectedSessionId}
                 onChange={(e) => setSelectedSessionId(e.target.value)}
-                className="w-full"
+                className="w-full font-bold text-xs"
               >
                 {availableSessions.map(s => {
                   const isDone = selectedSemester === 1 && s.sessionNumber <= 2;
@@ -329,7 +334,7 @@ export function StudentAttendance() {
                   const tag = isDone ? ' [Selesai]' : isActive ? ' [Sesi Aktif]' : '';
                   return (
                     <option key={s.id} value={s.id}>
-                      Pertemuan {s.sessionNumber} ({s.scheduleDay || 'Sabtu'}): {s.topic}{tag}
+                      Pertemuan {s.sessionNumber}: {s.topic}{tag}
                     </option>
                   );
                 })}
@@ -339,26 +344,26 @@ export function StudentAttendance() {
 
           {/* Active Session Info Box */}
           {activeSessionObj && (
-            <div className="mt-4 p-3 bg-emerald-50 rounded-xl border border-emerald-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+            <div className="mt-4 p-4 bg-[#0362D0]/10 rounded-2xl border border-[#0362D0]/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
               <div className="space-y-0.5">
                 <div className="flex items-center gap-2">
-                  <span className="font-bold text-emerald-900">
+                  <span className="font-extrabold text-[#0362D0]">
                     Pertemuan {activeSessionObj.sessionNumber}: {activeSessionObj.topic}
                   </span>
                   {activeSessionObj.pageRef && (
-                    <span className="px-1.5 py-0.5 bg-emerald-200/80 text-emerald-900 rounded text-[10px] font-semibold">
+                    <span className="px-2 py-0.5 bg-white text-[#0362D0] border border-[#0362D0]/30 rounded text-[10px] font-black">
                       Ref: {activeSessionObj.pageRef}
                     </span>
                   )}
                 </div>
-                <p className="text-slate-600 text-[11px]">
+                <p className="text-slate-600 text-[11px] font-medium">
                   <strong>Target Capaian:</strong> {activeSessionObj.target}
                 </p>
               </div>
               <div className="shrink-0 flex items-center gap-2">
-                <span className="px-2.5 py-1 rounded-full bg-white border border-emerald-200 text-emerald-800 text-[11px] font-medium flex items-center gap-1">
-                  <Clock size={12} className="text-emerald-600" />
-                  07.30 - 09.00 WIB
+                <span className="px-3 py-1 rounded-full bg-white border border-[#E6E8EC] text-[#172033] text-[11px] font-bold flex items-center gap-1 shadow-2xs">
+                  <Clock size={12} className="text-[#0362D0]" />
+                  Sabtu, 07.30 - 09.00 WIB
                 </span>
               </div>
             </div>
@@ -366,31 +371,31 @@ export function StudentAttendance() {
         </div>
 
         {/* Attendance Summary Counters Bar */}
-        <div className="p-4 bg-white border-b border-gray-100 flex flex-wrap items-center justify-between gap-3">
+        <div className="p-4 bg-white border-b border-[#E6E8EC] flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Rekap:</span>
-            <span className="px-3 py-1 bg-slate-100 text-slate-700 rounded-lg text-xs font-bold flex items-center gap-1">
-              Total: {totalCount} Siswa
+            <span className="text-xs font-black text-[#172033] uppercase tracking-wider">Rekap Presensi:</span>
+            <span className="px-3 py-1 bg-[#F5F6F8] text-[#172033] border border-[#E6E8EC] rounded-xl text-xs font-extrabold flex items-center gap-1">
+              Total: {totalCount} Santri
             </span>
-            <span className="px-3 py-1 bg-emerald-100 text-emerald-800 rounded-lg text-xs font-bold flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-emerald-500"></span> Hadir: {hadirCount}
+            <span className="px-3 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-extrabold flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-emerald-600"></span> Hadir: {hadirCount}
             </span>
-            <span className="px-3 py-1 bg-amber-100 text-amber-800 rounded-lg text-xs font-bold flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-amber-500"></span> Izin: {izinCount}
+            <span className="px-3 py-1 bg-amber-50 text-amber-800 border border-amber-200 rounded-xl text-xs font-extrabold flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-amber-600"></span> Izin: {izinCount}
             </span>
-            <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-lg text-xs font-bold flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-blue-500"></span> Sakit: {sakitCount}
+            <span className="px-3 py-1 bg-blue-50 text-blue-800 border border-blue-200 rounded-xl text-xs font-extrabold flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-blue-600"></span> Sakit: {sakitCount}
             </span>
-            <span className="px-3 py-1 bg-rose-100 text-rose-800 rounded-lg text-xs font-bold flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-rose-500"></span> Alpa: {alpaCount}
+            <span className="px-3 py-1 bg-rose-50 text-rose-800 border border-rose-200 rounded-xl text-xs font-extrabold flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-rose-600"></span> Alpa: {alpaCount}
             </span>
           </div>
 
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => setAllStatus('Hadir')}>
+            <Button variant="outline" size="sm" onClick={() => setAllStatus('Hadir')} className="border-[#E6E8EC] text-[#172033] hover:bg-[#F5F6F8] font-bold text-xs">
               <Check size={14} className="mr-1 text-emerald-600" /> Hadir Semua
             </Button>
-            <Button variant="outline" size="sm" onClick={handleReset}>
+            <Button variant="outline" size="sm" onClick={handleReset} className="border-[#E6E8EC] text-slate-600 hover:bg-[#F5F6F8] font-bold text-xs">
               <RotateCcw size={14} className="mr-1 text-slate-500" /> Reset
             </Button>
           </div>
@@ -398,28 +403,28 @@ export function StudentAttendance() {
 
         {/* Student List */}
         {loading ? (
-          <div className="p-12 text-center text-slate-500 flex flex-col items-center justify-center gap-3">
-            <Loader2 size={32} className="animate-spin text-emerald-600" />
-            <p className="text-sm font-medium">Memuat data siswa...</p>
+          <div className="p-16 text-center text-slate-500 flex flex-col items-center justify-center gap-3">
+            <Loader2 size={32} className="animate-spin text-[#0362D0]" />
+            <p className="text-sm font-bold text-[#172033]">Memuat data santri...</p>
           </div>
         ) : groupStudents.length === 0 ? (
-          <div className="p-12 text-center text-slate-500">
+          <div className="p-16 text-center text-slate-500">
             <Users size={36} className="mx-auto mb-2 text-slate-400" />
-            <p className="text-sm font-semibold">Tidak ada siswa terdaftar di kelompok ini.</p>
-            <p className="text-xs text-slate-400 mt-1">Pilih kelompok lain atau periksa konfigurasi kelompok.</p>
+            <p className="text-sm font-bold text-[#172033]">Tidak ada santri terdaftar di kelompok ini.</p>
+            <p className="text-xs text-slate-400 mt-1 font-medium">Pilih kelompok lain atau periksa konfigurasi kelompok.</p>
           </div>
         ) : (
           <>
             {/* Desktop Table View */}
             <div className="hidden md:block overflow-x-auto">
               <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-12 text-center">No</TableHead>
-                    <TableHead>Nama Siswa</TableHead>
-                    <TableHead className="text-center">Kelas</TableHead>
-                    <TableHead className="text-center w-72">Status Kehadiran</TableHead>
-                    <TableHead>Catatan Mentor</TableHead>
+                <TableHeader className="bg-[#F5F6F8]">
+                  <TableRow className="border-b border-[#E6E8EC]">
+                    <TableHead className="w-12 text-center font-black text-[#172033] text-xs">No</TableHead>
+                    <TableHead className="font-black text-[#172033] text-xs">Nama Santri</TableHead>
+                    <TableHead className="text-center font-black text-[#172033] text-xs">Kelas</TableHead>
+                    <TableHead className="text-center w-72 font-black text-[#172033] text-xs">Status Presensi</TableHead>
+                    <TableHead className="font-black text-[#172033] text-xs">Catatan Mentor</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -428,33 +433,34 @@ export function StudentAttendance() {
                     const currentNotes = attendance[student.id]?.notes || '';
                     
                     return (
-                      <TableRow key={student.id} className="hover:bg-slate-50/60 transition-colors">
-                        <TableCell className="text-center text-gray-500 py-3">{idx + 1}</TableCell>
+                      <TableRow key={student.id} className="hover:bg-[#F5F6F8]/60 transition-colors border-b border-[#E6E8EC]">
+                        <TableCell className="text-center text-slate-500 py-3 font-bold text-xs">{idx + 1}</TableCell>
                         <TableCell className="py-3">
-                          <div className="font-semibold text-gray-900">{student.name}</div>
+                          <div className="font-extrabold text-[#172033] text-sm">{student.name}</div>
+                          <div className="text-[11px] text-slate-400 font-medium">NIS: {student.nis || '-'}</div>
                         </TableCell>
                         <TableCell className="text-center py-3">
-                          <span className="px-2.5 py-1 bg-emerald-50 text-emerald-800 rounded-md text-xs font-bold border border-emerald-200/60">
+                          <span className="px-2.5 py-1 bg-[#0362D0]/10 text-[#0362D0] rounded-md text-xs font-black border border-[#0362D0]/20">
                             Kelas {student.class}
                           </span>
                         </TableCell>
                         <TableCell className="text-center py-3">
-                          <div className="inline-flex rounded-lg shadow-sm border border-slate-200 overflow-hidden p-0.5 bg-slate-50">
+                          <div className="inline-flex rounded-xl border border-[#E6E8EC] overflow-hidden p-1 bg-[#F5F6F8]">
                             {[
-                              { label: 'Hadir', activeClass: 'bg-emerald-600 text-white shadow-sm' },
-                              { label: 'Izin', activeClass: 'bg-amber-500 text-white shadow-sm' },
-                              { label: 'Sakit', activeClass: 'bg-blue-600 text-white shadow-sm' },
-                              { label: 'Alpa', activeClass: 'bg-rose-600 text-white shadow-sm' }
+                              { label: 'Hadir', activeClass: 'bg-emerald-600 text-white shadow-2xs' },
+                              { label: 'Izin', activeClass: 'bg-amber-500 text-white shadow-2xs' },
+                              { label: 'Sakit', activeClass: 'bg-blue-600 text-white shadow-2xs' },
+                              { label: 'Alpa', activeClass: 'bg-rose-600 text-white shadow-2xs' }
                             ].map(({ label, activeClass }) => (
                               <button
                                 key={label}
                                 type="button"
                                 onClick={() => handleStatusChange(student.id, label)}
                                 className={cn(
-                                  "px-3.5 py-1.5 text-xs font-semibold rounded-md transition-all",
+                                  "px-3 py-1.5 text-xs font-extrabold rounded-lg transition-all cursor-pointer",
                                   currentStatus === label 
                                     ? activeClass
-                                    : "text-slate-600 hover:text-slate-900 hover:bg-white/80"
+                                    : "text-slate-600 hover:text-[#172033] hover:bg-white"
                                 )}
                               >
                                 {label}
@@ -464,13 +470,13 @@ export function StudentAttendance() {
                         </TableCell>
                         <TableCell className="py-3">
                           <div className="relative">
-                            <MessageSquare className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
+                            <MessageSquare className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
                             <input 
                               type="text" 
                               value={currentNotes}
                               onChange={(e) => handleNotesChange(student.id, e.target.value)}
-                              placeholder="Catatan keaktifan/adab..." 
-                              className="w-full text-xs border border-slate-200 bg-white rounded-lg py-2 pl-9 pr-3 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                              placeholder="Catatan bacaan/adab..." 
+                              className="w-full text-xs border border-[#E6E8EC] bg-white rounded-xl py-2 pl-9 pr-3 focus:outline-none focus:ring-2 focus:ring-[#0362D0] text-[#172033]"
                             />
                           </div>
                         </TableCell>
@@ -482,7 +488,7 @@ export function StudentAttendance() {
             </div>
 
             {/* Mobile Card View */}
-            <div className="md:hidden divide-y divide-slate-100">
+            <div className="md:hidden divide-y divide-[#E6E8EC]">
               {groupStudents.map((student, idx) => {
                 const currentStatus = attendance[student.id]?.status || 'Hadir';
                 const currentNotes = attendance[student.id]?.notes || '';
@@ -491,29 +497,29 @@ export function StudentAttendance() {
                   <div key={student.id} className="p-4 space-y-3 bg-white">
                     <div className="flex items-start justify-between">
                       <div>
-                        <div className="font-bold text-slate-900 text-sm">{idx + 1}. {student.name}</div>
+                        <div className="font-extrabold text-[#172033] text-sm">{idx + 1}. {student.name}</div>
                       </div>
-                      <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-800 border border-emerald-200/60 rounded-md text-xs font-bold">
+                      <span className="px-2.5 py-0.5 bg-[#0362D0]/10 text-[#0362D0] border border-[#0362D0]/20 rounded-md text-xs font-black">
                         Kelas {student.class}
                       </span>
                     </div>
                     
-                    <div className="grid grid-cols-4 gap-1.5 p-1 bg-slate-100 rounded-lg">
+                    <div className="grid grid-cols-4 gap-1.5 p-1 bg-[#F5F6F8] rounded-xl border border-[#E6E8EC]">
                       {[
-                        { label: 'Hadir', activeClass: 'bg-emerald-600 text-white shadow' },
-                        { label: 'Izin', activeClass: 'bg-amber-500 text-white shadow' },
-                        { label: 'Sakit', activeClass: 'bg-blue-600 text-white shadow' },
-                        { label: 'Alpa', activeClass: 'bg-rose-600 text-white shadow' }
+                        { label: 'Hadir', activeClass: 'bg-emerald-600 text-white' },
+                        { label: 'Izin', activeClass: 'bg-amber-500 text-white' },
+                        { label: 'Sakit', activeClass: 'bg-blue-600 text-white' },
+                        { label: 'Alpa', activeClass: 'bg-rose-600 text-white' }
                       ].map(({ label, activeClass }) => (
                         <button
                           key={label}
                           type="button"
                           onClick={() => handleStatusChange(student.id, label)}
                           className={cn(
-                            "py-1.5 text-xs font-bold rounded-md transition-all",
+                            "py-1.5 text-xs font-extrabold rounded-lg transition-all",
                             currentStatus === label 
                               ? activeClass
-                              : "text-slate-600 bg-white/60 hover:bg-white"
+                              : "text-slate-600 bg-white"
                           )}
                         >
                           {label}
@@ -528,7 +534,7 @@ export function StudentAttendance() {
                         value={currentNotes}
                         onChange={(e) => handleNotesChange(student.id, e.target.value)}
                         placeholder="Catatan santri..." 
-                        className="w-full text-xs border border-slate-200 bg-white rounded-md py-2 pl-9 pr-3 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        className="w-full text-xs border border-[#E6E8EC] bg-white rounded-xl py-2 pl-9 pr-3 focus:outline-none focus:ring-2 focus:ring-[#0362D0]"
                       />
                     </div>
                   </div>
@@ -539,23 +545,23 @@ export function StudentAttendance() {
         )}
         
         {/* Bottom Save Bar */}
-        <div className="p-4 sm:p-6 border-t border-gray-100 bg-gray-50/70 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <p className="text-xs text-slate-500 text-center sm:text-left">
-            Pastikan seluruh santri telah terabsen sebelum menyimpan data ke sistem.
+        <div className="p-5 border-t border-[#E6E8EC] bg-[#F5F6F8]/70 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <p className="text-xs text-slate-500 font-medium text-center sm:text-left">
+            Pastikan data presensi sudah sesuai sebelum menyimpan ke basis data portal.
           </p>
           <Button 
             onClick={handleSave} 
             disabled={saving || groupStudents.length === 0} 
-            className="w-full sm:w-auto shadow-sm"
+            className="w-full sm:w-auto bg-[#0362D0] hover:bg-[#0252b3] text-white font-bold shadow-xs cursor-pointer py-2.5"
           >
             {saving ? (
               <>
                 <Loader2 size={16} className="mr-2 animate-spin" />
-                Menyimpan Data...
+                Menyimpan Presensi...
               </>
             ) : (
               <>
-                <Save size={18} className="mr-2" /> Simpan Absensi Kehadiran
+                <Save size={18} className="mr-2" /> Simpan Presensi Kehadiran
               </>
             )}
           </Button>
@@ -564,12 +570,12 @@ export function StudentAttendance() {
 
       {/* Toast Notification */}
       {showToast && (
-        <div className="fixed bottom-8 right-8 bg-slate-900 text-white px-5 py-4 rounded-xl shadow-2xl flex items-center gap-3 animate-in slide-in-from-bottom-5 fade-in duration-300 z-50 border border-slate-700">
-          <CheckCircle className="text-emerald-400 shrink-0" size={24} />
+        <div className="fixed bottom-8 right-8 bg-[#172033] text-white px-5 py-4 rounded-2xl shadow-2xl flex items-center gap-3 animate-in slide-in-from-bottom-5 fade-in duration-300 z-50 border border-[#E6E8EC]/20">
+          <CheckCircle className="text-[#C99A2E] shrink-0" size={24} />
           <div>
-            <p className="text-sm font-bold">Absensi Berhasil Disimpan</p>
-            <p className="text-xs text-slate-300">
-              Data kehadiran {currentGroupObj?.name || 'Kelompok'} untuk tanggal {selectedDate} telah tersimpan.
+            <p className="text-sm font-black">Presensi Berhasil Disimpan</p>
+            <p className="text-xs text-slate-300 font-medium">
+              Data presensi {currentGroupObj?.name || 'Kelompok'} untuk tanggal {selectedDate} telah tersimpan.
             </p>
           </div>
         </div>
@@ -577,4 +583,5 @@ export function StudentAttendance() {
     </div>
   );
 }
+
 

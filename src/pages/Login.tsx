@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../services/firebase';
 import { 
-  BookOpen, 
   Lock, 
   User, 
   Eye, 
@@ -11,13 +10,13 @@ import {
   ShieldCheck, 
   Sparkles, 
   HelpCircle, 
-  CheckCircle2, 
   AlertCircle, 
   Building2,
   KeyRound,
   X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { APP_LOGO, APP_NAME, APP_SUBTITLE, APP_DESC } from '../assets/logo';
 
 export function Login() {
   const [username, setUsername] = useState('');
@@ -26,7 +25,6 @@ export function Login() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
-  const [activeTab, setActiveTab] = useState<'form' | 'credentials'>('form');
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,7 +37,6 @@ export function Login() {
     setLoading(true);
 
     try {
-      // Append the institutional domain if only username is entered
       const cleanUsername = username.toLowerCase().trim();
       const email = cleanUsername.includes('@') 
         ? cleanUsername 
@@ -49,9 +46,9 @@ export function Login() {
     } catch (err: any) {
       console.error(err);
       if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found') {
-        setError('Username atau password tidak sesuai. Pastikan akun sudah terdaftar.');
+        setError('Username atau password tidak sesuai. Pastikan akun telah terdaftar.');
       } else if (err.code === 'auth/too-many-requests') {
-        setError('Terlalu banyak percobaan gagal. Silakan coba kembali sesaat lagi.');
+        setError('Terlalu banyak percobaan gagal. Silakan coba beberapa saat lagi.');
       } else {
         setError('Gagal masuk ke sistem. Silakan periksa koneksi internet Anda.');
       }
@@ -67,229 +64,260 @@ export function Login() {
   };
 
   return (
-    <div className="min-h-screen relative flex items-center justify-center p-4 sm:p-6 lg:p-8 bg-slate-950 overflow-hidden select-none">
+    <div className="min-h-screen relative flex items-center justify-center p-4 sm:p-6 lg:p-8 bg-[#172033] overflow-hidden select-none">
       {/* Dynamic Background Atmosphere */}
-      <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-emerald-950/80 to-teal-950" />
+      <div className="absolute inset-0 bg-gradient-to-br from-[#172033] via-[#0f172a] to-[#1e1b4b]" />
       
-      {/* Decorative Radial Glowing Auras */}
-      <div className="absolute -top-40 -left-40 w-96 h-96 bg-emerald-500/15 rounded-full blur-3xl pointer-events-none animate-pulse" />
-      <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-teal-500/15 rounded-full blur-3xl pointer-events-none animate-pulse" />
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-emerald-600/10 rounded-full blur-[120px] pointer-events-none" />
+      {/* Decorative Brand Auras */}
+      <div className="absolute -top-40 -left-40 w-96 h-96 bg-[#0362D0]/20 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-[#950415]/20 rounded-full blur-3xl pointer-events-none" />
 
-      {/* Subtle Islamic Geometric Pattern Overlay */}
-      <div 
-        className="absolute inset-0 opacity-[0.035] pointer-events-none"
-        style={{
-          backgroundImage: `radial-gradient(circle at 25px 25px, white 2%, transparent 0%), radial-gradient(circle at 75px 75px, white 2%, transparent 0%)`,
-          backgroundSize: '100px 100px'
-        }}
-      />
-
-      {/* Main Login Card Container */}
+      {/* Main Container - Two Side Split Layout */}
       <motion.div 
-        initial={{ opacity: 0, y: 20, scale: 0.98 }}
+        initial={{ opacity: 0, y: 15, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.4, ease: 'easeOut' }}
-        className="relative z-10 w-full max-w-md"
+        className="relative z-10 w-full max-w-4xl bg-white rounded-3xl shadow-2xl overflow-hidden border border-[#E6E8EC] grid lg:grid-cols-12 min-h-[580px]"
       >
-        {/* Top Floating School Badge */}
-        <div className="flex justify-center mb-4">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-900/50 backdrop-blur-md border border-emerald-500/20 text-emerald-300 text-[11px] font-semibold tracking-wide shadow-lg">
-            <Building2 size={13} className="text-emerald-400" />
-            <span>SMP NEGERI 102 JAKARTA</span>
-            <span className="w-1 h-1 rounded-full bg-emerald-400" />
-            <span className="text-emerald-300/80">TP 2026/2027</span>
-          </div>
-        </div>
-
-        {/* Card Body */}
-        <div className="bg-white/95 backdrop-blur-xl rounded-3xl p-6 sm:p-8 shadow-2xl shadow-black/40 border border-white/20">
+        {/* LEFT COLUMN: Brand Identity Panel (Royal Blue) */}
+        <div className="lg:col-span-5 bg-[#0362D0] p-8 lg:p-10 text-white flex flex-col justify-between relative overflow-hidden">
+          {/* Subtle Geometric Pattern Overlay */}
+          <div 
+            className="absolute inset-0 opacity-15 pointer-events-none"
+            style={{
+              backgroundImage: `radial-gradient(circle at 20px 20px, rgba(255,255,255,0.8) 1.5px, transparent 0%), radial-gradient(circle at 60px 60px, rgba(201,154,46,0.9) 1.5px, transparent 0%)`,
+              backgroundSize: '80px 80px'
+            }}
+          />
           
-          {/* Header Section */}
-          <div className="text-center mb-6">
-            {/* Emblem Logo */}
-            <div className="relative inline-block mb-3.5">
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-emerald-700 via-emerald-600 to-teal-500 flex items-center justify-center shadow-lg shadow-emerald-700/30 ring-4 ring-emerald-500/15">
-                <BookOpen size={30} className="text-white" />
+          {/* Decorative Circular Ring Elements Inspired by Logo */}
+          <div className="absolute -top-12 -left-12 w-48 h-48 rounded-full border-4 border-white/10 pointer-events-none" />
+          <div className="absolute -bottom-20 -right-20 w-64 h-64 rounded-full border-8 border-[#C99A2E]/20 pointer-events-none" />
+
+          {/* Top Tag */}
+          <div className="relative z-10">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/15 backdrop-blur-md border border-white/20 text-white text-[11px] font-bold tracking-wide">
+              <Building2 size={13} className="text-[#C99A2E]" />
+              <span>SMP NEGERI 102 JAKARTA</span>
+            </div>
+          </div>
+
+          {/* Middle Logo & Info */}
+          <div className="relative z-10 my-8 text-center lg:text-left">
+            {/* Logo SMPN 102 */}
+            <div className="relative inline-block mb-6">
+              <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl p-2 bg-white shadow-xl ring-4 ring-[#C99A2E]/50 mx-auto lg:mx-0">
+                <img 
+                  src={APP_LOGO} 
+                  alt="Logo SMPN 102 Jakarta" 
+                  className="w-full h-full object-cover rounded-xl"
+                  referrerPolicy="no-referrer"
+                />
               </div>
-              <div className="absolute -bottom-1 -right-1 bg-amber-400 text-slate-950 p-1 rounded-lg shadow-sm">
-                <Sparkles size={12} />
+              <div className="absolute -bottom-2 -right-2 bg-[#C99A2E] text-slate-950 p-1.5 rounded-full shadow-lg">
+                <Sparkles size={14} />
               </div>
             </div>
 
-            {/* Bismillah Accent */}
-            <div className="font-serif text-emerald-800 text-sm opacity-90 tracking-wide mb-1 font-semibold">
+            <div className="font-serif text-white/90 text-xs sm:text-sm tracking-wide mb-1.5 font-bold">
               بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ
             </div>
 
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-              SI-BTQ
+            <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight leading-tight">
+              {APP_NAME}
             </h1>
-            <p className="text-xs sm:text-sm text-slate-500 font-medium mt-0.5">
-              Sistem Informasi Bimbingan Baca Tulis Al-Qur'an
+            <h2 className="text-sm sm:text-base font-bold text-[#C99A2E] tracking-tight mt-0.5">
+              {APP_SUBTITLE}
+            </h2>
+            <p className="text-xs text-blue-100/90 font-medium mt-3 leading-relaxed max-w-sm">
+              {APP_DESC}
             </p>
           </div>
 
-          {/* Quick Credential Helper Pill Bar */}
-          <div className="mb-5 p-1.5 bg-slate-100 rounded-2xl flex items-center gap-1 text-xs">
-            <button
-              type="button"
-              onClick={() => handleQuickFill('admin')}
-              className={`flex-1 py-1.5 px-2.5 rounded-xl font-bold transition-all flex items-center justify-center gap-1.5 ${
-                username === 'admin' 
-                  ? 'bg-white text-emerald-800 shadow-sm' 
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <ShieldCheck size={13} className="text-emerald-600" />
-              <span>Admin</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleQuickFill('ahmad')}
-              className={`flex-1 py-1.5 px-2.5 rounded-xl font-bold transition-all flex items-center justify-center gap-1.5 ${
-                username === 'ahmad' 
-                  ? 'bg-white text-emerald-800 shadow-sm' 
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <User size={13} className="text-teal-600" />
-              <span>Mentor 1</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleQuickFill('nurul')}
-              className={`flex-1 py-1.5 px-2.5 rounded-xl font-bold transition-all flex items-center justify-center gap-1.5 ${
-                username === 'nurul' 
-                  ? 'bg-white text-emerald-800 shadow-sm' 
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <User size={13} className="text-teal-600" />
-              <span>Mentor 2</span>
-            </button>
-          </div>
-
-          {/* Error Message */}
-          <AnimatePresence>
-            {error && (
-              <motion.div 
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                className="mb-4 overflow-hidden"
-              >
-                <div className="bg-rose-50 border border-rose-200 text-rose-700 p-3 rounded-2xl text-xs flex items-center gap-2.5 shadow-sm">
-                  <AlertCircle size={16} className="shrink-0 text-rose-500" />
-                  <span className="font-semibold">{error}</span>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Form */}
-          <form onSubmit={handleLogin} className="space-y-4">
-            {/* Username Input */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                Username / Akun
-              </label>
-              <div className="relative group">
-                <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-emerald-600 transition-colors">
-                  <User size={18} />
-                </div>
-                <input
-                  type="text"
-                  required
-                  placeholder="Masukkan username (cth: admin, ahmad)"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs sm:text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/15 outline-none transition-all"
-                />
-              </div>
-            </div>
-
-            {/* Password Input */}
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-bold text-slate-700">
-                  Kata Sandi
-                </label>
-                <button
-                  type="button"
-                  onClick={() => setShowHelpModal(true)}
-                  className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 hover:underline transition-colors flex items-center gap-1"
-                >
-                  <HelpCircle size={12} /> Bantuan
-                </button>
-              </div>
-              <div className="relative group">
-                <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-emerald-600 transition-colors">
-                  <Lock size={18} />
-                </div>
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  required
-                  placeholder="Masukkan kata sandi..."
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-10 pr-11 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs sm:text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/15 outline-none transition-all"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors p-1"
-                  tabIndex={-1}
-                >
-                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
-              </div>
-            </div>
-
-            {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full mt-2 py-3 px-4 bg-gradient-to-r from-emerald-600 via-emerald-700 to-teal-700 hover:from-emerald-500 hover:to-teal-600 text-white font-extrabold text-xs sm:text-sm rounded-2xl shadow-lg shadow-emerald-700/25 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed group cursor-pointer"
-            >
-              {loading ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  <span>Memverifikasi Akun...</span>
-                </>
-              ) : (
-                <>
-                  <span>Masuk ke Dashboard</span>
-                  <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
-                </>
-              )}
-            </button>
-          </form>
-
-          {/* Footer Security Badge */}
-          <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-center gap-2 text-[11px] text-slate-500 font-medium">
-            <ShieldCheck size={14} className="text-emerald-600" />
-            <span>Sistem Terotentikasi & Data Tersimpan Aman</span>
+          {/* Bottom Accent */}
+          <div className="relative z-10 pt-4 border-t border-white/20 flex items-center gap-2 text-[11px] text-blue-100/80 font-medium">
+            <ShieldCheck size={14} className="text-[#C99A2E]" />
+            <span>Sistem Administrasi Resmi Sekolah</span>
           </div>
         </div>
 
-        {/* Bottom Credits */}
-        <div className="text-center mt-4 text-[11px] text-slate-400/80">
-          © 2026 Tim BTQ SMP Negeri 102 Jakarta • Bimbingan Sesi Sabtu
+        {/* RIGHT COLUMN: Login Form */}
+        <div className="lg:col-span-7 p-6 sm:p-8 lg:p-10 flex flex-col justify-between bg-white">
+          <div>
+            {/* Form Title */}
+            <div className="mb-6">
+              <h3 className="text-xl font-extrabold text-[#172033] tracking-tight">
+                Masuk ke Portal
+              </h3>
+              <p className="text-xs text-slate-500 mt-1 font-medium">
+                Silakan masukkan kredensial akun Anda untuk melanjutkan.
+              </p>
+            </div>
+
+            {/* Quick Fill Buttons */}
+            <div className="mb-6 p-2 bg-[#F5F6F8] border border-[#E6E8EC] rounded-2xl">
+              <div className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1.5 px-1">
+                Akses Cepat Pengguna Demo:
+              </div>
+              <div className="grid grid-cols-3 gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => handleQuickFill('admin')}
+                  className={`py-1.5 px-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                    username === 'admin' 
+                      ? 'bg-[#0362D0] text-white shadow-xs' 
+                      : 'bg-white text-[#172033] hover:bg-slate-100 border border-[#E6E8EC]'
+                  }`}
+                >
+                  <span>Admin</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleQuickFill('ahmad')}
+                  className={`py-1.5 px-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                    username === 'ahmad' 
+                      ? 'bg-[#0362D0] text-white shadow-xs' 
+                      : 'bg-white text-[#172033] hover:bg-slate-100 border border-[#E6E8EC]'
+                  }`}
+                >
+                  <span>Mentor 1</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleQuickFill('nurul')}
+                  className={`py-1.5 px-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                    username === 'nurul' 
+                      ? 'bg-[#0362D0] text-white shadow-xs' 
+                      : 'bg-white text-[#172033] hover:bg-slate-100 border border-[#E6E8EC]'
+                  }`}
+                >
+                  <span>Mentor 2</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Error Banner */}
+            <AnimatePresence>
+              {error && (
+                <motion.div 
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="mb-4 overflow-hidden"
+                >
+                  <div className="bg-red-50 border border-red-200 text-[#950415] p-3 rounded-2xl text-xs flex items-center gap-2.5 shadow-xs">
+                    <AlertCircle size={16} className="shrink-0 text-[#950415]" />
+                    <span className="font-bold">{error}</span>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Login Form */}
+            <form onSubmit={handleLogin} className="space-y-4">
+              {/* Username Input */}
+              <div>
+                <label className="block text-xs font-bold text-[#172033] mb-1.5">
+                  Email / Username
+                </label>
+                <div className="relative group">
+                  <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-[#0362D0] transition-colors">
+                    <User size={18} />
+                  </div>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Masukkan username (contoh: admin, ahmad)"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 bg-[#F5F6F8] border border-[#E6E8EC] rounded-2xl text-xs sm:text-sm font-medium text-[#172033] placeholder:text-slate-400 focus:bg-white focus:border-[#0362D0] focus:ring-4 focus:ring-[#0362D0]/15 outline-none transition-all"
+                  />
+                </div>
+              </div>
+
+              {/* Password Input */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-bold text-[#172033]">
+                    Kata Sandi
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setShowHelpModal(true)}
+                    className="text-[11px] font-bold text-[#0362D0] hover:underline transition-colors flex items-center gap-1"
+                  >
+                    <HelpCircle size={12} /> Bantuan Akun
+                  </button>
+                </div>
+                <div className="relative group">
+                  <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-[#0362D0] transition-colors">
+                    <Lock size={18} />
+                  </div>
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    placeholder="Masukkan kata sandi..."
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full pl-10 pr-11 py-2.5 bg-[#F5F6F8] border border-[#E6E8EC] rounded-2xl text-xs sm:text-sm font-medium text-[#172033] placeholder:text-slate-400 focus:bg-white focus:border-[#0362D0] focus:ring-4 focus:ring-[#0362D0]/15 outline-none transition-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors p-1"
+                    tabIndex={-1}
+                  >
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Submit Button */}
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full mt-2 py-3 px-4 bg-[#0362D0] hover:bg-[#0252b3] text-white font-extrabold text-xs sm:text-sm rounded-2xl shadow-md active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
+              >
+                {loading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    <span>Memverifikasi Akun...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Masuk ke Dashboard</span>
+                    <ArrowRight size={16} />
+                  </>
+                )}
+              </button>
+            </form>
+          </div>
+
+          {/* Footer Branding Text */}
+          <div className="mt-8 pt-4 border-t border-[#E6E8EC] text-center">
+            <div className="flex items-center justify-center gap-1.5 text-xs font-bold text-[#172033]">
+              <span>Portal BTQ</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-[#C99A2E]" />
+              <span className="text-[#950415]">SMP Negeri 102 Jakarta</span>
+            </div>
+            <p className="text-[10px] text-slate-400 mt-0.5">
+              Sistem Informasi Administrasi & Pembelajaran BTQ • Tahun Ajaran 2025/2026
+            </p>
+          </div>
         </div>
       </motion.div>
 
       {/* Help / Password Guide Modal */}
       {showHelpModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in">
-          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 animate-in zoom-in-95">
-            <div className="flex justify-between items-center mb-4">
-              <div className="flex items-center gap-2 text-emerald-800 font-extrabold text-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#172033]/60 backdrop-blur-xs p-4 animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-[#E6E8EC] animate-in zoom-in-95">
+            <div className="flex justify-between items-center mb-4 pb-2 border-b border-[#E6E8EC]">
+              <div className="flex items-center gap-2 text-[#0362D0] font-extrabold text-sm">
                 <KeyRound size={18} /> Panduan Akses Akun
               </div>
               <button 
                 onClick={() => setShowHelpModal(false)}
-                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+                className="text-slate-400 hover:text-[#172033] p-1 rounded-lg"
               >
                 <X size={18} />
               </button>
@@ -297,29 +325,29 @@ export function Login() {
 
             <div className="space-y-3 text-xs text-slate-600 leading-relaxed">
               <p>
-                Akun login dikhususkan bagi <strong>Koordinator BTQ / Admin</strong> dan <strong>Mentor Pembimbing</strong>:
+                Akses sistem Portal BTQ diberikan kepada <strong>Administrator / Koordinator BTQ</strong> dan <strong>Mentor Pembimbing</strong>:
               </p>
-              <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 space-y-2">
+              <div className="bg-[#F5F6F8] p-3 rounded-2xl border border-[#E6E8EC] space-y-2">
                 <div>
-                  <strong className="text-slate-800 block">Akun Admin:</strong>
-                  <span>Username: <code>admin</code></span>
+                  <strong className="text-[#172033] block">Akun Administrator:</strong>
+                  <span>Username: <code className="bg-white px-1.5 py-0.5 rounded border border-[#E6E8EC] font-bold">admin</code></span>
                 </div>
                 <div>
-                  <strong className="text-slate-800 block">Akun Mentor:</strong>
-                  <span>Username: <code>ahmad</code>, <code>nurul</code>, atau nama mentor</span>
+                  <strong className="text-[#172033] block">Akun Mentor:</strong>
+                  <span>Username: <code className="bg-white px-1.5 py-0.5 rounded border border-[#E6E8EC] font-bold">ahmad</code>, <code className="bg-white px-1.5 py-0.5 rounded border border-[#E6E8EC] font-bold">nurul</code></span>
                 </div>
                 <div className="pt-1 text-[11px] text-slate-500">
-                  Password bawaan sistem: <code>12345678</code>
+                  Kata sandi bawaan: <code className="bg-white px-1.5 py-0.5 rounded border border-[#E6E8EC] font-bold">12345678</code>
                 </div>
               </div>
               <p className="text-[11px] text-slate-400">
-                Jika mengalami kendala login, silakan hubungi Koordinator BTQ SMPN 102 Jakarta.
+                Jika membutuhkan masalah reset password, silakan hubungi Koordinator BTQ SMP Negeri 102 Jakarta.
               </p>
             </div>
 
             <button
               onClick={() => setShowHelpModal(false)}
-              className="w-full mt-4 py-2.5 bg-emerald-700 hover:bg-emerald-600 text-white font-bold text-xs rounded-xl transition-colors"
+              className="w-full mt-4 py-2.5 bg-[#0362D0] hover:bg-[#0252b3] text-white font-bold text-xs rounded-xl transition-colors"
             >
               Mengerti
             </button>
@@ -329,3 +357,4 @@ export function Login() {
     </div>
   );
 }
+

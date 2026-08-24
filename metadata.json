@@ -1,6 +1,6 @@
 {
   "name": "BTQ Admin SMP 102",
-  "description": "Sistem Administrasi Baca Tulis Al-Qur'an untuk SMP Negeri 102 Jakarta",
+  "description": "Portal BTQ — Sistem Administrasi dan Pembelajaran Baca Tulis Al-Qur'an SMP Negeri 102 Jakarta",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"

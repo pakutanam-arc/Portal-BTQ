@@ -4,7 +4,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Button } from '../components/ui/Button';
 import { Select } from '../components/ui/Select';
 import { Input } from '../components/ui/Input';
-import { Search, Loader2, Save, FileText, CheckCircle } from 'lucide-react';
+import { Search, Loader2, Save, FileText, CheckCircle, Award, BookOpen } from 'lucide-react';
 import { getStudents, getGroups, getAllStudentProgress, saveStudentProgress, getMentors, createNotification, Student, Group, StudentProgress } from '../services/db';
 import { masterGrades, masterSessions } from '../services/curriculumData';
 import { cn } from '../utils/cn';
@@ -102,7 +102,6 @@ export function Progress() {
         return;
       }
       try {
-        // ideally we would filter by sessionId on the query, but we fetch all and filter client-side for simplicity here
         const allProgress = await getAllStudentProgress();
         const records = allProgress.filter(p => p.groupId === selectedGroupId && p.sessionId === selectedSessionId);
         
@@ -147,7 +146,7 @@ export function Progress() {
             groupId: selectedGroupId,
             sessionId: selectedSessionId,
             semester: selectedSemester,
-            date: new Date().toISOString().split('T')[0], // Use current date for update
+            date: new Date().toISOString().split('T')[0],
             reading: p.reading || 0,
             tajwid: p.tajwid || 0,
             memorization: p.memorization || 0,
@@ -204,31 +203,39 @@ export function Progress() {
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center h-full min-h-[400px]">
-        <div className="animate-pulse flex flex-col items-center gap-4 text-emerald-600">
+        <div className="animate-pulse flex flex-col items-center gap-4 text-[#0362D0]">
           <Loader2 size={32} className="animate-spin" />
-          <p className="font-medium text-slate-600">Memuat data...</p>
+          <p className="font-semibold text-[#172033]">Memuat data penilaian...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 relative">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <div className="space-y-6 max-w-[1240px] mx-auto pb-12">
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-3xl border border-[#E6E8EC] shadow-xs">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Penilaian Sesi Kurikulum</h1>
-          <p className="text-gray-500 mt-1 text-sm">Input nilai progress siswa per pertemuan materi</p>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-black text-[#172033] tracking-tight">Penilaian Pertemuan Kurikulum</h1>
+            <span className="px-3 py-0.5 rounded-full bg-[#0362D0]/10 text-[#0362D0] text-xs font-black border border-[#0362D0]/20">
+              SMP Negeri 102 Jakarta
+            </span>
+          </div>
+          <p className="text-slate-500 mt-1 text-xs sm:text-sm font-medium">
+            Formulir penilaian aspek membaca, tajwid, hafalan, dan kelancaran menulis Al-Qur'an santri
+          </p>
         </div>
       </div>
 
-      <Card>
-        <div className="p-4 border-b border-gray-100 bg-gray-50/50 grid grid-cols-1 md:grid-cols-3 gap-4">
+      <Card className="border border-[#E6E8EC] rounded-3xl overflow-hidden shadow-xs bg-white">
+        <div className="p-5 border-b border-[#E6E8EC] bg-[#F5F6F8]/60 grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-gray-600 uppercase">Kelompok</label>
+            <label className="text-xs font-black text-[#172033] uppercase tracking-wider">Kelompok</label>
             <Select 
               value={selectedGroupId}
               onChange={(e) => setSelectedGroupId(e.target.value)}
-              className="w-full"
+              className="w-full font-bold text-xs"
             >
               {groups.map(g => (
                 <option key={g.id} value={g.id}>{g.name}</option>
@@ -238,11 +245,11 @@ export function Progress() {
           </div>
           
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-gray-600 uppercase">Semester</label>
+            <label className="text-xs font-black text-[#172033] uppercase tracking-wider">Semester</label>
             <Select 
               value={selectedSemester.toString()}
               onChange={(e) => setSelectedSemester(parseInt(e.target.value))}
-              className="w-full"
+              className="w-full font-bold text-xs"
             >
               <option value="1">Semester 1</option>
               <option value="2">Semester 2</option>
@@ -250,11 +257,11 @@ export function Progress() {
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-gray-600 uppercase">Pertemuan Sesi (Jadwal Sabtu)</label>
+            <label className="text-xs font-black text-[#172033] uppercase tracking-wider">Pertemuan Sesi (Sabtu)</label>
             <Select 
               value={selectedSessionId}
               onChange={(e) => setSelectedSessionId(e.target.value)}
-              className="w-full"
+              className="w-full font-bold text-xs"
             >
               {availableSessions.map(s => {
                 const statusTag = selectedSemester === 1 && s.sessionNumber <= 2 
@@ -264,7 +271,7 @@ export function Progress() {
                   : '';
                 return (
                   <option key={s.id} value={s.id}>
-                    Pertemuan {s.sessionNumber} ({s.scheduleDay || 'Sabtu'}): {s.topic}{statusTag}
+                    Pertemuan {s.sessionNumber}: {s.topic}{statusTag}
                   </option>
                 );
               })}
@@ -274,39 +281,39 @@ export function Progress() {
 
         <div className="overflow-x-auto">
           <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-12 text-center">No</TableHead>
-                <TableHead>Nama Siswa</TableHead>
-                <TableHead className="text-center w-24">Membaca</TableHead>
-                <TableHead className="text-center w-24">Tajwid</TableHead>
-                <TableHead className="text-center w-24">Hafalan</TableHead>
-                <TableHead className="text-center w-24">Menulis</TableHead>
-                <TableHead className="text-center w-24">Total</TableHead>
+            <TableHeader className="bg-[#F5F6F8]">
+              <TableRow className="border-b border-[#E6E8EC]">
+                <TableHead className="w-12 text-center font-black text-[#172033] text-xs">No</TableHead>
+                <TableHead className="font-black text-[#172033] text-xs">Nama Santri</TableHead>
+                <TableHead className="text-center w-24 font-black text-[#172033] text-xs">Membaca</TableHead>
+                <TableHead className="text-center w-24 font-black text-[#172033] text-xs">Tajwid</TableHead>
+                <TableHead className="text-center w-24 font-black text-[#172033] text-xs">Hafalan</TableHead>
+                <TableHead className="text-center w-24 font-black text-[#172033] text-xs">Menulis</TableHead>
+                <TableHead className="text-center w-24 font-black text-[#172033] text-xs">Rata-Rata</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {groupStudents.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-slate-500">
-                    Belum ada siswa di kelompok ini.
+                  <TableCell colSpan={7} className="text-center py-12 text-slate-500 font-medium">
+                    Belum ada santri di kelompok ini.
                   </TableCell>
                 </TableRow>
               ) : (
                 groupStudents.map((student, idx) => {
                   const p = sessionProgress[student.id] || { reading: '', tajwid: '', memorization: '', writing: '', total: 0 };
                   return (
-                    <TableRow key={student.id} className="hover:bg-slate-50 transition-colors">
-                      <TableCell className="text-center text-slate-500">{idx + 1}</TableCell>
+                    <TableRow key={student.id} className="hover:bg-[#F5F6F8]/60 transition-colors border-b border-[#E6E8EC]">
+                      <TableCell className="text-center text-slate-500 font-bold text-xs">{idx + 1}</TableCell>
                       <TableCell>
-                        <div className="font-semibold text-slate-900">{student.name}</div>
-                        <div className="text-xs text-emerald-700 font-medium">Kelas {student.class}</div>
+                        <div className="font-extrabold text-[#172033] text-sm">{student.name}</div>
+                        <div className="text-[11px] text-[#0362D0] font-bold">Kelas {student.class}</div>
                       </TableCell>
                       <TableCell>
                         <Input 
                           type="number" 
                           min="0" max="100" 
-                          className="text-center h-8 px-1"
+                          className="text-center h-9 px-1 font-bold text-xs border-[#E6E8EC]"
                           value={p.reading}
                           onChange={(e) => handleScoreChange(student.id, 'reading', e.target.value)}
                         />
@@ -315,7 +322,7 @@ export function Progress() {
                         <Input 
                           type="number" 
                           min="0" max="100" 
-                          className="text-center h-8 px-1"
+                          className="text-center h-9 px-1 font-bold text-xs border-[#E6E8EC]"
                           value={p.tajwid}
                           onChange={(e) => handleScoreChange(student.id, 'tajwid', e.target.value)}
                         />
@@ -324,7 +331,7 @@ export function Progress() {
                         <Input 
                           type="number" 
                           min="0" max="100" 
-                          className="text-center h-8 px-1"
+                          className="text-center h-9 px-1 font-bold text-xs border-[#E6E8EC]"
                           value={p.memorization}
                           onChange={(e) => handleScoreChange(student.id, 'memorization', e.target.value)}
                         />
@@ -333,17 +340,17 @@ export function Progress() {
                         <Input 
                           type="number" 
                           min="0" max="100" 
-                          className="text-center h-8 px-1"
+                          className="text-center h-9 px-1 font-bold text-xs border-[#E6E8EC]"
                           value={p.writing}
                           onChange={(e) => handleScoreChange(student.id, 'writing', e.target.value)}
                         />
                       </TableCell>
                       <TableCell className="text-center">
                         <span className={cn(
-                          "font-bold px-2 py-1 rounded",
-                          p.total >= 85 ? "text-emerald-700 bg-emerald-50" :
-                          p.total >= 70 ? "text-blue-700 bg-blue-50" :
-                          p.total >= 50 ? "text-amber-700 bg-amber-50" : "text-red-700 bg-red-50"
+                          "font-black px-2.5 py-1 rounded-lg text-xs border",
+                          (p.total || 0) >= 85 ? "text-emerald-800 bg-emerald-50 border-emerald-200" :
+                          (p.total || 0) >= 70 ? "text-[#0362D0] bg-[#0362D0]/10 border-[#0362D0]/20" :
+                          (p.total || 0) >= 50 ? "text-[#C99A2E] bg-[#C99A2E]/15 border-[#C99A2E]/30" : "text-[#950415] bg-[#950415]/10 border-[#950415]/20"
                         )}>{p.total || 0}%</span>
                       </TableCell>
                     </TableRow>
@@ -354,26 +361,27 @@ export function Progress() {
           </Table>
         </div>
 
-        <div className="p-6 border-t border-gray-100 bg-gray-50/50 flex justify-end">
-          <Button onClick={handleSave} className="w-full sm:w-auto" disabled={saving || groupStudents.length === 0}>
+        <div className="p-5 border-t border-[#E6E8EC] bg-[#F5F6F8]/70 flex justify-end">
+          <Button onClick={handleSave} className="w-full sm:w-auto bg-[#0362D0] hover:bg-[#0252b3] text-white font-bold py-2.5 shadow-xs cursor-pointer" disabled={saving || groupStudents.length === 0}>
             {saving ? <Loader2 size={18} className="mr-2 animate-spin" /> : <Save size={18} className="mr-2" />} 
-            {saving ? 'Menyimpan...' : 'Simpan Nilai'}
+            {saving ? 'Menyimpan Nilai...' : 'Simpan Nilai Sesi'}
           </Button>
         </div>
       </Card>
 
       {/* Toast Notification */}
       {showToast && (
-        <div className="fixed bottom-8 right-8 bg-gray-900 text-white px-4 py-3 rounded-lg shadow-xl flex items-center gap-3 animate-in slide-in-from-bottom-5 fade-in duration-300 z-50">
-          <div className="bg-emerald-500/20 p-1.5 rounded-full text-emerald-400">
+        <div className="fixed bottom-8 right-8 bg-[#172033] text-white px-5 py-4 rounded-2xl shadow-2xl flex items-center gap-3 animate-in slide-in-from-bottom-5 fade-in duration-300 z-50 border border-[#E6E8EC]/20">
+          <div className="bg-[#C99A2E]/20 p-2 rounded-xl text-[#C99A2E]">
             <CheckCircle size={20} />
           </div>
           <div>
-            <p className="text-sm font-medium">Nilai berhasil disimpan</p>
-            <p className="text-xs text-gray-400">Data penilaian sesi telah diperbarui.</p>
+            <p className="text-sm font-black">Nilai Berhasil Disimpan</p>
+            <p className="text-xs text-slate-300 font-medium">Data capaian santri telah diperbarui di sistem.</p>
           </div>
         </div>
       )}
     </div>
   );
 }
+
