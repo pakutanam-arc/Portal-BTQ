@@ -4,17 +4,20 @@ import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Badge } from '../components/ui/Badge';
-import { getGroups, getMentors, getStudents, getGroupNumber, Group, Mentor, Student } from '../services/db';
+import { getGroups, getMentors, getGroupStudentsCount, getStudentsByGroup, getGroupNumber, Group, Mentor, Student } from '../services/db';
 import { useAuth } from '../contexts/AuthContext';
-import { masterGrades } from '../services/curriculumData';
+import { masterGrades, getGradeForGroup } from '../services/curriculumData';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
+import { theme } from '../theme';
 
 export function Groups() {
   const { currentUser, userData, userRole } = useAuth();
   const [groups, setGroups] = useState<Group[]>([]);
   const [mentors, setMentors] = useState<Mentor[]>([]);
-  const [students, setStudents] = useState<Student[]>([]);
+  const [groupCounts, setGroupCounts] = useState<Record<string, number>>({});
+  const [selectedGroupStudents, setSelectedGroupStudents] = useState<Student[]>([]);
+  const [loadingStudents, setLoadingStudents] = useState(false);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedLocationFilter, setSelectedLocationFilter] = useState<string>('all');
@@ -30,10 +33,9 @@ export function Groups() {
   useEffect(() => {
     async function loadData() {
       try {
-        const [groupsData, mentorsData, studentsData] = await Promise.all([
+        const [groupsData, mentorsData] = await Promise.all([
           getGroups(),
-          getMentors(),
-          getStudents()
+          getMentors()
         ]);
         
         const sortedGroups = [...groupsData].sort((a, b) => getGroupNumber(a) - getGroupNumber(b));
@@ -62,7 +64,13 @@ export function Groups() {
 
         setGroups(filteredGroups);
         setMentors(mentorsData);
-        setStudents(studentsData);
+        
+        // Load group counts
+        const counts: Record<string, number> = {};
+        await Promise.all(filteredGroups.map(async g => {
+          counts[g.id] = await getGroupStudentsCount(g.id);
+        }));
+        setGroupCounts(counts);
       } catch (error) {
         console.error("Error fetching groups data:", error);
       } finally {
@@ -121,12 +129,12 @@ export function Groups() {
   };
 
   return (
-    <div className="space-y-6 max-w-[1240px] mx-auto">
+    <div className="flex flex-col gap-4 sm:gap-6 w-full">
       {/* Header Banner */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-3xl border border-[#E6E8EC] shadow-xs">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-[#E6E8EC] shadow-xs">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-black text-[#172033] tracking-tight">10 Kelompok Bimbingan BTQ</h1>
+            <h1 className={theme.typography.h1}>10 Kelompok Bimbingan BTQ</h1>
             <span className="px-3 py-0.5 rounded-full bg-[#0362D0]/10 text-[#0362D0] text-xs font-black border border-[#0362D0]/20">
               SMP Negeri 102 Jakarta
             </span>
@@ -204,9 +212,8 @@ export function Groups() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {filteredGroups.map(group => {
             const mentor = mentors.find(m => m.id === group.mentorId);
-            const groupStudents = students.filter(s => s.groupId === group.id);
-            const studentsCount = groupStudents.length;
-            const gradeInfo = masterGrades.find(g => g.id === group.gradeId);
+            const studentsCount = groupCounts[group.id] || 0;
+            const gradeInfo = getGradeForGroup(group);
             
             return (
               <Card key={group.id} className="hover:shadow-md transition-all duration-200 border border-[#E6E8EC] rounded-2xl overflow-hidden flex flex-col bg-white group">
@@ -275,10 +282,19 @@ export function Groups() {
                     <Button 
                       variant="outline" 
                       size="sm" 
-                      onClick={() => {
+                      onClick={async () => {
                         setSelectedGroup(group);
                         setEditedRoom(group.room || '');
                         setIsEditingRoom(false);
+                        setLoadingStudents(true);
+                        try {
+                          const stds = await getStudentsByGroup(group.id);
+                          setSelectedGroupStudents(stds);
+                        } catch (e) {
+                          console.error(e);
+                        } finally {
+                          setLoadingStudents(false);
+                        }
                       }}
                       className="w-full text-xs font-bold text-[#172033] hover:bg-[#0362D0] hover:text-white hover:border-[#0362D0] transition-colors"
                     >
@@ -398,14 +414,16 @@ export function Groups() {
                 <div className="flex items-center justify-between mb-2">
                   <h4 className="text-xs font-black text-[#172033] flex items-center gap-1.5">
                     <Users size={14} className="text-[#0362D0]" />
-                    <span>Daftar Siswa ({students.filter(s => s.groupId === selectedGroup.id).length})</span>
+                    <span>Daftar Siswa ({selectedGroupStudents.length})</span>
                   </h4>
                 </div>
 
                 <div className="divide-y divide-[#E6E8EC] border border-[#E6E8EC] rounded-2xl overflow-hidden max-h-48 overflow-y-auto bg-[#F5F6F8]">
-                  {students
-                    .filter(s => s.groupId === selectedGroup.id)
-                    .map((st, idx) => (
+                  {loadingStudents ? (
+                    <div className="py-8 flex justify-center items-center">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0362D0]"></div>
+                    </div>
+                  ) : selectedGroupStudents.map((st, idx) => (
                       <div key={st.id} className="p-2.5 flex items-center justify-between text-xs hover:bg-white transition-colors">
                         <div className="flex items-center gap-2">
                           <span className="w-5 text-center text-slate-400 font-bold">{idx + 1}.</span>
@@ -419,7 +437,7 @@ export function Groups() {
                         </span>
                       </div>
                     ))}
-                  {students.filter(s => s.groupId === selectedGroup.id).length === 0 && (
+                  {!loadingStudents && selectedGroupStudents.length === 0 && (
                     <div className="p-4 text-center text-xs text-slate-500 font-medium">
                       Belum ada data siswa di kelompok ini.
                     </div>

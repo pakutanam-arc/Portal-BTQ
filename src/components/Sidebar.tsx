@@ -19,14 +19,15 @@ import { APP_LOGO, APP_NAME, APP_SUBTITLE } from '../assets/logo';
 
 const navItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/', roles: ['admin', 'mentor'] },
-  { icon: Users, label: 'Data Siswa', path: '/students', roles: ['admin'] },
-  { icon: Layers, label: 'Kelompok BTQ', path: '/groups', roles: ['admin', 'mentor'] },
-  { icon: CheckSquare, label: 'Absensi Siswa', path: '/attendance/students', roles: ['admin', 'mentor'] },
-  { icon: UserCheck, label: 'Kehadiran Mentor', path: '/attendance/mentors', roles: ['admin'] },
-  { icon: BarChart3, label: 'Progress BTQ', path: '/progress', roles: ['admin', 'mentor'] },
-  { icon: BookMarked, label: 'Jurnal Mengajar', path: '/journals', roles: ['admin', 'mentor'] },
+  { icon: CheckSquare, label: 'Sesi Mengajar', path: '/session', roles: ['admin', 'mentor'] },
   { icon: Award, label: 'Ujian & Sertifikasi', path: '/certifications', roles: ['admin', 'mentor'] },
   { icon: BookOpen, label: 'Kurikulum', path: '/curriculum', roles: ['admin', 'mentor'] },
+  { icon: Users, label: 'Data Siswa', path: '/students', roles: ['admin'] },
+  { icon: Layers, label: 'Kelompok BTQ', path: '/groups', roles: ['admin'] },
+  { icon: UserCheck, label: 'Kehadiran Mentor', path: '/attendance/mentors', roles: ['admin'] },
+  { icon: CheckSquare, label: 'Presensi Siswa', path: '/attendance/students', roles: ['admin'] },
+  { icon: BarChart3, label: 'Progress Siswa', path: '/progress', roles: ['admin'] },
+  { icon: BookMarked, label: 'Jurnal Mengajar', path: '/journals', roles: ['admin'] },
   { icon: FileText, label: 'Laporan', path: '/reports', roles: ['admin'] },
 ];
 

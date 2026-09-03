@@ -69,9 +69,10 @@ export interface Progress {
   date: string;
   reading: number; // 0-100
   tajwid: number; // 0-100
-  memorization: number; // 0-100
+  memorization?: number; // 0-100 (optional legacy)
+  memorizedSurah?: string; // Surah yang dihafalkan pada sesi (mis. QS. An-Naba', An-Nazi'at)
   writing: number; // 0-100
-  total: number; // average of above
+  total: number; // Nilai rata-rata mutu (membaca, tajwid, menulis)
   notes?: string;
 }
 

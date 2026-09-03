@@ -1,4 +1,5 @@
 import React from 'react';
+import { theme } from '../theme';
 import { Download, Printer, FileText, PieChart, BarChart, FileSpreadsheet, Sparkles } from 'lucide-react';
 
 export function Reports() {
@@ -34,14 +35,14 @@ export function Reports() {
   ];
 
   return (
-    <div className="space-y-6 max-w-[1240px] mx-auto pb-12">
+    <div className="flex flex-col gap-4 sm:gap-6 w-full pb-12">
       {/* Header Banner */}
       <div className="bg-gradient-to-r from-[#172033] via-[#0362D0] to-[#172033] rounded-3xl p-6 lg:p-8 text-white shadow-md border border-[#E6E8EC] flex flex-col md:flex-row md:items-center justify-between gap-6 relative overflow-hidden">
         <div className="relative z-10 max-w-2xl">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md text-slate-100 text-xs font-bold mb-3 border border-white/10">
             <FileSpreadsheet size={14} className="text-[#C99A2E]" /> Pusat Laporan Administrasi
           </div>
-          <h1 className="text-2xl lg:text-3xl font-black tracking-tight">
+          <h1 className={theme.typography.h1.replace('text-[#172033]', '')}>
             Laporan & Rekapitulasi Data
           </h1>
           <p className="text-slate-200 text-xs sm:text-sm mt-1.5 leading-relaxed font-medium">

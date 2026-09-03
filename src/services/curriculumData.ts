@@ -27,10 +27,10 @@ export const CURRICULUM_CONFIG = {
   scheduleTime: '07:15 - 08:00 WIB',
   totalSessions: 32,
   sessionsPerSemester: 16,
-  completedSessionsCount: 2, // Sudah 2x pertemuan terlaksana
-  currentActiveSessionNumber: 3, // Pertemuan berikutnya yang aktif
+  completedSessionsCount: 2, // Sudah 2 Tahap terlaksana
+  currentActiveSessionNumber: 3, // Tahap berikutnya yang aktif
   currentSemester: 1 as const,
-  statusDescription: 'Kegiatan rutin setiap hari Sabtu. Saat ini telah terlaksana 2x pertemuan (Pertemuan 1 Pengenalan Mentor & Pertemuan 2 Mulai Pembelajaran).'
+  statusDescription: 'Kegiatan bimbingan rutin. Saat ini telah terlaksana 2 Tahap (Tahap 1 Pengenalan Mentor & Tahap 2 Mulai Pembelajaran).'
 };
 
 export const masterGrades: Grade[] = [
@@ -41,7 +41,7 @@ export const masterGrades: Grade[] = [
     programName: 'Utsmani Jilid 1', 
     bookTitle: 'Bimbingan Tahsin & Tajwid Al-Qur\'an Utsmani Dewasa Jilid 1',
     description: 'Fokus pengenalan huruf hijaiyyah, tanda baca (harakat), huruf sambung, tanwin, mad thobi\'i, sukun, tasydid, dan dasar kelancaran membaca mushaf rasm Utsmani.',
-    groups: ['Kelompok 1', 'Kelompok 2', 'Kelompok 3', 'Kelompok 4', 'Kelompok 5']
+    groups: ['Kelompok 1', 'Kelompok 2', 'Kelompok 3', 'Kelompok 7', 'Kelompok 8']
   },
   { 
     id: 'grade2', 
@@ -50,22 +50,44 @@ export const masterGrades: Grade[] = [
     programName: 'Utsmani Jilid 2', 
     bookTitle: 'Bimbingan Tahsin & Tajwid Al-Qur\'an Utsmani Dewasa Jilid 2',
     description: 'Fokus pendalaman kaidah tajwid lengkap (Hukum Nun & Mim Sukun, Ghunnah, Idgham, Qalqalah, Hukum Mad Lanjutan, Sifat & Makhorijul Huruf, serta Gharib Al-Qur\'an).',
-    groups: ['Kelompok 6', 'Kelompok 7', 'Kelompok 8', 'Kelompok 9']
+    groups: ['Kelompok 4', 'Kelompok 5', 'Kelompok 6', 'Kelompok 9']
   },
   { 
     id: 'grade3', 
     level: 3, 
     name: 'Grade 3', 
-    programName: 'Tahfizh Al-Qur\'an', 
-    bookTitle: 'Kurikulum Tahfizh & Mutqin Al-Qur\'an Juz 30',
-    description: 'Fokus bimbingan tahsin bacaan, talaqqi, setoran hafalan baru, murajaah harian/pekanan, evaluasi mutqin, dan tasmi\' Juz 30.',
+    programName: 'Kurikulum Al-Qur\'an & Hafalan Juz 30', 
+    bookTitle: 'Mushaf Al-Qur\'an & Kurikulum Hafalan Juz 30',
+    description: 'Khusus Kelompok 10: Fokus bimbingan membaca mushaf Al-Qur\'an, talaqqi, setoran hafalan surah Juz 30 baru, murajaah mutqin, dan tasmi\' Juz 30 (bukan materi Jilid 1 atau 2).',
     groups: ['Kelompok 10']
   },
 ];
 
+export function getGradeForGroup(group?: { id?: string; name?: string; gradeId?: string } | null): Grade {
+  if (!group) return masterGrades[0];
+  const name = group.name || '';
+  const id = group.id || '';
+  const match = name.match(/\d+/) || id.match(/\d+/);
+  const num = match ? parseInt(match[0], 10) : 0;
+
+  // Kelompok 10 = Grade 3
+  if (num === 10 || id === 'g10' || id === 'group_10' || name.toLowerCase().includes('10') || name.toLowerCase().includes('tahfizh') || group.gradeId === 'grade3') {
+    return masterGrades[2];
+  }
+  // Kelompok 4, 5, 6, 9 = Grade 2
+  if ([4, 5, 6, 9].includes(num) || ['g4', 'g5', 'g6', 'g9'].includes(id) || group.gradeId === 'grade2') {
+    return masterGrades[1];
+  }
+  // Kelompok 1, 2, 3, 7, 8 = Grade 1
+  if ([1, 2, 3, 7, 8].includes(num) || ['g1', 'g2', 'g3', 'g7', 'g8'].includes(id) || group.gradeId === 'grade1') {
+    return masterGrades[0];
+  }
+  return masterGrades[0];
+}
+
 export const masterSessions: CurriculumSession[] = [
   // =========================================================================
-  // GRADE 1: UTSMANI JILID 1 (KELOMPOK 1, 2, 3, 4, 5) - SEMESTER 1 (Sesi 1-16)
+  // GRADE 1: UTSMANI JILID 1 (KELOMPOK 1, 2, 3, 7, 8) - SEMESTER 1 (Sesi 1-16)
   // =========================================================================
   {
     id: 'g1-s1',
@@ -392,7 +414,7 @@ export const masterSessions: CurriculumSession[] = [
   },
 
   // =========================================================================
-  // GRADE 2: UTSMANI JILID 2 (KELOMPOK 6, 7, 8, 9) - SEMESTER 1 (Sesi 1-16)
+  // GRADE 2: UTSMANI JILID 2 (KELOMPOK 4, 5, 6, 9) - SEMESTER 1 (Sesi 1-16)
   // =========================================================================
   {
     id: 'g2-s1',
@@ -1044,4 +1066,44 @@ export const masterSessions: CurriculumSession[] = [
     pageRef: 'Sertifikasi Tahfizh',
     target: 'Ujian sertifikasi resmi kelulusan Tahfizh Al-Qur\'an Juz 30 SMPN 102.'
   },
+];
+
+export const JUZ_30_SURAHS = [
+  "QS. An-Naba'",
+  "QS. An-Nazi'at",
+  "QS. 'Abasa",
+  "QS. At-Takwir",
+  "QS. Al-Infithar",
+  "QS. Al-Muthaffifin",
+  "QS. Al-Insyiqaq",
+  "QS. Al-Buruj",
+  "QS. At-Thariq",
+  "QS. Al-A'la",
+  "QS. Al-Ghasyiyah",
+  "QS. Al-Fajr",
+  "QS. Al-Balad",
+  "QS. Asy-Syams",
+  "QS. Al-Lail",
+  "QS. Ad-Dhuha",
+  "QS. Asy-Syarh",
+  "QS. At-Tin",
+  "QS. Al-'Alaq",
+  "QS. Al-Qadr",
+  "QS. Al-Bayyinah",
+  "QS. Az-Zalzalah",
+  "QS. Al-'Adiyat",
+  "QS. Al-Qari'ah",
+  "QS. At-Takatsur",
+  "QS. Al-'Ashr",
+  "QS. Al-Humazah",
+  "QS. Al-Fil",
+  "QS. Quraisy",
+  "QS. Al-Ma'un",
+  "QS. Al-Kautsar",
+  "QS. Al-Kafirun",
+  "QS. An-Nashr",
+  "QS. Al-Lahab",
+  "QS. Al-Ikhlas",
+  "QS. Al-Falaq",
+  "QS. An-Nas",
 ];

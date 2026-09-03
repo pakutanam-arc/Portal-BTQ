@@ -9,6 +9,7 @@ import { getGroups, getStudentsByGroup, getStudentAttendance, saveStudentAttenda
 import { masterGrades, masterSessions, CurriculumSession } from '../services/curriculumData';
 import { cn } from '../utils/cn';
 import { useAuth } from '../contexts/AuthContext';
+import { theme } from '../theme';
 
 export function StudentAttendance() {
   const { currentUser, userData, userRole } = useAuth();
@@ -221,7 +222,7 @@ export function StudentAttendance() {
   const alpaCount = attendanceList.filter(a => a.status === 'Alpa').length;
 
   return (
-    <div className="space-y-6 max-w-[1240px] mx-auto pb-12">
+    <div className="flex flex-col gap-4 sm:gap-6 w-full pb-12">
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-3xl border border-[#E6E8EC] shadow-xs">
         <div>
@@ -316,8 +317,8 @@ export function StudentAttendance() {
                 onChange={(e) => setSelectedSemester(parseInt(e.target.value))}
                 className="w-full font-bold text-xs"
               >
-                <option value="1">Semester 1 (Pertemuan 1 – 16)</option>
-                <option value="2">Semester 2 (Pertemuan 17 – 32)</option>
+                <option value="1">Semester 1 (Tahap 1 – 16)</option>
+                <option value="2">Semester 2 (Tahap 17 – 32)</option>
               </Select>
             </div>
 
@@ -331,10 +332,10 @@ export function StudentAttendance() {
                 {availableSessions.map(s => {
                   const isDone = selectedSemester === 1 && s.sessionNumber <= 2;
                   const isActive = selectedSemester === 1 && s.sessionNumber === 3;
-                  const tag = isDone ? ' [Selesai]' : isActive ? ' [Sesi Aktif]' : '';
+                  const tag = isDone ? ' [Selesai]' : isActive ? ' [Tahap Aktif]' : '';
                   return (
                     <option key={s.id} value={s.id}>
-                      Pertemuan {s.sessionNumber}: {s.topic}{tag}
+                      Tahap {s.sessionNumber}: {s.topic}{tag}
                     </option>
                   );
                 })}
@@ -348,7 +349,7 @@ export function StudentAttendance() {
               <div className="space-y-0.5">
                 <div className="flex items-center gap-2">
                   <span className="font-extrabold text-[#0362D0]">
-                    Pertemuan {activeSessionObj.sessionNumber}: {activeSessionObj.topic}
+                    Tahap {activeSessionObj.sessionNumber}: {activeSessionObj.topic}
                   </span>
                   {activeSessionObj.pageRef && (
                     <span className="px-2 py-0.5 bg-white text-[#0362D0] border border-[#0362D0]/30 rounded text-[10px] font-black">
@@ -416,15 +417,15 @@ export function StudentAttendance() {
         ) : (
           <>
             {/* Desktop Table View */}
-            <div className="hidden md:block overflow-x-auto">
+            <div className="hidden md:block overflow-x-auto w-full scrollbar-thin">
               <Table>
                 <TableHeader className="bg-[#F5F6F8]">
                   <TableRow className="border-b border-[#E6E8EC]">
-                    <TableHead className="w-12 text-center font-black text-[#172033] text-xs">No</TableHead>
-                    <TableHead className="font-black text-[#172033] text-xs">Nama Santri</TableHead>
-                    <TableHead className="text-center font-black text-[#172033] text-xs">Kelas</TableHead>
-                    <TableHead className="text-center w-72 font-black text-[#172033] text-xs">Status Presensi</TableHead>
-                    <TableHead className="font-black text-[#172033] text-xs">Catatan Mentor</TableHead>
+                    <TableHead className="w-12 text-center font-black text-[#172033] text-xs whitespace-nowrap px-4 py-3.5">No</TableHead>
+                    <TableHead className="font-black text-[#172033] text-xs whitespace-nowrap px-4 py-3.5">Nama Santri</TableHead>
+                    <TableHead className="text-center font-black text-[#172033] text-xs whitespace-nowrap px-4 py-3.5">Kelas</TableHead>
+                    <TableHead className="text-center w-72 font-black text-[#172033] text-xs whitespace-nowrap px-4 py-3.5">Status Presensi</TableHead>
+                    <TableHead className="font-black text-[#172033] text-xs whitespace-nowrap px-4 py-3.5">Catatan Mentor</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -434,17 +435,17 @@ export function StudentAttendance() {
                     
                     return (
                       <TableRow key={student.id} className="hover:bg-[#F5F6F8]/60 transition-colors border-b border-[#E6E8EC]">
-                        <TableCell className="text-center text-slate-500 py-3 font-bold text-xs">{idx + 1}</TableCell>
-                        <TableCell className="py-3">
+                        <TableCell className="text-center text-slate-500 py-3 font-bold text-xs whitespace-nowrap px-4">{idx + 1}</TableCell>
+                        <TableCell className="py-3 whitespace-nowrap px-4">
                           <div className="font-extrabold text-[#172033] text-sm">{student.name}</div>
                           <div className="text-[11px] text-slate-400 font-medium">NIS: {student.nis || '-'}</div>
                         </TableCell>
-                        <TableCell className="text-center py-3">
-                          <span className="px-2.5 py-1 bg-[#0362D0]/10 text-[#0362D0] rounded-md text-xs font-black border border-[#0362D0]/20">
+                        <TableCell className="text-center py-3 whitespace-nowrap px-4">
+                          <span className="px-2.5 py-1 bg-[#0362D0]/10 text-[#0362D0] rounded-md text-xs font-black border border-[#0362D0]/20 inline-block whitespace-nowrap">
                             Kelas {student.class}
                           </span>
                         </TableCell>
-                        <TableCell className="text-center py-3">
+                        <TableCell className="text-center py-3 whitespace-nowrap px-4">
                           <div className="inline-flex rounded-xl border border-[#E6E8EC] overflow-hidden p-1 bg-[#F5F6F8]">
                             {[
                               { label: 'Hadir', activeClass: 'bg-emerald-600 text-white shadow-2xs' },

@@ -29,72 +29,97 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let isMounted = true;
+
+    // Safety timeout: ensure loading state never hangs indefinitely
+    const timeoutId = setTimeout(() => {
+      if (isMounted) {
+        setLoading(false);
+      }
+    }, 2500);
+
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setLoading(true);
-      if (user && user.email) {
-        setCurrentUser(user);
-        const emailLower = user.email.toLowerCase();
-        
-        // Check if admin (hardcoded admin email or fetch from users collection)
-        if (emailLower === 'admin@smpn102.sch.id' || emailLower.startsWith('admin@')) {
-          setUserRole('admin');
-          setUserData({ name: 'Administrator', email: user.email, role: 'admin' });
-        } else {
-          // Check mock mentors first as immediate fallback
-          const matchedMentor = mockMentors.find(m => m.email.toLowerCase() === emailLower);
+      if (!isMounted) return;
+      try {
+        if (user && user.email) {
+          setCurrentUser(user);
+          const emailLower = user.email.toLowerCase();
           
-          try {
-            const q = query(collection(db, 'users'), where('email', '==', user.email));
-            const snapshot = await getDocs(q);
-            if (!snapshot.empty) {
-              const data = snapshot.docs[0].data() as any;
-              const uData = { id: snapshot.docs[0].id, ...data };
-              setUserData(uData);
-              setUserRole(uData?.role || 'mentor');
-            } else if (matchedMentor) {
-              setUserData({ ...matchedMentor, role: 'mentor' });
-              setUserRole('mentor');
-            } else {
-              // Generic mentor
-              const username = emailLower.split('@')[0];
-              const formattedName = username.charAt(0).toUpperCase() + username.slice(1);
-              setUserData({
-                id: `m_${username}`,
-                name: `Ustadz/ah ${formattedName}`,
-                email: user.email,
-                role: 'mentor',
-                groupId: 'g1'
-              });
-              setUserRole('mentor');
-            }
-          } catch (error) {
-            console.warn("Firestore offline or query error, using local mentor profile:", error);
-            if (matchedMentor) {
-              setUserData({ ...matchedMentor, role: 'mentor' });
-              setUserRole('mentor');
-            } else {
-              const username = emailLower.split('@')[0];
-              const formattedName = username.charAt(0).toUpperCase() + username.slice(1);
-              setUserData({
-                id: `m_${username}`,
-                name: `Ustadz/ah ${formattedName}`,
-                email: user.email,
-                role: 'mentor',
-                groupId: 'g1'
-              });
-              setUserRole('mentor');
+          // Check if admin (hardcoded admin email or fetch from users collection)
+          if (emailLower === 'admin@smpn102.sch.id' || emailLower.startsWith('admin@')) {
+            setUserRole('admin');
+            setUserData({ name: 'Administrator', email: user.email, role: 'admin' });
+          } else {
+            // Check mock mentors first as immediate fallback
+            const matchedMentor = mockMentors.find(m => m.email.toLowerCase() === emailLower);
+            
+            // Extract alumni number if applicable
+            const username = emailLower.split('@')[0];
+            const matchAlumni = username.match(/\d+/);
+            const alumniNum = matchAlumni ? parseInt(matchAlumni[0], 10) : 1;
+            const defaultGroupId = `g${alumniNum}`;
+            const defaultMentorName = username.startsWith('alumni') ? `Kak Alumni ${alumniNum}` : `Ustadz/ah ${username.charAt(0).toUpperCase() + username.slice(1)}`;
+
+            try {
+              const q = query(collection(db, 'users'), where('email', '==', user.email));
+              const snapshot = await getDocs(q);
+              if (!snapshot.empty) {
+                const data = snapshot.docs[0].data() as any;
+                const uData = { id: snapshot.docs[0].id, ...data };
+                if (!uData.groupId) uData.groupId = defaultGroupId;
+                setUserData(uData);
+                setUserRole(uData?.role || 'mentor');
+              } else if (matchedMentor) {
+                setUserData({ ...matchedMentor, role: 'mentor' });
+                setUserRole('mentor');
+              } else {
+                // Generic mentor
+                setUserData({
+                  id: `m_${username}`,
+                  name: defaultMentorName,
+                  email: user.email,
+                  role: 'mentor',
+                  groupId: defaultGroupId
+                });
+                setUserRole('mentor');
+              }
+            } catch (error) {
+              console.warn("Firestore offline or query error, using local mentor profile:", error);
+              if (matchedMentor) {
+                setUserData({ ...matchedMentor, role: 'mentor' });
+                setUserRole('mentor');
+              } else {
+                setUserData({
+                  id: `m_${username}`,
+                  name: defaultMentorName,
+                  email: user.email,
+                  role: 'mentor',
+                  groupId: defaultGroupId
+                });
+                setUserRole('mentor');
+              }
             }
           }
+        } else {
+          setCurrentUser(null);
+          setUserRole(null);
+          setUserData(null);
         }
-      } else {
-        setCurrentUser(null);
-        setUserRole(null);
-        setUserData(null);
+      } catch (err) {
+        console.error("Auth state handling error:", err);
+      } finally {
+        if (isMounted) {
+          clearTimeout(timeoutId);
+          setLoading(false);
+        }
       }
-      setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+      isMounted = false;
+      clearTimeout(timeoutId);
+      unsubscribe();
+    };
   }, []);
 
   const value = {

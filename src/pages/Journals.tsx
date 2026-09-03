@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { theme } from '../theme';
 import { 
   BookOpen, 
   Plus, 
@@ -37,6 +38,10 @@ export function Journals() {
   const isMentor = userRole === 'mentor';
 
   const [journals, setJournals] = useState<TeachingJournal[]>([]);
+  const [lastDoc, setLastDoc] = useState<any>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+
   const [groups, setGroups] = useState<Group[]>([]);
   const [mentors, setMentors] = useState<Mentor[]>([]);
   const [loading, setLoading] = useState(true);
@@ -54,6 +59,7 @@ export function Journals() {
   const [formData, setFormData] = useState<{
     groupId: string;
     sessionId: string;
+    meetingNumber: number;
     date: string;
     materialTaught: string;
     pagesCovered: string;
@@ -63,6 +69,7 @@ export function Journals() {
   }>({
     groupId: '',
     sessionId: '',
+    meetingNumber: 1,
     date: new Date().toISOString().split('T')[0],
     materialTaught: '',
     pagesCovered: '',
@@ -85,16 +92,14 @@ export function Journals() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [journalsData, groupsData, mentorsData] = await Promise.all([
-        getTeachingJournals(),
-        getGroups(),
-        getMentors()
-      ]);
+      const groupsData = await getGroups();
+      const mentorsData = await getMentors();
 
       setMentors(mentorsData);
       setGroups(groupsData);
 
       // Mentor specific default group selection
+      let initialGroup = 'all';
       const matchedMentor = mentorsData.find(
         m => (userData?.id && m.id === userData.id) ||
              (currentUser?.uid && m.id === currentUser.uid) ||
@@ -105,16 +110,51 @@ export function Journals() {
       const assignedGroupId = matchedMentor?.groupId || userData?.groupId;
       if (isMentor && assignedGroupId) {
         setSelectedGroupFilter(assignedGroupId);
+        initialGroup = assignedGroupId;
         setFormData(prev => ({ ...prev, groupId: assignedGroupId }));
       } else if (groupsData.length > 0) {
         setFormData(prev => ({ ...prev, groupId: groupsData[0].id }));
       }
 
-      setJournals(journalsData);
+      const res = await getTeachingJournals(initialGroup === 'all' ? undefined : initialGroup, 20);
+      setJournals(res.data);
+      setLastDoc(res.lastDoc);
+      setHasMore(res.hasMore);
     } catch (e) {
       console.error("Failed to load journals", e);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleFilterChange = async (groupId: string) => {
+    setSelectedGroupFilter(groupId);
+    setLoading(true);
+    try {
+      const res = await getTeachingJournals(groupId === 'all' ? undefined : groupId, 20);
+      setJournals(res.data);
+      setLastDoc(res.lastDoc);
+      setHasMore(res.hasMore);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLoadMore = async () => {
+    if (!hasMore || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const grp = selectedGroupFilter === 'all' ? undefined : selectedGroupFilter;
+      const res = await getTeachingJournals(grp, 20, lastDoc);
+      setJournals(prev => [...prev, ...res.data]);
+      setLastDoc(res.lastDoc);
+      setHasMore(res.hasMore);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingMore(false);
     }
   };
 
@@ -124,9 +164,13 @@ export function Journals() {
       ? (groups.find(g => g.mentorId === userData?.id || g.id === userData?.groupId)?.id || groups[0]?.id || '')
       : (groups[0]?.id || '');
 
+    const groupJournals = journals.filter(j => j.groupId === defaultGroup);
+    const nextMeetingNum = groupJournals.length + 1;
+
     setFormData({
       groupId: defaultGroup,
       sessionId: masterSessions[0]?.id || '',
+      meetingNumber: nextMeetingNum,
       date: new Date().toISOString().split('T')[0],
       materialTaught: '',
       pagesCovered: '',
@@ -142,6 +186,7 @@ export function Journals() {
     setFormData({
       groupId: journal.groupId,
       sessionId: journal.sessionId || '',
+      meetingNumber: journal.meetingNumber || 1,
       date: journal.date,
       materialTaught: journal.materialTaught,
       pagesCovered: journal.pagesCovered || '',
@@ -183,7 +228,8 @@ export function Journals() {
         groupId: formData.groupId,
         groupName: selectedGrp?.name || 'Kelompok BTQ',
         sessionId: formData.sessionId || undefined,
-        sessionTitle: selectedSess?.topic || undefined,
+        meetingNumber: formData.meetingNumber,
+        sessionTitle: selectedSess ? `Tahap ${selectedSess.sessionNumber}: ${selectedSess.topic}` : undefined,
         date: formData.date,
         materialTaught: formData.materialTaught,
         pagesCovered: formData.pagesCovered || undefined,
@@ -201,7 +247,7 @@ export function Journals() {
       try {
         await createNotification({
           title: `Jurnal Sesi: ${selectedGrp?.name || 'Kelompok'}`,
-          message: `${mentorName} telah mengisi jurnal pertemuan tanggal ${formData.date}: "${formData.materialTaught.substring(0, 70)}..."`,
+          message: `${mentorName} telah mengisi jurnal Tahap tanggal ${formData.date}: "${formData.materialTaught.substring(0, 70)}..."`,
           type: 'info',
           targetRole: 'all',
           link: '/journals',
@@ -217,8 +263,7 @@ export function Journals() {
       setIsModalOpen(false);
       
       // Refresh list
-      const refreshed = await getTeachingJournals();
-      setJournals(refreshed);
+      await handleFilterChange(selectedGroupFilter);
     } catch (e) {
       console.error(e);
       alert("Gagal menyimpan jurnal mengajar");
@@ -240,7 +285,7 @@ export function Journals() {
   });
 
   return (
-    <div className="space-y-6 max-w-[1240px] mx-auto pb-12">
+    <div className="flex flex-col gap-4 sm:gap-6 w-full pb-12">
       {/* Toast Notification */}
       {toastMessage && (
         <div className="fixed bottom-6 right-6 z-50 bg-[#172033] text-white px-5 py-4 rounded-2xl shadow-2xl border border-[#E6E8EC]/20 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-3">
@@ -255,8 +300,8 @@ export function Journals() {
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md text-[#C99A2E] text-xs font-black mb-3 border border-white/10">
             <BookOpen size={14} /> Jurnal Pembelajaran Sesi Sabtu
           </div>
-          <h1 className="text-2xl lg:text-3xl font-black tracking-tight">
-            Jurnal Mengajar & Catatan Pertemuan
+          <h1 className={theme.typography.h1.replace('text-[#172033]', '')}>
+            Jurnal Mengajar & Catatan Tahap
           </h1>
           <p className="text-slate-200 text-xs sm:text-sm mt-1.5 leading-relaxed font-medium">
             Dokumentasi berkala kegiatan belajar mengajar BTQ: materi tilawati/tahsin yang dibahas, kendala santri, dan target pekan berikutnya.
@@ -291,7 +336,7 @@ export function Journals() {
             <Filter size={15} className="text-slate-400" />
             <select
               value={selectedGroupFilter}
-              onChange={(e) => setSelectedGroupFilter(e.target.value)}
+              onChange={(e) => handleFilterChange(e.target.value)}
               className="px-3 py-2 bg-[#F5F6F8] border border-[#E6E8EC] rounded-xl text-xs font-bold text-[#172033] outline-none focus:ring-2 focus:ring-[#0362D0]"
             >
               <option value="all">Semua Kelompok ({groups.length})</option>
@@ -313,8 +358,9 @@ export function Journals() {
           Memuat catatan jurnal mengajar...
         </div>
       ) : filteredJournals.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {filteredJournals.map(journal => {
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {filteredJournals.map(journal => {
             return (
               <div 
                 key={journal.id} 
@@ -327,6 +373,11 @@ export function Journals() {
                       <span className="px-3 py-1 bg-[#0362D0]/10 text-[#0362D0] rounded-xl text-xs font-black border border-[#0362D0]/20 flex items-center gap-1.5">
                         <Users size={12} /> {journal.groupName || 'Kelompok Binaan'}
                       </span>
+                      {journal.meetingNumber && (
+                        <span className="px-2.5 py-1 bg-[#C99A2E]/15 text-[#856110] rounded-xl text-[11px] font-black border border-[#C99A2E]/30 flex items-center gap-1">
+                          Pertemuan Ke-{journal.meetingNumber}
+                        </span>
+                      )}
                       <span className="px-2.5 py-1 bg-[#F5F6F8] text-slate-600 rounded-xl text-[11px] font-bold border border-[#E6E8EC] flex items-center gap-1">
                         <Calendar size={11} /> {journal.date}
                       </span>
@@ -382,7 +433,7 @@ export function Journals() {
 
                     <div className="pt-2 border-t border-[#E6E8EC]">
                       <span className="font-extrabold text-[#172033] block mb-0.5 flex items-center gap-1 text-[11px]">
-                        <ChevronRight size={12} className="text-[#0362D0]" /> Rencana Pertemuan Pekan Depan:
+                        <ChevronRight size={12} className="text-[#0362D0]" /> Rencana Target Tahap Berikutnya:
                       </span>
                       <p className="text-slate-600 leading-relaxed pl-4 font-medium">
                         {journal.nextPlan || 'Melanjutkan materi jilid berikutnya dan setoran hafalan rutin.'}
@@ -406,6 +457,27 @@ export function Journals() {
             );
           })}
         </div>
+        
+        {hasMore && (
+          <div className="mt-8 text-center">
+            <button
+              onClick={handleLoadMore}
+              disabled={loadingMore}
+              className="inline-flex items-center gap-2 px-6 py-3 bg-white border border-[#E6E8EC] rounded-2xl text-sm font-black text-[#172033] hover:bg-[#F5F6F8] transition-colors disabled:opacity-50 cursor-pointer"
+            >
+              {loadingMore ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-[#172033] border-t-transparent rounded-full animate-spin"></div>
+                  Memuat...
+                </>
+              ) : (
+                'Muat Lebih Banyak'
+              )}
+            </button>
+          </div>
+        )}
+        
+      </>
       ) : (
         <div className="bg-white rounded-3xl border border-[#E6E8EC] p-12 text-center max-w-md mx-auto">
           <div className="w-12 h-12 rounded-2xl bg-[#0362D0]/10 text-[#0362D0] flex items-center justify-center mx-auto mb-3">
@@ -413,7 +485,7 @@ export function Journals() {
           </div>
           <h3 className="font-extrabold text-[#172033] text-sm">Belum Ada Catatan Jurnal</h3>
           <p className="text-slate-500 text-xs mt-1 leading-relaxed font-medium">
-            Belum ada catatan jurnal mengajar yang sesuai dengan filter. Klik tombol di bawah untuk membuat catatan pertemuan baru.
+            Belum ada catatan jurnal mengajar yang sesuai dengan filter. Klik tombol di bawah untuk membuat catatan baru.
           </p>
           <button
             onClick={handleOpenNewModal}
@@ -434,7 +506,7 @@ export function Journals() {
                   {editingJournalId ? 'Edit Jurnal Mengajar' : 'Catatan Jurnal Mengajar Sabtu'}
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5 font-medium">
-                  Isi ringkas materi, evaluasi santri, dan perencanaan pertemuan berikutnya.
+                  Isi ringkas materi, evaluasi santri, dan perencanaan tahap berikutnya.
                 </p>
               </div>
               <button 
@@ -477,22 +549,38 @@ export function Journals() {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-black text-[#172033] mb-1 uppercase tracking-wider">
-                  Sesi Kurikulum Aktif (Opsional)
-                </label>
-                <select 
-                  value={formData.sessionId}
-                  onChange={(e) => setFormData({ ...formData, sessionId: e.target.value })}
-                  className="w-full px-3 py-2 bg-[#F5F6F8] border border-[#E6E8EC] rounded-xl text-xs font-medium focus:ring-2 focus:ring-[#0362D0] outline-none text-[#172033]"
-                >
-                  <option value="">-- Pilih Sesi Pertemuan Kurikulum --</option>
-                  {masterSessions.map(s => (
-                    <option key={s.id} value={s.id}>
-                      Pertemuan {s.sessionNumber}: {s.topic}
-                    </option>
-                  ))}
-                </select>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-black text-[#172033] mb-1 uppercase tracking-wider">
+                    Pertemuan Ke- (Riil / Kalender)
+                  </label>
+                  <input 
+                    type="number"
+                    min="1"
+                    max="50"
+                    value={formData.meetingNumber}
+                    onChange={(e) => setFormData({ ...formData, meetingNumber: parseInt(e.target.value) || 1 })}
+                    className="w-full px-3 py-2 bg-[#F5F6F8] border border-[#E6E8EC] rounded-xl text-xs font-black focus:ring-2 focus:ring-[#0362D0] outline-none text-[#0362D0]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-black text-[#172033] mb-1 uppercase tracking-wider">
+                    Tahap Kurikulum (Opsional)
+                  </label>
+                  <select 
+                    value={formData.sessionId}
+                    onChange={(e) => setFormData({ ...formData, sessionId: e.target.value })}
+                    className="w-full px-3 py-2 bg-[#F5F6F8] border border-[#E6E8EC] rounded-xl text-xs font-medium focus:ring-2 focus:ring-[#0362D0] outline-none text-[#172033]"
+                  >
+                    <option value="">-- Pilih Tahap Kurikulum --</option>
+                    {masterSessions.map(s => (
+                      <option key={s.id} value={s.id}>
+                        Tahap {s.sessionNumber}: {s.topic}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               <div>
@@ -537,7 +625,7 @@ export function Journals() {
 
               <div>
                 <label className="block text-xs font-black text-[#172033] mb-1 uppercase tracking-wider">
-                  Rencana Target Pertemuan Pekan Depan
+                  Rencana Target Tahap Berikutnya
                 </label>
                 <textarea 
                   rows={2}

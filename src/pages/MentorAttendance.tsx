@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { theme } from '../theme';
 import { Calendar, Save, CheckCircle, RotateCcw, MessageSquare, Loader2, UserCheck, ShieldCheck } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -121,12 +122,12 @@ export function MentorAttendance() {
   }
 
   return (
-    <div className="space-y-6 max-w-[1240px] mx-auto pb-12">
+    <div className="flex flex-col gap-4 sm:gap-6 w-full pb-12">
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-3xl border border-[#E6E8EC] shadow-xs">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-black text-[#172033] tracking-tight">Presensi Kehadiran Mentor</h1>
+            <h1 className={theme.typography.h1}>Presensi Kehadiran Mentor</h1>
             <span className="px-3 py-0.5 rounded-full bg-[#950415]/10 text-[#950415] text-xs font-black border border-[#950415]/20">
               Pengurus & Mentor BTQ
             </span>

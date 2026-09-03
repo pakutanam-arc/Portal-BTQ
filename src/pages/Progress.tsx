@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
+import { theme } from '../theme';
 import { Card, CardContent } from '../components/ui/Card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/Table';
 import { Button } from '../components/ui/Button';
 import { Select } from '../components/ui/Select';
 import { Input } from '../components/ui/Input';
 import { Search, Loader2, Save, FileText, CheckCircle, Award, BookOpen } from 'lucide-react';
-import { getStudents, getGroups, getAllStudentProgress, saveStudentProgress, getMentors, createNotification, Student, Group, StudentProgress } from '../services/db';
-import { masterGrades, masterSessions } from '../services/curriculumData';
+import { getGroups, getStudentsByGroup, getStudentProgressBySession, saveStudentProgress, getMentors, createNotification, Student, Group, StudentProgress } from '../services/db';
+import { masterGrades, masterSessions, getGradeForGroup, JUZ_30_SURAHS } from '../services/curriculumData';
 import { cn } from '../utils/cn';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -30,8 +31,7 @@ export function Progress() {
   useEffect(() => {
     async function loadData() {
       try {
-        const [studentsRes, groupsRes, mentorsRes] = await Promise.all([
-          getStudents(),
+        const [groupsRes, mentorsRes] = await Promise.all([
           getGroups(),
           getMentors()
         ]);
@@ -61,7 +61,6 @@ export function Progress() {
         }
         
         setGroups(filteredGroups);
-        setStudents(studentsRes);
         
         if (filteredGroups.length > 0) {
           setSelectedGroupId(filteredGroups[0].id);
@@ -76,8 +75,11 @@ export function Progress() {
   }, [userRole, userData, currentUser, isMentor]);
 
   const selectedGroup = groups.find(g => g.id === selectedGroupId);
-  const gradeId = selectedGroup?.gradeId || 'grade1';
-  const availableSessions = masterSessions.filter(s => s.gradeId === gradeId && s.semester === selectedSemester);
+  const gradeObj = getGradeForGroup(selectedGroup);
+  const gradeId = gradeObj.id;
+  const availableSessions = React.useMemo(() => {
+    return masterSessions.filter(s => s.gradeId === gradeId && s.semester === selectedSemester);
+  }, [gradeId, selectedSemester]);
   
   // Set default session when grade or semester changes
   useEffect(() => {
@@ -94,13 +96,16 @@ export function Progress() {
     }
   }, [gradeId, selectedSemester, availableSessions, selectedSessionId]);
 
-  // Helper to calculate average of non-zero scores
+  // Helper to calculate average of non-zero quality scores:
+  // Kelompok 1-9 (Utsmani): Tajwid & Menulis
+  // Kelompok 10 (Tahfizh / Al-Qur'an): Membaca, Tajwid, Menulis (Hafalan dicatat tersendiri per surah dan tidak dirata-ratakan)
   const calculateProgressAverage = (record: Partial<StudentProgress>) => {
     const scores: number[] = [];
-    if (record.reading && record.reading > 0) scores.push(Number(record.reading));
-    if (record.tajwid && record.tajwid > 0) scores.push(Number(record.tajwid));
-    if (record.memorization && record.memorization > 0) scores.push(Number(record.memorization));
-    if (record.writing && record.writing > 0) scores.push(Number(record.writing));
+    if (gradeId === 'grade3') {
+      if (record.reading && Number(record.reading) > 0) scores.push(Number(record.reading));
+    }
+    if (record.tajwid && Number(record.tajwid) > 0) scores.push(Number(record.tajwid));
+    if (record.writing && Number(record.writing) > 0) scores.push(Number(record.writing));
     return scores.length > 0 ? Math.round(scores.reduce((sum, s) => sum + s, 0) / scores.length) : 0;
   };
 
@@ -112,8 +117,12 @@ export function Progress() {
         return;
       }
       try {
-        const allProgress = await getAllStudentProgress();
-        const records = allProgress.filter(p => p.groupId === selectedGroupId && p.sessionId === selectedSessionId);
+        const [records, groupStudents] = await Promise.all([
+          getStudentProgressBySession(selectedGroupId, selectedSessionId),
+          getStudentsByGroup(selectedGroupId)
+        ]);
+        
+        setStudents(groupStudents);
         
         const stateMap: Record<string, Partial<StudentProgress>> = {};
         records.forEach(r => {
@@ -129,10 +138,16 @@ export function Progress() {
   }, [selectedGroupId, selectedSessionId]);
 
   const handleScoreChange = (studentId: string, field: keyof StudentProgress, value: string) => {
-    const numValue = value === '' ? 0 : Math.min(100, Math.max(0, parseInt(value) || 0));
     setSessionProgress(prev => {
-      const current = prev[studentId] || { reading: 0, tajwid: 0, memorization: 0, writing: 0 };
-      const updated = { ...current, [field]: numValue };
+      const current = prev[studentId] || { reading: 0, tajwid: 0, memorizedSurah: '', writing: 0 };
+      let updated: Partial<StudentProgress>;
+      
+      if (field === 'memorizedSurah') {
+        updated = { ...current, memorizedSurah: value };
+      } else {
+        const numValue = value === '' ? 0 : Math.min(100, Math.max(0, parseInt(value) || 0));
+        updated = { ...current, [field]: numValue };
+      }
       
       updated.total = calculateProgressAverage(updated);
       
@@ -144,7 +159,7 @@ export function Progress() {
     if (!selectedGroupId || !selectedSessionId) return;
     setSaving(true);
     try {
-      const groupStudents = students.filter(s => s.groupId === selectedGroupId);
+      const groupStudents = students;
       
       for (const student of groupStudents) {
         const p = sessionProgress[student.id];
@@ -158,6 +173,7 @@ export function Progress() {
             date: new Date().toISOString().split('T')[0],
             reading: p.reading || 0,
             tajwid: p.tajwid || 0,
+            memorizedSurah: p.memorizedSurah || '',
             memorization: p.memorization || 0,
             writing: p.writing || 0,
             total: p.total || 0,
@@ -192,8 +208,7 @@ export function Progress() {
       }
 
       // Reload to get new IDs
-      const allProgress = await getAllStudentProgress();
-      const records = allProgress.filter(pr => pr.groupId === selectedGroupId && pr.sessionId === selectedSessionId);
+      const records = await getStudentProgressBySession(selectedGroupId, selectedSessionId);
       const stateMap: Record<string, Partial<StudentProgress>> = {};
       records.forEach(r => {
         r.total = calculateProgressAverage(r);
@@ -208,7 +223,7 @@ export function Progress() {
     }
   };
 
-  const groupStudents = students.filter(s => s.groupId === selectedGroupId);
+  const groupStudents = students;
 
   if (loading) {
     return (
@@ -222,18 +237,18 @@ export function Progress() {
   }
 
   return (
-    <div className="space-y-6 max-w-[1240px] mx-auto pb-12">
+    <div className="flex flex-col gap-4 sm:gap-6 w-full pb-12">
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-3xl border border-[#E6E8EC] shadow-xs">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-black text-[#172033] tracking-tight">Penilaian Pertemuan Kurikulum</h1>
+            <h1 className={theme.typography.h1}>Penilaian Tahap Kurikulum</h1>
             <span className="px-3 py-0.5 rounded-full bg-[#0362D0]/10 text-[#0362D0] text-xs font-black border border-[#0362D0]/20">
               SMP Negeri 102 Jakarta
             </span>
           </div>
           <p className="text-slate-500 mt-1 text-xs sm:text-sm font-medium">
-            Formulir penilaian aspek membaca, tajwid, hafalan, dan kelancaran menulis Al-Qur'an santri
+            Formulir penilaian aspek mutu pembelajaran Al-Qur'an santri sesuai kurikulum kelompok
           </p>
         </div>
       </div>
@@ -267,7 +282,7 @@ export function Progress() {
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-black text-[#172033] uppercase tracking-wider">Pertemuan Sesi (Sabtu)</label>
+            <label className="text-xs font-black text-[#172033] uppercase tracking-wider">Pilih Tahap Kurikulum</label>
             <Select 
               value={selectedSessionId}
               onChange={(e) => setSelectedSessionId(e.target.value)}
@@ -277,11 +292,11 @@ export function Progress() {
                 const statusTag = selectedSemester === 1 && s.sessionNumber <= 2 
                   ? ' [Selesai]' 
                   : selectedSemester === 1 && s.sessionNumber === 3 
-                  ? ' [Sesi Aktif]' 
+                  ? ' [Tahap Aktif]' 
                   : '';
                 return (
                   <option key={s.id} value={s.id}>
-                    Pertemuan {s.sessionNumber}: {s.topic}{statusTag}
+                    Tahap {s.sessionNumber}: {s.topic}{statusTag}
                   </option>
                 );
               })}
@@ -289,50 +304,80 @@ export function Progress() {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
+        {/* Informasi Fokus Penilaian Sesuai Kurikulum Kelompok */}
+        <div className="px-5 py-3 bg-[#0362D0]/5 border-b border-[#E6E8EC] flex flex-wrap items-center justify-between gap-2 text-xs font-semibold">
+          <div className="flex items-center gap-2 text-[#172033]">
+            <BookOpen size={16} className="text-[#0362D0] shrink-0" />
+            <span>
+              {gradeId === 'grade3' 
+                ? 'Kelompok 10 (Tahfizh Al-Qur\'an Juz 30): Mutu membaca, tajwid, dan menulis dirata-ratakan. Kolom Hafalan mencatat surah/ayat yang dihafalkan pada sesi ini.'
+                : `Kelompok 1–9 (${selectedGroup?.name || 'Utsmani'}): Penilaian fokus pada Tajwid dan Menulis Al-Qur'an (2 Aspek Mutu).`}
+            </span>
+          </div>
+          <span className="text-[11px] font-bold text-[#0362D0] shrink-0 bg-white px-2.5 py-0.5 rounded-lg border border-[#0362D0]/20">
+            {gradeId === 'grade3' ? 'Membaca, Tajwid, Menulis + Kolom Hafalan' : '2 Aspek Mutu'}
+          </span>
+        </div>
+
+        {/* Datalist pilihan Surah Juz 30 */}
+        <datalist id="juz30-surah-list">
+          {JUZ_30_SURAHS.map(surah => (
+            <option key={surah} value={surah} />
+          ))}
+        </datalist>
+
+        <div className="hidden md:block overflow-x-auto w-full scrollbar-thin">
           <Table>
             <TableHeader className="bg-[#F5F6F8]">
               <TableRow className="border-b border-[#E6E8EC]">
-                <TableHead className="w-12 text-center font-black text-[#172033] text-xs">No</TableHead>
-                <TableHead className="font-black text-[#172033] text-xs">Nama Santri</TableHead>
-                <TableHead className="text-center w-24 font-black text-[#172033] text-xs">Membaca</TableHead>
-                <TableHead className="text-center w-24 font-black text-[#172033] text-xs">Tajwid</TableHead>
-                <TableHead className="text-center w-24 font-black text-[#172033] text-xs">Hafalan</TableHead>
-                <TableHead className="text-center w-24 font-black text-[#172033] text-xs">Menulis</TableHead>
-                <TableHead className="text-center w-24 font-black text-[#172033] text-xs">Rata-Rata</TableHead>
+                <TableHead className="w-12 text-center font-black text-[#172033] text-xs whitespace-nowrap px-4 py-3.5">No</TableHead>
+                <TableHead className="font-black text-[#172033] text-xs whitespace-nowrap px-4 py-3.5">Nama Santri</TableHead>
+                {gradeId === 'grade3' && (
+                  <TableHead className="text-center w-20 font-black text-[#172033] text-xs whitespace-nowrap px-3 py-3.5">Membaca</TableHead>
+                )}
+                <TableHead className="text-center w-20 font-black text-[#172033] text-xs whitespace-nowrap px-3 py-3.5">Tajwid</TableHead>
+                <TableHead className="text-center w-20 font-black text-[#172033] text-xs whitespace-nowrap px-3 py-3.5">Menulis</TableHead>
+                {gradeId === 'grade3' && (
+                  <TableHead className="text-center min-w-44 font-black text-[#172033] text-xs whitespace-nowrap px-4 py-3.5">Setoran Hafalan (Surah/Ayat)</TableHead>
+                )}
+                <TableHead className="text-center w-24 font-black text-[#172033] text-xs whitespace-nowrap px-4 py-3.5">Rata-Rata Mutu</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {groupStudents.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-12 text-slate-500 font-medium">
+                  <TableCell colSpan={gradeId === 'grade3' ? 7 : 5} className="text-center py-12 text-slate-500 font-medium whitespace-nowrap">
                     Belum ada santri di kelompok ini.
                   </TableCell>
                 </TableRow>
               ) : (
                 groupStudents.map((student, idx) => {
-                  const p = sessionProgress[student.id] || { reading: '', tajwid: '', memorization: '', writing: '', total: 0 };
+                  const p = sessionProgress[student.id] || { reading: '', tajwid: '', memorizedSurah: '', writing: '', total: 0 };
                   return (
                     <TableRow key={student.id} className="hover:bg-[#F5F6F8]/60 transition-colors border-b border-[#E6E8EC]">
-                      <TableCell className="text-center text-slate-500 font-bold text-xs">{idx + 1}</TableCell>
-                      <TableCell>
+                      <TableCell className="text-center text-slate-500 font-bold text-xs whitespace-nowrap px-4 py-3.5">{idx + 1}</TableCell>
+                      <TableCell className="whitespace-nowrap px-4 py-3.5">
                         <div className="font-extrabold text-[#172033] text-sm">{student.name}</div>
                         <div className="text-[11px] text-[#0362D0] font-bold">Kelas {student.class}</div>
                       </TableCell>
+                      {gradeId === 'grade3' && (
+                        <TableCell>
+                          <Input 
+                            type="number" 
+                            min="0" max="100" 
+                            className="text-center h-9 px-1 font-bold text-xs border-[#E6E8EC]"
+                            placeholder="0-100"
+                            value={p.reading === 0 || p.reading === '' || p.reading === undefined ? '' : p.reading}
+                            onChange={(e) => handleScoreChange(student.id, 'reading', e.target.value)}
+                          />
+                        </TableCell>
+                      )}
                       <TableCell>
                         <Input 
                           type="number" 
                           min="0" max="100" 
                           className="text-center h-9 px-1 font-bold text-xs border-[#E6E8EC]"
-                          value={p.reading === 0 || p.reading === '' || p.reading === undefined ? '' : p.reading}
-                          onChange={(e) => handleScoreChange(student.id, 'reading', e.target.value)}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Input 
-                          type="number" 
-                          min="0" max="100" 
-                          className="text-center h-9 px-1 font-bold text-xs border-[#E6E8EC]"
+                          placeholder="0-100"
                           value={p.tajwid === 0 || p.tajwid === '' || p.tajwid === undefined ? '' : p.tajwid}
                           onChange={(e) => handleScoreChange(student.id, 'tajwid', e.target.value)}
                         />
@@ -342,22 +387,26 @@ export function Progress() {
                           type="number" 
                           min="0" max="100" 
                           className="text-center h-9 px-1 font-bold text-xs border-[#E6E8EC]"
-                          value={p.memorization === 0 || p.memorization === '' || p.memorization === undefined ? '' : p.memorization}
-                          onChange={(e) => handleScoreChange(student.id, 'memorization', e.target.value)}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Input 
-                          type="number" 
-                          min="0" max="100" 
-                          className="text-center h-9 px-1 font-bold text-xs border-[#E6E8EC]"
+                          placeholder="0-100"
                           value={p.writing === 0 || p.writing === '' || p.writing === undefined ? '' : p.writing}
                           onChange={(e) => handleScoreChange(student.id, 'writing', e.target.value)}
                         />
                       </TableCell>
+                      {gradeId === 'grade3' && (
+                        <TableCell>
+                          <Input 
+                            type="text"
+                            list="juz30-surah-list"
+                            placeholder="Contoh: QS. An-Naba' 1-20" 
+                            className="h-9 px-2 text-xs font-semibold border-[#E6E8EC] bg-white"
+                            value={p.memorizedSurah || ''}
+                            onChange={(e) => handleScoreChange(student.id, 'memorizedSurah', e.target.value)}
+                          />
+                        </TableCell>
+                      )}
                       <TableCell className="text-center">
                         <span className={cn(
-                          "font-black px-2.5 py-1 rounded-lg text-xs border",
+                          "font-black px-2.5 py-1 rounded-lg text-xs border inline-block min-w-14",
                           (p.total || 0) >= 85 ? "text-emerald-800 bg-emerald-50 border-emerald-200" :
                           (p.total || 0) >= 70 ? "text-[#0362D0] bg-[#0362D0]/10 border-[#0362D0]/20" :
                           (p.total || 0) >= 50 ? "text-[#C99A2E] bg-[#C99A2E]/15 border-[#C99A2E]/30" : "text-[#950415] bg-[#950415]/10 border-[#950415]/20"
@@ -369,6 +418,89 @@ export function Progress() {
               )}
             </TableBody>
           </Table>
+        </div>
+
+        {/* Mobile View */}
+        <div className="md:hidden flex flex-col gap-3 p-1">
+          {groupStudents.length === 0 ? (
+            <div className="text-center py-12 text-slate-500 font-medium bg-[#F5F6F8] rounded-xl border border-[#E6E8EC]">
+              Belum ada santri di kelompok ini.
+            </div>
+          ) : (
+            groupStudents.map((student, idx) => {
+              const p = sessionProgress[student.id] || { reading: '', tajwid: '', memorizedSurah: '', writing: '', total: 0 };
+              return (
+                <div key={student.id} className="bg-white border border-[#E6E8EC] rounded-xl p-4 shadow-sm">
+                  <div className="flex justify-between items-start mb-4">
+                    <div>
+                      <div className="font-extrabold text-[#172033] text-sm leading-tight">{student.name}</div>
+                      <div className="text-[11px] text-[#0362D0] font-bold mt-1">Kelas {student.class}</div>
+                    </div>
+                    <span className={cn(
+                      "font-black px-2 py-1 rounded-lg text-[10px] border shrink-0 text-center",
+                      (p.total || 0) >= 85 ? "text-emerald-800 bg-emerald-50 border-emerald-200" :
+                      (p.total || 0) >= 70 ? "text-[#0362D0] bg-[#0362D0]/10 border-[#0362D0]/20" :
+                      (p.total || 0) >= 50 ? "text-[#C99A2E] bg-[#C99A2E]/15 border-[#C99A2E]/30" : "text-[#950415] bg-[#950415]/10 border-[#950415]/20"
+                    )}>Rata-rata Mutu<br/>{p.total || 0}%</span>
+                  </div>
+
+                  <div className={`grid ${gradeId === 'grade3' ? 'grid-cols-3' : 'grid-cols-2'} gap-2.5 mb-3`}>
+                    {gradeId === 'grade3' && (
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-500 mb-1 block">Membaca</label>
+                        <Input 
+                          type="number" 
+                          min="0" max="100" 
+                          placeholder="0-100"
+                          className="text-center h-9 px-1 font-bold text-xs border-[#E6E8EC]"
+                          value={p.reading === 0 || p.reading === '' || p.reading === undefined ? '' : p.reading}
+                          onChange={(e) => handleScoreChange(student.id, 'reading', e.target.value)}
+                        />
+                      </div>
+                    )}
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 mb-1 block">Tajwid</label>
+                      <Input 
+                        type="number" 
+                        min="0" max="100" 
+                        placeholder="0-100"
+                        className="text-center h-9 px-1 font-bold text-xs border-[#E6E8EC]"
+                        value={p.tajwid === 0 || p.tajwid === '' || p.tajwid === undefined ? '' : p.tajwid}
+                        onChange={(e) => handleScoreChange(student.id, 'tajwid', e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 mb-1 block">Menulis</label>
+                      <Input 
+                        type="number" 
+                        min="0" max="100" 
+                        placeholder="0-100"
+                        className="text-center h-9 px-1 font-bold text-xs border-[#E6E8EC]"
+                        value={p.writing === 0 || p.writing === '' || p.writing === undefined ? '' : p.writing}
+                        onChange={(e) => handleScoreChange(student.id, 'writing', e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  {gradeId === 'grade3' && (
+                    <div className="mt-2 pt-2 border-t border-slate-100">
+                      <label className="text-[10px] font-bold text-slate-600 mb-1 block flex items-center justify-between">
+                        <span>Setoran Hafalan Surah (Tahap Ini)</span>
+                      </label>
+                      <Input 
+                        type="text"
+                        list="juz30-surah-list"
+                        placeholder="Contoh: QS. An-Naba' 1-20" 
+                        className="h-9 px-2 font-medium text-xs border-[#E6E8EC]"
+                        value={p.memorizedSurah || ''}
+                        onChange={(e) => handleScoreChange(student.id, 'memorizedSurah', e.target.value)}
+                      />
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
         </div>
 
         <div className="p-5 border-t border-[#E6E8EC] bg-[#F5F6F8]/70 flex justify-end">

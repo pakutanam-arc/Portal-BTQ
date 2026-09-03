@@ -1,4 +1,4 @@
-import { collection, doc, getDocs, getDoc, addDoc, updateDoc, deleteDoc, query, where, orderBy, setDoc, onSnapshot } from 'firebase/firestore';
+import { collection, doc, getDocs, getDoc, addDoc, updateDoc, deleteDoc, query, where, orderBy, setDoc, onSnapshot, limit, startAfter, QueryDocumentSnapshot, getCountFromServer } from 'firebase/firestore';
 import { db, auth } from './firebase';
 import { mockGroups, mockStudents, mockMentors, mockStudentAttendance, mockProgress } from './mockData';
 
@@ -119,6 +119,30 @@ export function getGroupNumber(group: { name?: string; id?: string }): number {
   return 0;
 }
 
+// Helper to determine Grade ID for a group:
+// Kelompok 1, 2, 3, 7, 8: Grade 1 (Utsmani Jilid 1)
+// Kelompok 4, 5, 6, 9: Grade 2 (Utsmani Jilid 2)
+// Kelompok 10: Grade 3 (Kurikulum Al-Qur'an & Hafalan Juz 30)
+export function getGroupGradeId(group: { name?: string; id?: string; gradeId?: string }): string {
+  const gNum = getGroupNumber(group);
+  // Kelompok 10 = Grade 3
+  if (gNum === 10 || group.id === 'g10' || group.id === 'group_10' || group.name?.toLowerCase().includes('10') || group.name?.toLowerCase().includes('tahfizh')) {
+    return 'grade3';
+  }
+  // Kelompok 4, 5, 6, 9 = Grade 2
+  if ([4, 5, 6, 9].includes(gNum) || ['g4', 'g5', 'g6', 'g9'].includes(group.id || '')) {
+    return 'grade2';
+  }
+  // Kelompok 1, 2, 3, 7, 8 = Grade 1
+  if ([1, 2, 3, 7, 8].includes(gNum) || ['g1', 'g2', 'g3', 'g7', 'g8'].includes(group.id || '')) {
+    return 'grade1';
+  }
+  if (group.gradeId === 'grade3' || group.gradeId === 'grade2' || group.gradeId === 'grade1') {
+    return group.gradeId;
+  }
+  return 'grade1';
+}
+
 // Fetch all groups
 export async function getGroups(): Promise<Group[]> {
   try {
@@ -127,12 +151,7 @@ export async function getGroups(): Promise<Group[]> {
     if (!snapshot.empty) {
       const items = snapshot.docs.map(doc => {
         const data = doc.data() as Group;
-        const gNum = getGroupNumber({ id: doc.id, ...data }) || 1;
-        const gradeId = (gNum === 7 || gNum === 8 || doc.id === 'g7' || doc.id === 'g8' || doc.id === 'group_7' || doc.id === 'group_8')
-          ? 'grade1'
-          : (gNum === 4 || doc.id === 'g4' || doc.id === 'group_4')
-          ? 'grade2'
-          : (data.gradeId || (gNum <= 3 ? 'grade1' : gNum <= 8 ? 'grade2' : 'grade3'));
+        const gradeId = getGroupGradeId({ id: doc.id, ...data });
         return { id: doc.id, ...data, schedule: 'Sabtu, 07:15 - 08:00', gradeId };
       });
       return items.sort((a, b) => getGroupNumber(a) - getGroupNumber(b));
@@ -144,12 +163,7 @@ export async function getGroups(): Promise<Group[]> {
   // Fallback to initial groups
   const sortedMock = [...mockGroups].sort((a, b) => getGroupNumber(a) - getGroupNumber(b));
   return sortedMock.map(g => {
-    const gNum = getGroupNumber(g) || 1;
-    const gradeId = (gNum === 7 || gNum === 8 || g.id === 'g7' || g.id === 'g8' || g.id === 'group_7' || g.id === 'group_8')
-      ? 'grade1'
-      : (gNum === 4 || g.id === 'g4' || g.id === 'group_4')
-      ? 'grade2'
-      : ((g as { gradeId?: string }).gradeId || (gNum <= 3 ? 'grade1' : gNum <= 8 ? 'grade2' : 'grade3'));
+    const gradeId = getGroupGradeId(g);
     return { ...g, schedule: 'Sabtu, 07:15 - 08:00', gradeId };
   });
 }
@@ -424,6 +438,84 @@ export function subscribeToStudents(callback: (students: Student[]) => void): ()
   });
 }
 
+export async function getStudentsPaginated(
+  pageSize: number = 20,
+  lastDocSnap?: any,
+  filters?: {
+    groupId?: string;
+    classFilter?: string;
+    searchTerm?: string;
+  }
+): Promise<{ data: Student[], lastDoc: any, hasMore: boolean }> {
+  try {
+    let q: any = collection(db, 'students');
+
+    if (filters?.groupId && filters.groupId !== 'all') {
+      q = query(q, where('groupId', '==', filters.groupId));
+    }
+    
+    // Fallback order by name
+    q = query(q, orderBy('name', 'asc'));
+
+    if (lastDocSnap && lastDocSnap.id) {
+      q = query(q, startAfter(lastDocSnap));
+    }
+
+    // We fetch a bit more than pageSize to see if there's more, or just limit to pageSize
+    q = query(q, limit(pageSize));
+
+    const snapshot = await getDocs(q);
+    if (!snapshot.empty) {
+      const docs = snapshot.docs;
+      let items = docs.map(d => ({ id: d.id, ...(d.data() as any) } as Student));
+      
+      // Client-side filter for things Firestore can't easily index or query (like full-text search and secondary filters without composite indexes)
+      if (filters?.searchTerm || filters?.classFilter) {
+        items = items.filter(s => {
+          const matchSearch = filters.searchTerm 
+            ? s.name.toLowerCase().includes(filters.searchTerm.toLowerCase()) || (s.nis && s.nis.includes(filters.searchTerm))
+            : true;
+          const matchClass = filters.classFilter ? s.class?.includes(filters.classFilter) : true;
+          return matchSearch && matchClass;
+        });
+      }
+
+      return {
+        data: items,
+        lastDoc: docs[docs.length - 1],
+        hasMore: docs.length === pageSize
+      };
+    }
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, 'students');
+  }
+
+  // Fallback to local mock
+  let items = mockStudents;
+  if (filters?.groupId && filters.groupId !== 'all') {
+    items = items.filter(s => s.groupId === filters.groupId);
+  }
+  if (filters?.classFilter) {
+    items = items.filter(s => s.class?.includes(filters.classFilter as string));
+  }
+  if (filters?.searchTerm) {
+    items = items.filter(s => 
+      s.name.toLowerCase().includes(filters.searchTerm!.toLowerCase()) || 
+      (s.nis && s.nis.includes(filters.searchTerm!))
+    );
+  }
+  
+  const startIndex = lastDocSnap && typeof lastDocSnap.index === 'number' ? lastDocSnap.index : 0;
+  const paginated = items.slice(startIndex, startIndex + pageSize);
+  const hasMore = startIndex + pageSize < items.length;
+
+  return {
+    data: paginated,
+    lastDoc: hasMore ? { index: startIndex + pageSize } : null,
+    hasMore
+  };
+}
+
 export async function addStudent(studentData: Omit<Student, 'id'>): Promise<string> {
   const payload = {
     ...studentData,
@@ -557,6 +649,27 @@ export async function getMentors(): Promise<Mentor[]> {
     const numB = parseInt(b.name.replace(/\D/g, ''), 10) || 0;
     return numA - numB;
   });
+}
+
+export async function getTotalStudentsCount(): Promise<number> {
+  try {
+    const colRef = collection(db, 'students');
+    const snapshot = await getCountFromServer(colRef);
+    return snapshot.data().count;
+  } catch (error) {
+    console.warn("Failed to get count from server, falling back to mock", error);
+    return mockStudents.length;
+  }
+}
+
+export async function getGroupStudentsCount(groupId: string): Promise<number> {
+  try {
+    const q = query(collection(db, 'students'), where('groupId', '==', groupId));
+    const snapshot = await getCountFromServer(q);
+    return snapshot.data().count;
+  } catch (error) {
+    return mockStudents.filter(s => s.groupId === groupId).length;
+  }
 }
 
 // Fetch students for a specific group
@@ -936,6 +1049,7 @@ export interface StudentAttendance {
   studentId: string;
   groupId: string;
   date: string;
+  meetingNumber?: number;
   status: string;
   notes?: string;
 }
@@ -956,9 +1070,17 @@ export interface Curriculum {
   target: string;
 }
 
-export async function getStudentAttendance(groupId: string, date: string): Promise<StudentAttendance[]> {
+export async function getStudentAttendance(groupId: string, date: string, meetingNumber?: number): Promise<StudentAttendance[]> {
   const datePrefix = date.split('T')[0];
   try {
+    if (meetingNumber) {
+      const qByM = query(collection(db, 'student_attendance'), where('groupId', '==', groupId), where('meetingNumber', '==', meetingNumber));
+      const snapByM = await getDocs(qByM);
+      if (!snapByM.empty) {
+        return snapByM.docs.map(doc => ({ id: doc.id, ...doc.data() } as StudentAttendance));
+      }
+    }
+
     const q = query(collection(db, 'student_attendance'), where('groupId', '==', groupId), where('date', '==', datePrefix));
     const snapshot = await getDocs(q);
     if (!snapshot.empty) {
@@ -969,6 +1091,10 @@ export async function getStudentAttendance(groupId: string, date: string): Promi
   }
 
   const local = getLocalAttendance();
+  if (meetingNumber) {
+    const byMeeting = local.filter(a => a.groupId === groupId && a.meetingNumber === meetingNumber);
+    if (byMeeting.length > 0) return byMeeting;
+  }
   return local.filter(a => a.groupId === groupId && a.date.startsWith(datePrefix));
 }
 
@@ -976,7 +1102,9 @@ export async function saveStudentAttendance(records: StudentAttendance[]): Promi
   saveLocalAttendance(records);
   for (const record of records) {
     const datePrefix = record.date.split('T')[0];
-    const docId = `${record.studentId}_${datePrefix}`;
+    const docId = record.meetingNumber 
+      ? `${record.studentId}_m${record.meetingNumber}`
+      : `${record.studentId}_${datePrefix}`;
     const { id, ...data } = record;
     try {
       await setDoc(doc(db, 'student_attendance', docId), { ...data, date: datePrefix }, { merge: true });
@@ -1059,11 +1187,13 @@ export interface StudentProgress {
   studentId: string;
   groupId: string;
   sessionId?: string;
+  meetingNumber?: number;
   semester?: number;
   date: string;
   reading: number;
   tajwid: number;
-  memorization: number;
+  memorization?: number;
+  memorizedSurah?: string;
   writing: number;
   total: number;
 }
@@ -1086,31 +1216,171 @@ export async function getAllStudentProgress(): Promise<StudentProgress[]> {
 
   return mockProgress.map(p => {
     const student = mockStudents.find(s => s.id === p.studentId);
+    const group = mockGroups.find(g => g.id === (p.groupId || student?.groupId));
+    const gradeId = group ? getGroupGradeId(group) : 'grade1';
+    const isGrade3 = gradeId === 'grade3';
+
+    // Rata-rata mutu: Kelompok 10 = Membaca, Tajwid, Menulis (Hafalan per surah tidak dirata-ratakan); Kelompok 1-9 = Tajwid, Menulis
     const scores: number[] = [];
-    if (p.reading && p.reading > 0) scores.push(p.reading);
+    if (isGrade3 && p.reading && p.reading > 0) scores.push(p.reading);
     if (p.tajwid && p.tajwid > 0) scores.push(p.tajwid);
-    if (p.memorization && p.memorization > 0) scores.push(p.memorization);
     if (p.writing && p.writing > 0) scores.push(p.writing);
     
     return {
       ...p,
-      groupId: student?.groupId || 'g1',
-      total: scores.length > 0 ? Math.round(scores.reduce((sum, s) => sum + s, 0) / scores.length) : 0,
+      groupId: student?.groupId || p.groupId || 'g1',
+      reading: isGrade3 ? (p.reading || 0) : 0,
+      memorizedSurah: isGrade3 ? (p.memorizedSurah || 'Juz 30') : '',
+      total: scores.length > 0 ? Math.round(scores.reduce((sum, s) => sum + s, 0) / scores.length) : (p.total || 0),
     };
   });
+}
+
+export async function getStudentProgressHistory(studentId: string): Promise<StudentProgress[]> {
+  const all = await getAllStudentProgress();
+  return all
+    .filter(p => p.studentId === studentId)
+    .sort((a, b) => {
+      if (a.meetingNumber && b.meetingNumber && a.meetingNumber !== b.meetingNumber) {
+        return a.meetingNumber - b.meetingNumber;
+      }
+      const sNumA = parseInt(a.sessionId?.match(/\d+$/)?.[0] || '0', 10);
+      const sNumB = parseInt(b.sessionId?.match(/\d+$/)?.[0] || '0', 10);
+      if (sNumA !== sNumB) return sNumA - sNumB;
+      return new Date(a.date).getTime() - new Date(b.date).getTime();
+    });
+}
+
+export async function getStudentProgressBySession(groupId: string, sessionId: string): Promise<StudentProgress[]> {
+  try {
+    const q = query(
+      collection(db, 'student_progress'),
+      where('groupId', '==', groupId),
+      where('sessionId', '==', sessionId)
+    );
+    const snapshot = await getDocs(q);
+    if (!snapshot.empty) {
+      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as StudentProgress));
+    }
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, 'student_progress');
+  }
+
+  try {
+    const raw = localStorage.getItem(LOCAL_STORAGE_KEY_PROGRESS);
+    if (raw) {
+      const list = JSON.parse(raw) as StudentProgress[];
+      return list.filter(p => p.groupId === groupId && p.sessionId === sessionId);
+    }
+  } catch {}
+
+  return mockProgress
+    .filter(p => p.groupId === groupId && p.sessionId === sessionId)
+    .map(p => {
+      const student = mockStudents.find(s => s.id === p.studentId);
+      const group = mockGroups.find(g => g.id === groupId);
+      const gradeId = group ? getGroupGradeId(group) : 'grade1';
+      const isGrade3 = gradeId === 'grade3';
+      const scores: number[] = [];
+      if (isGrade3 && p.reading && p.reading > 0) scores.push(p.reading);
+      if (p.tajwid && p.tajwid > 0) scores.push(p.tajwid);
+      if (p.writing && p.writing > 0) scores.push(p.writing);
+      
+      return {
+        ...p,
+        groupId: student?.groupId || 'g1',
+        reading: isGrade3 ? (p.reading || 0) : 0,
+        memorizedSurah: isGrade3 ? (p.memorizedSurah || 'Juz 30') : '',
+        total: scores.length > 0 ? Math.round(scores.reduce((sum, s) => sum + s, 0) / scores.length) : 0,
+      };
+    });
+}
+
+export async function getStudentProgressByMeeting(groupId: string, meetingNumber: number, fallbackSessionId?: string): Promise<StudentProgress[]> {
+  try {
+    const q = query(
+      collection(db, 'student_progress'),
+      where('groupId', '==', groupId),
+      where('meetingNumber', '==', meetingNumber)
+    );
+    const snapshot = await getDocs(q);
+    if (!snapshot.empty) {
+      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as StudentProgress));
+    }
+
+    if (fallbackSessionId) {
+      const qFallback = query(
+        collection(db, 'student_progress'),
+        where('groupId', '==', groupId),
+        where('sessionId', '==', fallbackSessionId)
+      );
+      const snapFB = await getDocs(qFallback);
+      if (!snapFB.empty) {
+        return snapFB.docs.map(doc => ({ id: doc.id, ...doc.data() } as StudentProgress));
+      }
+    }
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, 'student_progress');
+  }
+
+  try {
+    const raw = localStorage.getItem(LOCAL_STORAGE_KEY_PROGRESS);
+    if (raw) {
+      const list = JSON.parse(raw) as StudentProgress[];
+      const byMeeting = list.filter(p => p.groupId === groupId && p.meetingNumber === meetingNumber);
+      if (byMeeting.length > 0) return byMeeting;
+      if (fallbackSessionId) {
+        const bySess = list.filter(p => p.groupId === groupId && p.sessionId === fallbackSessionId);
+        if (bySess.length > 0) return bySess;
+      }
+    }
+  } catch {}
+
+  const targetSessId = fallbackSessionId || `session_${meetingNumber}`;
+  return mockProgress
+    .filter(p => p.groupId === groupId && p.sessionId === targetSessId)
+    .map(p => {
+      const student = mockStudents.find(s => s.id === p.studentId);
+      const group = mockGroups.find(g => g.id === groupId);
+      const gradeId = group ? getGroupGradeId(group) : 'grade1';
+      const isGrade3 = gradeId === 'grade3';
+      const scores: number[] = [];
+      if (isGrade3 && p.reading && p.reading > 0) scores.push(p.reading);
+      if (p.tajwid && p.tajwid > 0) scores.push(p.tajwid);
+      if (p.writing && p.writing > 0) scores.push(p.writing);
+      
+      return {
+        ...p,
+        groupId: student?.groupId || 'g1',
+        meetingNumber,
+        reading: isGrade3 ? (p.reading || 0) : 0,
+        memorizedSurah: isGrade3 ? (p.memorizedSurah || 'Juz 30') : '',
+        total: scores.length > 0 ? Math.round(scores.reduce((sum, s) => sum + s, 0) / scores.length) : 0,
+      };
+    });
 }
 
 export async function saveStudentProgress(record: StudentProgress): Promise<void> {
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_KEY_PROGRESS);
-    const existing = raw ? JSON.parse(raw) : [];
+    const existing: StudentProgress[] = raw ? JSON.parse(raw) : [];
     const updated = [...existing];
+    
+    let idx = -1;
     if (record.id) {
-      const idx = updated.findIndex((r: any) => r.id === record.id);
-      if (idx >= 0) updated[idx] = record;
-      else updated.push(record);
+      idx = updated.findIndex((r: any) => r.id === record.id);
+    }
+    if (idx < 0 && record.studentId && record.meetingNumber) {
+      idx = updated.findIndex((r: any) => r.studentId === record.studentId && r.meetingNumber === record.meetingNumber);
+    }
+    if (idx < 0 && record.studentId && record.sessionId) {
+      idx = updated.findIndex((r: any) => r.studentId === record.studentId && r.sessionId === record.sessionId && r.groupId === record.groupId);
+    }
+
+    if (idx >= 0) {
+      updated[idx] = { ...updated[idx], ...record };
     } else {
-      updated.push({ ...record, id: `p_${Date.now()}` });
+      updated.push({ ...record, id: record.id || `p_${record.studentId}_m${record.meetingNumber || Date.now()}` });
     }
     localStorage.setItem(LOCAL_STORAGE_KEY_PROGRESS, JSON.stringify(updated));
   } catch (e) {
@@ -1118,9 +1388,10 @@ export async function saveStudentProgress(record: StudentProgress): Promise<void
   }
 
   try {
-    if (record.id) {
+    const docId = record.id || (record.meetingNumber ? `prog_${record.studentId}_m${record.meetingNumber}` : undefined);
+    if (docId) {
       const { id, ...data } = record;
-      await updateDoc(doc(db, 'student_progress', id), data);
+      await setDoc(doc(db, 'student_progress', docId), { ...data }, { merge: true });
     } else {
       await addDoc(collection(db, 'student_progress'), record);
     }
@@ -1179,8 +1450,8 @@ const defaultSeedNotifications: Omit<AppNotification, 'id'>[] = [
     createdBy: 'Koordinator BTQ'
   },
   {
-    title: 'Sesi Aktif Kurikulum Pertemuan 3',
-    message: 'Sesi pembelajaran aktif saat ini memasuki Pertemuan ke-3. Pastikan pengisian capaian tahsin dan tajwid santri tercatat lengkap.',
+    title: 'Sesi Aktif Kurikulum Tahap 3',
+    message: 'Sesi pembelajaran aktif saat ini memasuki Tahap ke-3. Pastikan pengisian capaian tahsin dan tajwid santri tercatat lengkap.',
     type: 'success',
     targetRole: 'all',
     link: '/progress',
@@ -1433,12 +1704,14 @@ export interface TeachingJournal {
   groupId: string;
   groupName?: string;
   sessionId?: string;
+  sessionIds?: string[]; // Multiple Tahap IDs selected
   sessionTitle?: string;
+  meetingNumber?: number; // Pertemuan Ke- (Kalender/Riil)
   date: string; // YYYY-MM-DD
   materialTaught: string; // Materi & Halaman yang dibahas hari ini
   pagesCovered?: string;
   studentObstacles: string; // Kendala santri selama sesi
-  nextPlan: string; // Rencana materi / target pertemuan pekan depan
+  nextPlan: string; // Rencana materi / target tahap berikutnya
   attendanceSummary?: string; // Catatan kehadiran
   mentorId: string;
   mentorName: string;
@@ -1453,7 +1726,9 @@ const defaultSeedJournals: TeachingJournal[] = [
     groupId: 'group_1',
     groupName: 'Kelompok 1 (Putra 7A)',
     sessionId: 'session_1',
-    sessionTitle: 'Pertemuan 1: Makharijul Huruf & Q.S. An-Nas - Al-Falaq',
+    sessionIds: ['session_1'],
+    meetingNumber: 1,
+    sessionTitle: 'Tahap 1: Makharijul Huruf & Q.S. An-Nas - Al-Falaq',
     date: '2026-08-01',
     materialTaught: 'Tilawati Jilid 3 Hal 1-5 dan Tahsin Q.S. An-Nas sampai Al-Ikhlas',
     pagesCovered: 'Hal 1 - 5',
@@ -1466,10 +1741,48 @@ const defaultSeedJournals: TeachingJournal[] = [
   },
   {
     id: 'journal_seed_2',
+    groupId: 'group_1',
+    groupName: 'Kelompok 1 (Putra 7A)',
+    sessionId: 'session_2',
+    sessionIds: ['session_2'],
+    meetingNumber: 2,
+    sessionTitle: 'Tahap 2: Sifatul Huruf & Q.S. Al-Ikhlas - Al-Lahab',
+    date: '2026-08-08',
+    materialTaught: 'Tilawati Jilid 3 Hal 6-10 dan penguatan Sifatul Huruf',
+    pagesCovered: 'Hal 6 - 10',
+    studentObstacles: 'Pelafalan hams pada ta dan kaf perlu penekanan ulang.',
+    nextPlan: 'Tahap 3: Hukum Nun Sukin & Tanwin (Izhar Halqi).',
+    attendanceSummary: 'Hadir 5 dari 5 santri.',
+    mentorId: 'mentor_1',
+    mentorName: 'Kak Alumni 1',
+    createdAt: '2026-08-08T09:30:00.000Z'
+  },
+  {
+    id: 'journal_seed_3',
+    groupId: 'group_2',
+    groupName: 'Kelompok 2 (Putri 7A)',
+    sessionId: 'session_1',
+    sessionIds: ['session_1'],
+    meetingNumber: 1,
+    sessionTitle: 'Tahap 1: Makharijul Huruf & Q.S. An-Nas - Al-Falaq',
+    date: '2026-08-01',
+    materialTaught: 'Latihan makhraj Hal 1-4 dan Tahsin An-Nas & Al-Falaq',
+    pagesCovered: 'Hal 1 - 4',
+    studentObstacles: 'Antusiasme baik, artikulasi konsonan sudah cukup fasih.',
+    nextPlan: 'Lanjut Tahap 2 Mad Thabi\'i.',
+    attendanceSummary: 'Hadir 5 dari 5 santri.',
+    mentorId: 'mentor_2',
+    mentorName: 'Ustadzah Nurul Hidayah, S.Pd',
+    createdAt: '2026-08-01T09:45:00.000Z'
+  },
+  {
+    id: 'journal_seed_4',
     groupId: 'group_2',
     groupName: 'Kelompok 2 (Putri 7A)',
     sessionId: 'session_2',
-    sessionTitle: 'Pertemuan 2: Sifatul Huruf & Q.S. Al-Ikhlas - Al-Lahab',
+    sessionIds: ['session_2'],
+    meetingNumber: 2,
+    sessionTitle: 'Tahap 2: Sifatul Huruf & Q.S. Al-Ikhlas - Al-Lahab',
     date: '2026-08-08',
     materialTaught: 'Qur\'an Juz 30 Surah Al-Kafirun & An-Nasr dengan hukum Mad Thabi\'i',
     pagesCovered: 'Surah Al-Kafirun & An-Nasr',
@@ -1482,16 +1795,33 @@ const defaultSeedJournals: TeachingJournal[] = [
   }
 ];
 
-export async function getTeachingJournals(groupId?: string): Promise<TeachingJournal[]> {
+export async function getTeachingJournals(
+  groupId?: string,
+  pageSize: number = 20,
+  lastDocSnap?: any
+): Promise<{ data: TeachingJournal[], lastDoc: any, hasMore: boolean }> {
   try {
     const journalCol = collection(db, 'teaching_journals');
-    const q = groupId 
+    let q = groupId 
       ? query(journalCol, where('groupId', '==', groupId), orderBy('date', 'desc'))
       : query(journalCol, orderBy('date', 'desc'));
       
+    if (lastDocSnap && lastDocSnap.id) { // Ensure it's a Firestore snapshot
+      q = query(q, startAfter(lastDocSnap));
+    }
+    
+    q = query(q, limit(pageSize));
+      
     const snap = await getDocs(q);
     if (!snap.empty) {
-      return snap.docs.map(d => ({ id: d.id, ...d.data() } as TeachingJournal));
+      const docs = snap.docs;
+      return {
+        data: docs.map(d => ({ id: d.id, ...d.data() } as TeachingJournal)),
+        lastDoc: docs[docs.length - 1],
+        hasMore: docs.length === pageSize
+      };
+    } else {
+      return { data: [], lastDoc: null, hasMore: false };
     }
   } catch (error) {
     handleFirestoreError(error, OperationType.LIST, 'teaching_journals');
@@ -1500,16 +1830,25 @@ export async function getTeachingJournals(groupId?: string): Promise<TeachingJou
   // Local storage fallback
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_JOURNALS_KEY);
-    const list: TeachingJournal[] = raw ? JSON.parse(raw) : defaultSeedJournals;
+    let list: TeachingJournal[] = raw ? JSON.parse(raw) : defaultSeedJournals;
     if (!raw) {
       localStorage.setItem(LOCAL_STORAGE_JOURNALS_KEY, JSON.stringify(defaultSeedJournals));
     }
     if (groupId) {
-      return list.filter(j => j.groupId === groupId);
+      list = list.filter(j => j.groupId === groupId);
     }
-    return list;
+    
+    const startIndex = lastDocSnap && typeof lastDocSnap.index === 'number' ? lastDocSnap.index : 0;
+    const paginated = list.slice(startIndex, startIndex + pageSize);
+    const hasMore = startIndex + pageSize < list.length;
+    
+    return {
+      data: paginated,
+      lastDoc: hasMore ? { index: startIndex + pageSize } : null,
+      hasMore
+    };
   } catch {
-    return defaultSeedJournals;
+    return { data: defaultSeedJournals.slice(0, pageSize), lastDoc: null, hasMore: false };
   }
 }
 
@@ -1539,7 +1878,7 @@ export async function saveTeachingJournal(journal: TeachingJournal): Promise<str
   let finalId = journal.id || `journal_${Date.now()}`;
   // 2. Persist to Firestore
   try {
-    if (journal.id && !journal.id.startsWith('journal_seed_')) {
+    if (journal.id) {
       const docRef = doc(db, 'teaching_journals', journal.id);
       await setDoc(docRef, payload, { merge: true });
     } else {
@@ -1608,9 +1947,11 @@ export interface StudentCertification {
   category: CertCategory;
   status: CertStatus;
   score?: number;
+  examScore?: number;
   notes?: string;
   certificateNumber?: string;
   completedDate?: string;
+  examDate?: string;
   examinerName?: string;
   updatedAt: string;
 }
@@ -1669,16 +2010,33 @@ const defaultSeedCertifications: StudentCertification[] = [
   }
 ];
 
-export async function getCertifications(groupId?: string): Promise<StudentCertification[]> {
+export async function getCertifications(
+  groupId?: string,
+  pageSize: number = 20,
+  lastDocSnap?: any
+): Promise<{ data: StudentCertification[], lastDoc: any, hasMore: boolean }> {
   try {
     const certCol = collection(db, 'certifications');
-    const snap = await getDocs(certCol);
+    let q = groupId 
+      ? query(certCol, where('groupId', '==', groupId), orderBy('updatedAt', 'desc'))
+      : query(certCol, orderBy('updatedAt', 'desc'));
+      
+    if (lastDocSnap && lastDocSnap.id) {
+      q = query(q, startAfter(lastDocSnap));
+    }
+    
+    q = query(q, limit(pageSize));
+    
+    const snap = await getDocs(q);
     if (!snap.empty) {
-      const items = snap.docs.map(d => ({ id: d.id, ...d.data() } as StudentCertification));
-      if (groupId) {
-        return items.filter(c => c.groupId === groupId);
-      }
-      return items;
+      const docs = snap.docs;
+      return {
+        data: docs.map(d => ({ id: d.id, ...d.data() } as StudentCertification)),
+        lastDoc: docs[docs.length - 1],
+        hasMore: docs.length === pageSize
+      };
+    } else {
+      return { data: [], lastDoc: null, hasMore: false };
     }
   } catch (error) {
     handleFirestoreError(error, OperationType.LIST, 'certifications');
@@ -1687,16 +2045,29 @@ export async function getCertifications(groupId?: string): Promise<StudentCertif
   // Local storage fallback
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_CERTS_KEY);
-    const list: StudentCertification[] = raw ? JSON.parse(raw) : defaultSeedCertifications;
+    let list: StudentCertification[] = raw ? JSON.parse(raw) : defaultSeedCertifications;
     if (!raw) {
       localStorage.setItem(LOCAL_STORAGE_CERTS_KEY, JSON.stringify(defaultSeedCertifications));
     }
+    
+    // Sort local data descending by updatedAt
+    list.sort((a, b) => new Date(b.updatedAt || b.completedDate || 0).getTime() - new Date(a.updatedAt || a.completedDate || 0).getTime());
+    
     if (groupId) {
-      return list.filter(c => c.groupId === groupId);
+      list = list.filter(c => c.groupId === groupId);
     }
-    return list;
+    
+    const startIndex = lastDocSnap && typeof lastDocSnap.index === 'number' ? lastDocSnap.index : 0;
+    const paginated = list.slice(startIndex, startIndex + pageSize);
+    const hasMore = startIndex + pageSize < list.length;
+    
+    return {
+      data: paginated,
+      lastDoc: hasMore ? { index: startIndex + pageSize } : null,
+      hasMore
+    };
   } catch {
-    return defaultSeedCertifications;
+    return { data: defaultSeedCertifications.slice(0, pageSize), lastDoc: null, hasMore: false };
   }
 }
 

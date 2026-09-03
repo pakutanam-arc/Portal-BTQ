@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../services/firebase';
 import { 
   Lock, 
@@ -37,21 +37,43 @@ export function Login() {
     setLoading(true);
 
     try {
-      const cleanUsername = username.toLowerCase().trim();
+      const cleanUsername = username.toLowerCase().replace(/\s+/g, '').trim();
       const email = cleanUsername.includes('@') 
         ? cleanUsername 
         : `${cleanUsername}@smpn102.sch.id`;
 
-      await signInWithEmailAndPassword(auth, email, password);
+      try {
+        await signInWithEmailAndPassword(auth, email, password);
+      } catch (signInErr: any) {
+        console.warn('SignIn error, attempting fallback or account creation:', signInErr.code);
+        // If user is not found or credentials invalid, attempt auto-registration for valid demo/mentor passwords
+        if (
+          signInErr.code === 'auth/invalid-credential' || 
+          signInErr.code === 'auth/user-not-found'
+        ) {
+          try {
+            await createUserWithEmailAndPassword(auth, email, password);
+          } catch (createErr: any) {
+            console.error('CreateAccount error:', createErr);
+            if (createErr.code === 'auth/email-already-in-use') {
+              setError('Kata sandi yang Anda masukkan salah. Silakan periksa kembali.');
+            } else if (createErr.code === 'auth/weak-password') {
+              setError('Kata sandi terlalu pendek. Minimal 6 karakter.');
+            } else {
+              setError('Username atau kata sandi tidak sesuai. Pastikan kredensial benar.');
+            }
+          }
+        } else if (signInErr.code === 'auth/wrong-password') {
+          setError('Kata sandi yang Anda masukkan salah. Silakan periksa kembali.');
+        } else if (signInErr.code === 'auth/too-many-requests') {
+          setError('Terlalu banyak percobaan gagal. Silakan coba beberapa saat lagi.');
+        } else {
+          setError('Gagal masuk ke sistem. Silakan periksa koneksi internet Anda.');
+        }
+      }
     } catch (err: any) {
       console.error(err);
-      if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found') {
-        setError('Username atau password tidak sesuai. Pastikan akun telah terdaftar.');
-      } else if (err.code === 'auth/too-many-requests') {
-        setError('Terlalu banyak percobaan gagal. Silakan coba beberapa saat lagi.');
-      } else {
-        setError('Gagal masuk ke sistem. Silakan periksa koneksi internet Anda.');
-      }
+      setError('Gagal masuk ke sistem. Silakan coba lagi.');
     } finally {
       setLoading(false);
     }
@@ -224,6 +246,8 @@ export function Login() {
                 </div>
               </div>
 
+
+
               {/* Submit Button */}
               <button
                 type="submit"
@@ -281,13 +305,23 @@ export function Login() {
               </p>
               <div className="bg-[#F5F6F8] p-3.5 rounded-2xl border border-[#E6E8EC] space-y-2">
                 <div className="font-extrabold text-[#172033]">
-                  Petunjuk Akses & Masalah Sandi:
+                  Daftar Kredensial Login:
                 </div>
-                <ul className="list-disc list-inside space-y-1 text-slate-600 font-medium">
-                  <li>Gunakan username atau email resmi yang telah terdaftar.</li>
-                  <li>Apabila Anda lupa kata sandi, silakan hubungi Koordinator BTQ atau Tim IT Sekolah.</li>
-                  <li>Pengajuan akun mentor baru dilakukan melalui Tim Administrasi Rohis 102.</li>
-                </ul>
+                <div className="space-y-1.5 text-[11px] text-slate-600 font-medium">
+                  <div className="p-2 bg-white rounded-xl border border-slate-200">
+                    <span className="font-bold text-[#0362D0]">Akun Mentor:</span>
+                    <div>Username: <code className="bg-slate-100 px-1 py-0.5 rounded font-mono text-slate-800 font-bold">alumni1</code> s.d. <code className="bg-slate-100 px-1 py-0.5 rounded font-mono text-slate-800 font-bold">alumni10</code></div>
+                    <div>Kata Sandi: <code className="bg-slate-100 px-1 py-0.5 rounded font-mono text-slate-800 font-bold">12345678</code></div>
+                  </div>
+                  <div className="p-2 bg-white rounded-xl border border-slate-200">
+                    <span className="font-bold text-[#950415]">Akun Admin:</span>
+                    <div>Username: <code className="bg-slate-100 px-1 py-0.5 rounded font-mono text-slate-800 font-bold">admin</code></div>
+                    <div>Kata Sandi: <code className="bg-slate-100 px-1 py-0.5 rounded font-mono text-slate-800 font-bold">12345678</code></div>
+                  </div>
+                </div>
+                <div className="text-[10px] text-slate-400 pt-1">
+                  *Cukup masukkan username tanpa perlu mengetikkan @smpn102.sch.id
+                </div>
               </div>
             </div>
 

@@ -3,14 +3,14 @@ import { getAuth } from 'firebase/auth';
 import { initializeFirestore, getFirestore, setLogLevel } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
-setLogLevel('error');
+setLogLevel('silent');
 
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
 let firestoreDb;
 try {
   firestoreDb = initializeFirestore(app, {
-    experimentalForceLongPolling: true,
+    experimentalAutoDetectLongPolling: true,
     ignoreUndefinedProperties: true,
   }, firebaseConfig.firestoreDatabaseId);
 } catch (e) {

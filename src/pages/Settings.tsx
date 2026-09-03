@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { theme } from '../theme';
 import { User, Bell, Shield, Database, Save, CheckCircle } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -17,12 +18,12 @@ export function Settings() {
   };
 
   return (
-    <div className="space-y-6 max-w-[1240px] mx-auto pb-12">
+    <div className="flex flex-col gap-4 sm:gap-6 w-full pb-12">
       {/* Header Title */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-3xl border border-[#E6E8EC] shadow-xs">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-black text-[#172033] tracking-tight">Pengaturan Sistem Portal</h1>
+            <h1 className={theme.typography.h1}>Pengaturan Sistem Portal</h1>
             <span className="px-3 py-0.5 rounded-full bg-[#0362D0]/10 text-[#0362D0] text-xs font-black border border-[#0362D0]/20">
               Pengaturan Administrator
             </span>
@@ -130,8 +131,8 @@ export function Settings() {
                     <div className="space-y-1.5">
                       <label className="text-xs font-black text-[#172033] uppercase tracking-wider">Semester Aktif</label>
                       <select className="w-full h-10 px-3 rounded-xl border border-[#E6E8EC] bg-[#F5F6F8] text-xs font-bold text-[#172033] focus:outline-none focus:ring-2 focus:ring-[#0362D0]">
-                        <option selected>Ganjil (16 Pertemuan)</option>
-                        <option>Genap (16 Pertemuan)</option>
+                        <option selected>Ganjil (16 Tahap)</option>
+                        <option>Genap (16 Tahap)</option>
                       </select>
                     </div>
                   </div>

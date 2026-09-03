@@ -1,0 +1,60 @@
+import React from 'react';
+import { Clock } from 'lucide-react';
+import { SystemActivity } from '../../services/db';
+
+interface RecentActivitiesCardProps {
+  activities: SystemActivity[];
+  onOpenModal: () => void;
+}
+
+export const RecentActivitiesCard = React.memo(function RecentActivitiesCard({
+  activities,
+  onOpenModal
+}: RecentActivitiesCardProps) {
+  return (
+    <section id="dashboard-recent-activities-card" className="bg-white rounded-2xl border border-[#E6E8EC] p-4 sm:p-5 flex-1 flex flex-col overflow-hidden shadow-xs">
+      <div className="flex justify-between items-center mb-4 pb-2 border-b border-[#E6E8EC]">
+        <h3 className="font-extrabold text-[#172033] text-sm">
+          Aktivitas Terbaru
+        </h3>
+        <Clock size={14} className="text-slate-400" />
+      </div>
+
+      <div className="space-y-4 overflow-y-auto pr-1 pb-2 flex-1 max-h-[250px]">
+        {activities.length === 0 ? (
+          <div className="py-8 flex flex-col items-center justify-center text-center text-slate-400 h-full">
+            <span className="text-xl">📭</span>
+            <p className="text-[11px] font-bold mt-1 text-slate-500">Belum ada aktivitas baru</p>
+            <p className="text-[9px] text-slate-400 mt-0.5">Sistem akan mencatat aktivitas secara otomatis.</p>
+          </div>
+        ) : (
+          activities.slice(0, 5).map((act, idx) => (
+            <div key={act.id} className="flex gap-3 items-start relative pl-4">
+              {idx < Math.min(activities.length, 5) - 1 && (
+                <div className="absolute left-[4.5px] top-[12px] bottom-[-20px] w-[1.5px] bg-[#E6E8EC]" />
+              )}
+              <div className={`w-2 h-2 rounded-full absolute left-0 top-[4px] ring-4 ${
+                act.type === 'progress' ? 'bg-[#0362D0] ring-[#0362D0]/10' : 
+                act.type === 'journal' ? 'bg-[#C99A2E] ring-[#C99A2E]/10' : 
+                'bg-[#950415] ring-[#950415]/10'
+              }`} />
+              <div className="text-[11px] text-slate-600 leading-snug">
+                <span className="font-bold text-[#172033]">{act.title}</span> • {act.description}
+                <p className="text-slate-400 text-[9px] mt-0.5 font-semibold">{act.timestamp}</p>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      <button 
+        id="btn-view-all-activities"
+        type="button"
+        onClick={onOpenModal}
+        className="w-full mt-4 py-2 bg-[#F5F6F8] hover:bg-[#E6E8EC] border border-[#E6E8EC] text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+      >
+        Lihat Semua Aktivitas
+      </button>
+    </section>
+  );
+});

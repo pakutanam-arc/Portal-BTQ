@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { theme } from '../theme';
 import { 
   Award, 
   Search, 
@@ -37,6 +38,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { cn } from '../utils/cn';
 import { APP_LOGO } from '../assets/logo';
+import { getGradeForGroup } from '../services/curriculumData';
 
 const CATEGORIES: CertCategory[] = [
   'Khatam Iqro/Tilawati',
@@ -58,6 +60,10 @@ export function Certifications() {
   const isMentor = userRole === 'mentor';
 
   const [certifications, setCertifications] = useState<StudentCertification[]>([]);
+  const [lastDoc, setLastDoc] = useState<any>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  
   const [students, setStudents] = useState<Student[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [mentors, setMentors] = useState<Mentor[]>([]);
@@ -115,33 +121,70 @@ export function Certifications() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [certsData, studentsData, groupsData, mentorsData] = await Promise.all([
-        getCertifications(),
+      const [studentsData, groupsData, mentorsData] = await Promise.all([
         getStudents(),
         getGroups(),
         getMentors()
       ]);
 
-      setCertifications(certsData);
       setStudents(studentsData);
       setGroups(groupsData);
       setMentors(mentorsData);
 
       // Default mentor group
+      let initialGroup = 'all';
       const matchedMentor = mentorsData.find(
         m => (userData?.id && m.id === userData.id) ||
              (currentUser?.uid && m.id === currentUser.uid) ||
              (currentUser?.email && m.email?.toLowerCase() === currentUser.email.toLowerCase()) ||
              (userData?.email && m.email?.toLowerCase() === userData.email.toLowerCase())
       );
+      
       const assignedGroupId = matchedMentor?.groupId || userData?.groupId;
       if (isMentor && assignedGroupId) {
         setSelectedGroupFilter(assignedGroupId);
+        initialGroup = assignedGroupId;
       }
+      
+      const res = await getCertifications(initialGroup === 'all' ? undefined : initialGroup, 20);
+      setCertifications(res.data);
+      setLastDoc(res.lastDoc);
+      setHasMore(res.hasMore);
     } catch (e) {
       console.error("Failed to load certifications", e);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleFilterChange = async (groupId: string) => {
+    setSelectedGroupFilter(groupId);
+    setLoading(true);
+    try {
+      const res = await getCertifications(groupId === 'all' ? undefined : groupId, 20);
+      setCertifications(res.data);
+      setLastDoc(res.lastDoc);
+      setHasMore(res.hasMore);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLoadMore = async () => {
+    if (!hasMore || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const grp = selectedGroupFilter === 'all' ? undefined : selectedGroupFilter;
+      const res = await getCertifications(grp, 20, lastDoc);
+      setCertifications(prev => [...prev, ...res.data]);
+      setLastDoc(res.lastDoc);
+      setHasMore(res.hasMore);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingMore(false);
     }
   };
 
@@ -287,8 +330,7 @@ export function Certifications() {
       showToast("Data status ujian & sertifikasi berhasil disimpan");
       setIsModalOpen(false);
 
-      const refreshed = await getCertifications();
-      setCertifications(refreshed);
+      await handleFilterChange(selectedGroupFilter);
     } catch (e) {
       console.error(e);
       alert("Gagal menyimpan sertifikasi");
@@ -324,7 +366,7 @@ export function Certifications() {
   const totalPersiapan = certifications.filter(c => c.status === 'Persiapan' || c.status === 'Perbaikan').length;
 
   return (
-    <div className="space-y-6 max-w-[1240px] mx-auto pb-12">
+    <div className="flex flex-col gap-4 sm:gap-6 w-full pb-12">
       {/* Toast Notification */}
       {toastMessage && (
         <div className="fixed bottom-6 right-6 z-50 bg-[#172033] text-white px-5 py-3 rounded-2xl shadow-xl border border-[#E6E8EC]/20 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-3">
@@ -339,7 +381,7 @@ export function Certifications() {
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md text-slate-100 text-xs font-bold mb-3 border border-white/10">
             <Award size={14} className="text-[#C99A2E]" /> Sertifikasi & Kesiapan Ujian BTQ
           </div>
-          <h1 className="text-2xl lg:text-3xl font-black tracking-tight">
+          <h1 className={theme.typography.h1.replace('text-[#172033]', '')}>
             Status Ujian, Tasmi' & Sertifikasi Kelulusan
           </h1>
           <p className="text-slate-200 text-xs sm:text-sm mt-1.5 leading-relaxed font-medium">
@@ -406,13 +448,16 @@ export function Certifications() {
 
           <select
             value={selectedGroupFilter}
-            onChange={(e) => setSelectedGroupFilter(e.target.value)}
+            onChange={(e) => handleFilterChange(e.target.value)}
             className="px-3 py-2 bg-[#F5F6F8] border border-[#E6E8EC] rounded-2xl text-xs font-bold text-[#172033] outline-none focus:ring-2 focus:ring-[#0362D0]"
           >
             <option value="all">Semua Kelompok</option>
-            {groups.map(g => (
-              <option key={g.id} value={g.id}>{g.name}</option>
-            ))}
+            {groups.map(g => {
+              const gr = getGradeForGroup(g);
+              return (
+                <option key={g.id} value={g.id}>{g.name} ({gr.name} - {gr.programName})</option>
+              );
+            })}
           </select>
 
           <select
@@ -450,11 +495,14 @@ export function Certifications() {
             Memuat data sertifikasi & status ujian santri...
           </div>
         ) : filteredCertifications.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-[#172033] text-white font-black">
-                <tr>
-                  <th className="py-3.5 px-4">Santri</th>
+          <>
+          
+          {/* Desktop Table View */}
+          <div className="hidden md:block overflow-x-auto w-full scrollbar-thin">
+            <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[900px]">
+              <thead>
+                <tr className="text-slate-400 border-b border-[#E6E8EC] text-[10px] uppercase tracking-wider font-extrabold bg-[#F5F6F8]/50 whitespace-nowrap">
+                  <th className="py-3.5 px-4">Nama Santri</th>
                   <th className="py-3.5 px-4">Kelompok & Kelas</th>
                   <th className="py-3.5 px-4">Kategori Ujian / Target</th>
                   <th className="py-3.5 px-4">Status Kesiapan</th>
@@ -467,10 +515,9 @@ export function Certifications() {
                 {filteredCertifications.map(cert => {
                   const statusObj = STATUSES.find(s => s.key === cert.status) || STATUSES[0];
                   const StatusIcon = statusObj.icon;
-
                   return (
                     <tr key={cert.id} className="hover:bg-[#F5F6F8]/60 transition-colors group">
-                      <td className="py-3.5 px-4">
+                      <td className="py-3.5 px-4 whitespace-nowrap">
                         <div className="font-extrabold text-[#172033] text-xs sm:text-sm">
                           {cert.studentName}
                         </div>
@@ -478,14 +525,18 @@ export function Certifications() {
                           NIS: {cert.studentNis || '-'}
                         </div>
                       </td>
-
-                      <td className="py-3.5 px-4">
+                      <td className="py-3.5 px-4 whitespace-nowrap">
                         <div className="font-bold text-[#172033]">{cert.groupName}</div>
-                        <div className="text-[11px] text-slate-500 font-medium">Kelas {cert.studentClass}</div>
+                        <div className="text-[11px] text-slate-500 font-medium flex items-center gap-1.5 mt-0.5">
+                          <span>Kelas {cert.studentClass}</span>
+                          <span className="text-slate-300">•</span>
+                          <span className="text-[10px] font-bold text-[#0362D0] bg-[#0362D0]/10 px-1.5 py-0.5 rounded whitespace-nowrap">
+                            {getGradeForGroup(groups.find(g => g.id === cert.groupId) || { name: cert.groupName }).name}
+                          </span>
+                        </div>
                       </td>
-
-                      <td className="py-3.5 px-4">
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#0362D0]/10 text-[#0362D0] font-bold border border-[#0362D0]/20 text-xs">
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#0362D0]/10 text-[#0362D0] font-bold border border-[#0362D0]/20 text-xs whitespace-nowrap">
                           <Award size={13} /> {cert.category}
                         </span>
                         {cert.notes && (
@@ -494,86 +545,43 @@ export function Certifications() {
                           </div>
                         )}
                       </td>
-
-                      <td className="py-3.5 px-4">
+                      <td className="py-3.5 px-4 whitespace-nowrap">
                         <div className="flex items-center gap-1.5">
                           <span className={cn(
-                            "px-2.5 py-1 rounded-full text-xs font-black inline-flex items-center gap-1 border",
+                            "px-2.5 py-1 rounded-full text-xs font-black inline-flex items-center gap-1 border whitespace-nowrap",
                             statusObj.bg,
                             statusObj.color
                           )}>
                             <StatusIcon size={12} /> {cert.status}
                           </span>
                         </div>
-
-                        {/* Quick switch status dropdown for mentor / admin */}
-                        <div className="mt-1.5">
-                          <select
-                            value={cert.status}
-                            onChange={(e) => handleQuickStatusChange(cert, e.target.value as CertStatus)}
-                            className="text-[10px] bg-[#F5F6F8] hover:bg-[#E6E8EC] text-[#172033] font-bold rounded px-1.5 py-0.5 border border-[#E6E8EC] outline-none cursor-pointer"
-                          >
-                            <option value="Persiapan">Ubah: Persiapan</option>
-                            <option value="Siap Ujian">Ubah: Siap Ujian</option>
-                            <option value="Lulus Bersertifikat">Ubah: Lulus & Bersertifikat</option>
-                            <option value="Perbaikan">Ubah: Perbaikan</option>
-                          </select>
+                      </td>
+                      <td className="py-3.5 px-4 text-center whitespace-nowrap">
+                        <span className="font-black text-sm text-[#172033]">{cert.score ?? cert.examScore ?? '-'}</span>
+                      </td>
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        <div className="font-bold text-[#172033] text-[11px]">
+                          {cert.certificateNumber || '-'}
+                        </div>
+                        <div className="text-[10px] text-slate-400 font-medium">
+                          {cert.completedDate || cert.examDate || '-'}
                         </div>
                       </td>
-
-                      <td className="py-3.5 px-4 text-center">
-                        {cert.score ? (
-                          <span className={cn(
-                            "px-2 py-1 rounded-lg font-black text-xs",
-                            cert.score >= 90 ? "bg-emerald-100 text-emerald-800" :
-                            cert.score >= 75 ? "bg-[#0362D0]/10 text-[#0362D0]" : "bg-[#950415]/10 text-[#950415]"
-                          )}>
-                            {cert.score}
-                          </span>
-                        ) : (
-                          <span className="text-slate-300">-</span>
-                        )}
-                      </td>
-
-                      <td className="py-3.5 px-4">
-                        {cert.certificateNumber ? (
-                          <div>
-                            <div className="font-mono font-bold text-[11px] text-[#0362D0]">
-                              {cert.certificateNumber}
-                            </div>
-                            <div className="text-[10px] text-slate-400 font-medium">
-                              {cert.completedDate} • {cert.examinerName}
-                            </div>
-                          </div>
-                        ) : (
-                          <span className="text-slate-400 text-[11px] italic font-medium">Belum terbit</span>
-                        )}
-                      </td>
-
                       <td className="py-3.5 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          {cert.status === 'Lulus Bersertifikat' && (
-                            <button
-                              onClick={() => handlePrintCertificate(cert)}
-                              className="px-2.5 py-1.5 bg-[#0362D0] hover:bg-[#0252b3] text-white rounded-xl text-xs font-bold flex items-center gap-1 shadow-xs transition-all cursor-pointer"
-                              title="Lihat / Cetak Sertifikat Digital"
-                            >
-                              <Printer size={13} /> Cetak
-                            </button>
-                          )}
+                        <div className="flex items-center justify-end gap-1 opacity-100 lg:opacity-0 group-hover:opacity-100 transition-opacity">
                           <button
                             onClick={() => handleEdit(cert)}
-                            className="p-1.5 text-slate-400 hover:text-[#0362D0] hover:bg-[#F5F6F8] rounded-xl transition-colors cursor-pointer"
-                            title="Edit Data"
+                            className="p-1.5 text-slate-400 hover:text-[#0362D0] hover:bg-[#0362D0]/10 rounded-xl transition-colors cursor-pointer"
+                            title="Edit / Update Data"
                           >
-                            <Edit3 size={14} />
+                            <Edit3 size={15} />
                           </button>
                           <button
-                            onClick={() => cert.id && handleDelete(cert.id)}
-                            className="p-1.5 text-slate-400 hover:text-[#950415] hover:bg-[#950415]/10 rounded-xl transition-colors cursor-pointer"
-                            title="Hapus"
+                            onClick={() => handleDelete(cert.id)}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
+                            title="Hapus Data"
                           >
-                            <Trash2 size={14} />
+                            <Trash2 size={15} />
                           </button>
                         </div>
                       </td>
@@ -583,6 +591,103 @@ export function Certifications() {
               </tbody>
             </table>
           </div>
+
+          {/* Mobile Card View */}
+          <div className="md:hidden flex flex-col gap-3 p-3">
+            {filteredCertifications.map(cert => {
+              const statusObj = STATUSES.find(s => s.key === cert.status) || STATUSES[0];
+              const StatusIcon = statusObj.icon;
+              return (
+                <div key={cert.id} className="bg-white border border-[#E6E8EC] rounded-xl p-4 shadow-sm relative overflow-hidden">
+                  <div className="flex justify-between items-start mb-3">
+                    <div>
+                      <h4 className="font-extrabold text-[#172033] text-sm leading-tight">{cert.studentName}</h4>
+                      <p className="text-[11px] text-slate-500 font-medium mt-1 flex items-center gap-1.5">
+                        <span>{cert.groupName}</span>
+                        <span>•</span>
+                        <span>Kelas {cert.studentClass}</span>
+                        <span className="text-[9px] font-bold text-[#0362D0] bg-[#0362D0]/10 px-1.5 py-0.5 rounded">
+                          {getGradeForGroup(groups.find(g => g.id === cert.groupId) || { name: cert.groupName }).name}
+                        </span>
+                      </p>
+                    </div>
+                    <span className={cn(
+                      "px-2 py-0.5 rounded-full text-[9px] font-black inline-flex items-center gap-1 border shrink-0",
+                      statusObj.bg,
+                      statusObj.color
+                    )}>
+                      <StatusIcon size={10} /> {cert.status}
+                    </span>
+                  </div>
+                  
+                  <div className="mb-3">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#0362D0]/10 text-[#0362D0] font-bold border border-[#0362D0]/20 text-[10px]">
+                      <Award size={12} /> {cert.category}
+                    </span>
+                    {cert.notes && (
+                      <div className="text-[11px] text-slate-500 mt-1.5 line-clamp-2 font-medium bg-[#F5F6F8] p-2 rounded-lg">
+                        {cert.notes}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 mb-3">
+                    <div className="bg-[#F5F6F8] p-2 rounded-lg text-center">
+                      <p className="text-[9px] text-slate-400 font-bold uppercase mb-0.5">Nilai Ujian</p>
+                      <p className="text-sm font-black text-[#172033]">{cert.score ?? cert.examScore ?? '-'}</p>
+                    </div>
+                    <div className="bg-[#F5F6F8] p-2 rounded-lg text-center">
+                      <p className="text-[9px] text-slate-400 font-bold uppercase mb-0.5">Tgl Ujian</p>
+                      <p className="text-xs font-black text-[#172033]">{cert.completedDate || cert.examDate || '-'}</p>
+                    </div>
+                  </div>
+                  
+                  {cert.certificateNumber && (
+                    <div className="mb-4">
+                      <p className="text-[9px] text-slate-400 font-bold uppercase mb-0.5">No. Piagam</p>
+                      <p className="text-[11px] font-bold text-[#172033]">{cert.certificateNumber}</p>
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-2 pt-3 border-t border-[#E6E8EC]">
+                    <button
+                      onClick={() => handleEdit(cert)}
+                      className="flex-1 flex justify-center items-center gap-1.5 py-2 text-[#0362D0] border border-[#0362D0]/30 hover:bg-[#0362D0]/5 rounded-xl font-bold text-[11px] transition-colors"
+                    >
+                      <Edit3 size={14} /> Update
+                    </button>
+                    <button
+                      onClick={() => handleDelete(cert.id)}
+                      className="flex-1 flex justify-center items-center gap-1.5 py-2 text-rose-600 border border-rose-200 hover:bg-rose-50 rounded-xl font-bold text-[11px] transition-colors"
+                    >
+                      <Trash2 size={14} /> Hapus
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          
+          {hasMore && (
+            <div className="mt-8 mb-6 text-center">
+              <button
+                onClick={handleLoadMore}
+                disabled={loadingMore}
+                className="inline-flex items-center gap-2 px-6 py-3 bg-white border border-[#E6E8EC] rounded-2xl text-sm font-black text-[#172033] hover:bg-[#F5F6F8] transition-colors disabled:opacity-50 cursor-pointer"
+              >
+                {loadingMore ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-[#172033] border-t-transparent rounded-full animate-spin"></div>
+                    Memuat...
+                  </>
+                ) : (
+                  'Muat Lebih Banyak'
+                )}
+              </button>
+            </div>
+          )}
+          
+        </>
         ) : (
           <div className="p-12 text-center max-w-md mx-auto">
             <div className="w-12 h-12 rounded-2xl bg-[#0362D0]/10 text-[#0362D0] flex items-center justify-center mx-auto mb-3">
@@ -633,10 +738,21 @@ export function Certifications() {
                   onChange={(e) => {
                     const stId = e.target.value;
                     const st = students.find(s => s.id === stId);
+                    const grp = groups.find(g => g.id === st?.groupId);
+                    const gr = getGradeForGroup(grp);
+                    let defaultCat: CertCategory = formData.category;
+                    if (gr.id === 'grade3') {
+                      defaultCat = "Tasmi' Juz 30";
+                    } else if (gr.id === 'grade2') {
+                      defaultCat = 'Ujian Kenaikan Tingkat';
+                    } else {
+                      defaultCat = 'Khatam Iqro/Tilawati';
+                    }
                     setFormData({ 
                       ...formData, 
                       studentId: stId,
-                      groupId: st?.groupId || formData.groupId 
+                      groupId: st?.groupId || formData.groupId,
+                      category: defaultCat
                     });
                   }}
                   required
@@ -645,9 +761,10 @@ export function Certifications() {
                   <option value="">-- Pilih Santri --</option>
                   {students.map(s => {
                     const grp = groups.find(g => g.id === s.groupId);
+                    const gr = getGradeForGroup(grp);
                     return (
                       <option key={s.id} value={s.id}>
-                        {s.name} ({s.class} - {grp?.name || 'Kelompok'})
+                        {s.name} ({s.class} - {grp?.name || 'Kelompok'} | {gr.name} {gr.programName})
                       </option>
                     );
                   })}
@@ -859,8 +976,15 @@ export function Certifications() {
                   <div className="text-[10px] text-slate-400 font-bold">Penguji / Pembimbing</div>
                 </div>
 
-                <div className="w-16 h-16 rounded-full border-4 border-dashed border-[#C99A2E] flex items-center justify-center text-[#C99A2E] font-serif font-black text-xs rotate-[-12deg]">
-                  STAMP
+                <div className="relative flex items-center justify-center w-28 h-28 rotate-[-12deg] opacity-90">
+                  <img 
+                    src="/stamp-rohis.png" 
+                    alt="Stempel Rohis" 
+                    className="w-full h-full object-contain mix-blend-multiply"
+                    onError={(e) => {
+                      e.currentTarget.src = "/download (4).png"; // Fallback
+                    }}
+                  />
                 </div>
 
                 <div className="text-center">
@@ -868,7 +992,7 @@ export function Certifications() {
                   <div className="font-extrabold text-[#172033] border-t border-slate-400 pt-1 px-4">
                     Koordinator BTQ SMPN 102
                   </div>
-                  <div className="text-[10px] text-slate-400 font-bold">Penyelenggara Bimbingan</div>
+                  <div className="text-[10px] text-slate-400 font-bold">Pembina Rohis</div>
                 </div>
               </div>
             </div>

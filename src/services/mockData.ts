@@ -27,14 +27,18 @@ const groupRooms: Record<number, string> = {
   10: '9D',
 };
 
-export const mockGroups: Group[] = Array.from({ length: 10 }).map((_, i) => ({
-  id: `g${i + 1}`,
-  name: `Kelompok ${i + 1}`,
-  mentorId: `m${i + 1}`,
-  schedule: 'Sabtu, 07:15 - 08:00',
-  room: groupRooms[i + 1] || `Ruang ${101 + i}`,
-  gradeId: (i + 1) === 7 || (i + 1) === 8 ? 'grade1' : (i + 1) <= 3 ? 'grade1' : (i + 1) <= 8 ? 'grade2' : 'grade3',
-}));
+export const mockGroups: Group[] = Array.from({ length: 10 }).map((_, i) => {
+  const gNum = i + 1;
+  const gradeId = gNum === 10 ? 'grade3' : [4, 5, 6, 9].includes(gNum) ? 'grade2' : 'grade1';
+  return {
+    id: `g${gNum}`,
+    name: `Kelompok ${gNum}`,
+    mentorId: `m${gNum}`,
+    schedule: 'Sabtu, 07:15 - 08:00',
+    room: groupRooms[gNum] || `Ruang ${101 + i}`,
+    gradeId,
+  };
+});
 
 const firstNamesL = ['Budi', 'Andi', 'Rizky', 'Fajar', 'Hendra', 'Aditya', 'Dimas', 'Eko', 'Ilham', 'Deni', 'Arif', 'Bayu', 'Gilang', 'Rian', 'Fauzan'];
 const firstNamesP = ['Siti', 'Ayu', 'Putri', 'Dewi', 'Sari', 'Nisa', 'Rina', 'Indah', 'Fitri', 'Dian', 'Lestari', 'Ratna', 'Wulan', 'Nur', 'Sri'];
@@ -434,26 +438,63 @@ mockStudents.forEach(student => {
     });
   });
 
-  // Progress
-  let baseReading = 40 + Math.random() * 20;
-  let baseTajwid = 30 + Math.random() * 20;
-  let baseMemorization = 30 + Math.random() * 30;
-  let baseWriting = 40 + Math.random() * 20;
-
+  // Progress per stage (Tahap 1, 2, 3)
   const group = mockGroups.find(g => g.id === student.groupId);
   const gradeId = group?.gradeId || 'grade1';
   const prefix = gradeId === 'grade1' ? 'g1' : gradeId === 'grade2' ? 'g2' : 'g3';
+  const isGrade3 = gradeId === 'grade3';
 
-  [
-    { date: subMonths(today, 2), sessionNum: 1 },
-    { date: subMonths(today, 1), sessionNum: 2 },
-    { date: today, sessionNum: 3 }
-  ].forEach(({ date, sessionNum }) => {
-    baseReading = Math.min(100, baseReading + Math.random() * 10);
-    baseTajwid = Math.min(100, baseTajwid + Math.random() * 12);
-    baseMemorization = Math.min(100, baseMemorization + Math.random() * 15);
-    baseWriting = Math.min(100, baseWriting + Math.random() * 10);
+  // Seed student trend profile deterministically by student index
+  const studentNum = parseInt(student.id.replace(/\D/g, ''), 10) || 1;
+  const trendType = (studentNum % 5 === 0) ? 'menurun' : (studentNum % 4 === 0) ? 'konsisten' : 'meningkat';
+
+  let s1Reading = 70 + (studentNum % 15);
+  let s1Tajwid = 68 + ((studentNum * 2) % 18);
+  let s1Writing = 72 + ((studentNum * 3) % 15);
+  let s1Memorization = isGrade3 ? (70 + (studentNum % 20)) : 0;
+
+  const sessionData = [
+    { 
+      date: subMonths(today, 2), 
+      sessionNum: 1,
+      r: s1Reading,
+      t: s1Tajwid,
+      w: s1Writing,
+      m: s1Memorization
+    },
+    { 
+      date: subMonths(today, 1), 
+      sessionNum: 2,
+      r: trendType === 'menurun' ? s1Reading - 2 : trendType === 'konsisten' ? s1Reading : s1Reading + 4,
+      t: trendType === 'menurun' ? s1Tajwid - 3 : trendType === 'konsisten' ? s1Tajwid : s1Tajwid + 5,
+      w: trendType === 'menurun' ? s1Writing - 1 : trendType === 'konsisten' ? s1Writing : s1Writing + 3,
+      m: isGrade3 ? (trendType === 'menurun' ? s1Memorization - 2 : trendType === 'konsisten' ? s1Memorization : s1Memorization + 4) : 0
+    },
+    { 
+      date: today, 
+      sessionNum: 3,
+      r: trendType === 'menurun' ? s1Reading - 6 : trendType === 'konsisten' ? s1Reading : s1Reading + 9,
+      t: trendType === 'menurun' ? s1Tajwid - 7 : trendType === 'konsisten' ? s1Tajwid : s1Tajwid + 10,
+      w: trendType === 'menurun' ? s1Writing - 5 : trendType === 'konsisten' ? s1Writing : s1Writing + 7,
+      m: isGrade3 ? (trendType === 'menurun' ? s1Memorization - 6 : trendType === 'konsisten' ? s1Memorization : s1Memorization + 8) : 0
+    }
+  ];
+
+  const grade3Surahs = ['QS. An-Nas s.d. Al-Falaq', 'QS. Al-Ikhlas s.d. Al-Lahab', 'QS. An-Nashr s.d. Al-Kafirun'];
+
+  sessionData.forEach(({ date, sessionNum, r, t, w, m }) => {
+    const reading = isGrade3 ? Math.min(98, Math.max(60, r)) : 0;
+    const tajwid = Math.min(98, Math.max(58, t));
+    const writing = Math.min(98, Math.max(60, w));
+    const memorization = isGrade3 ? Math.min(98, Math.max(58, m)) : 0;
+    const memorizedSurah = isGrade3 ? (grade3Surahs[sessionNum - 1] || 'Juz 30') : '';
     
+    // Nilai Rata-rata mutu untuk Kelompok 10: Membaca, Tajwid, Menulis (Hafalan dicatat tersendiri per surah)
+    // Nilai Rata-rata untuk Kelompok 1-9: Tajwid, Menulis
+    const total = isGrade3
+      ? Math.round((reading + tajwid + writing) / 3)
+      : Math.round((tajwid + writing) / 2);
+
     mockProgress.push({
       id: `p_${student.id}_s${sessionNum}`,
       studentId: student.id,
@@ -461,11 +502,12 @@ mockStudents.forEach(student => {
       sessionId: `${prefix}-s${sessionNum}`,
       semester: 1,
       date: date.toISOString().split('T')[0],
-      reading: Math.round(baseReading),
-      tajwid: Math.round(baseTajwid),
-      memorization: Math.round(baseMemorization),
-      writing: Math.round(baseWriting),
-      total: Math.round((baseReading + baseTajwid + baseMemorization + baseWriting) / 4),
+      reading,
+      tajwid,
+      memorization,
+      memorizedSurah,
+      writing,
+      total,
     });
   });
 });
