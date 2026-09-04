@@ -32,11 +32,32 @@ export interface CurriculumValidationReport {
   issues: CurriculumValidationIssue[];
 }
 
+// In-memory cache for validation report
+let cachedReportMap: Map<string, { report: CurriculumValidationReport; timestamp: number }> = new Map();
+const CACHE_TTL_MS = 15000; // 15 seconds cache
+
+export function clearValidationCache() {
+  cachedReportMap.clear();
+}
+
 /**
  * Utility function to validate consistency between 'Pertemuan Ke-' in Teaching Sessions
  * and 'Tahap' in Curriculum (32 Tahap per Grade).
  */
-export async function validateCurriculumConsistency(targetGroupId?: string): Promise<CurriculumValidationReport> {
+export async function validateCurriculumConsistency(
+  targetGroupId?: string, 
+  forceRefresh: boolean = false
+): Promise<CurriculumValidationReport> {
+  const cacheKey = targetGroupId || 'all';
+  const now = Date.now();
+
+  if (!forceRefresh && cachedReportMap.has(cacheKey)) {
+    const cached = cachedReportMap.get(cacheKey)!;
+    if (now - cached.timestamp < CACHE_TTL_MS) {
+      return cached.report;
+    }
+  }
+
   const groups = await getGroups();
   const { data: allJournals } = await getTeachingJournals(undefined, 300);
   
@@ -154,7 +175,7 @@ export async function validateCurriculumConsistency(targetGroupId?: string): Pro
   const errorCount = issues.filter(i => i.severity === 'error').length;
   const warningCount = issues.filter(i => i.severity === 'warning').length;
 
-  return {
+  const report: CurriculumValidationReport = {
     timestamp: new Date().toISOString(),
     totalGroupsChecked: filteredGroups.length,
     totalJournalsChecked: allJournals.length,
@@ -163,4 +184,8 @@ export async function validateCurriculumConsistency(targetGroupId?: string): Pro
     warningCount,
     issues
   };
+
+  cachedReportMap.set(cacheKey, { report, timestamp: now });
+
+  return report;
 }

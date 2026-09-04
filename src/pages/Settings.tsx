@@ -86,27 +86,42 @@ export function Settings() {
                   </div>
                 </div>
 
-                <form onSubmit={handleSave} className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-black text-[#172033] uppercase tracking-wider">Nama Lengkap</label>
-                    <Input defaultValue={userData?.name || 'Administrator Portal BTQ'} className="font-bold text-[#172033]" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-black text-[#172033] uppercase tracking-wider">Role / Jabatan</label>
-                    <Input defaultValue={userData?.role ? userData.role.toUpperCase() : 'ADMINISTRATOR'} disabled className="bg-[#F5F6F8] font-bold text-slate-500 border-[#E6E8EC]" />
-                  </div>
-                  <div className="space-y-1.5 md:col-span-2">
-                    <label className="text-xs font-black text-[#172033] uppercase tracking-wider">Email Utama</label>
-                    <Input defaultValue={userData?.email || 'admin.btq@smpn102.sch.id'} type="email" className="font-bold text-[#172033]" />
-                  </div>
-                  <div className="space-y-1.5 md:col-span-2">
-                    <label className="text-xs font-black text-[#172033] uppercase tracking-wider">Instansi / Sekolah</label>
-                    <Input defaultValue="SMP Negeri 102 Jakarta" disabled className="bg-[#F5F6F8] font-bold text-[#172033] border-[#E6E8EC]" />
+                <form onSubmit={handleSave} className="space-y-6 pt-2">
+                  <div className="bg-[#F5F6F8] p-5 rounded-2xl border border-[#E6E8EC] space-y-4">
+                    <h4 className="text-sm font-bold text-[#172033] flex items-center gap-2 border-b border-[#E6E8EC] pb-2 mb-4">
+                      Identitas Utama
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-black text-[#172033] uppercase tracking-wider">Nama Lengkap</label>
+                        <Input defaultValue={userData?.name || 'Administrator Portal BTQ'} className="font-bold text-[#172033]" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-black text-[#172033] uppercase tracking-wider">Role / Jabatan</label>
+                        <Input defaultValue={userData?.role ? userData.role.toUpperCase() : 'ADMINISTRATOR'} disabled className="bg-[#E6E8EC]/50 font-bold text-slate-500 border-[#E6E8EC]" />
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="pt-4 md:col-span-2 flex justify-end">
-                    <Button type="submit" className="bg-[#0362D0] hover:bg-[#0252b3] text-white font-black px-6 py-2.5 rounded-xl cursor-pointer">
-                      <Save size={16} className="mr-2" /> Simpan Perubahan
+                  <div className="bg-[#F5F6F8] p-5 rounded-2xl border border-[#E6E8EC] space-y-4">
+                    <h4 className="text-sm font-bold text-[#172033] flex items-center gap-2 border-b border-[#E6E8EC] pb-2 mb-4">
+                      Informasi Kontak & Instansi
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-1.5 md:col-span-2">
+                        <label className="text-xs font-black text-[#172033] uppercase tracking-wider">Email Utama</label>
+                        <Input defaultValue={userData?.email || 'admin.btq@smpn102.sch.id'} type="email" className="font-bold text-[#172033]" />
+                      </div>
+                      <div className="space-y-1.5 md:col-span-2">
+                        <label className="text-xs font-black text-[#172033] uppercase tracking-wider">Instansi / Sekolah</label>
+                        <Input defaultValue="SMP Negeri 102 Jakarta" disabled className="bg-[#E6E8EC]/50 font-bold text-[#172033] border-[#E6E8EC]" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 flex justify-end">
+                    <Button type="submit" className="btn btn-primary px-6">
+                      <Save size={16} /> Simpan Perubahan
                     </Button>
                   </div>
                 </form>
@@ -118,27 +133,32 @@ export function Settings() {
             <Card className="border border-[#E6E8EC] rounded-3xl overflow-hidden shadow-xs bg-white">
               <CardContent className="p-6 space-y-5">
                 <h3 className="text-lg font-black text-[#172033] border-b border-[#E6E8EC] pb-4">Tahun Ajaran & Kalender Akademik</h3>
-                <form onSubmit={handleSave} className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-black text-[#172033] uppercase tracking-wider">Tahun Ajaran Aktif</label>
-                      <select className="w-full h-10 px-3 rounded-xl border border-[#E6E8EC] bg-[#F5F6F8] text-xs font-bold text-[#172033] focus:outline-none focus:ring-2 focus:ring-[#0362D0]">
-                        <option>2025/2026</option>
-                        <option selected>2026/2027</option>
-                        <option>2027/2028</option>
-                      </select>
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-black text-[#172033] uppercase tracking-wider">Semester Aktif</label>
-                      <select className="w-full h-10 px-3 rounded-xl border border-[#E6E8EC] bg-[#F5F6F8] text-xs font-bold text-[#172033] focus:outline-none focus:ring-2 focus:ring-[#0362D0]">
-                        <option selected>Ganjil (16 Tahap)</option>
-                        <option>Genap (16 Tahap)</option>
-                      </select>
+                <form onSubmit={handleSave} className="space-y-6 pt-2">
+                  <div className="bg-[#F5F6F8] p-5 rounded-2xl border border-[#E6E8EC] space-y-4">
+                    <h4 className="text-sm font-bold text-[#172033] flex items-center gap-2 border-b border-[#E6E8EC] pb-2 mb-4">
+                      Konfigurasi Semester
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-black text-[#172033] uppercase tracking-wider">Tahun Ajaran Aktif</label>
+                        <select className="w-full h-10 px-3 rounded-xl border border-[#E6E8EC] bg-white text-xs font-bold text-[#172033] focus:outline-none focus:ring-2 focus:ring-[#0362D0]">
+                          <option>2025/2026</option>
+                          <option selected>2026/2027</option>
+                          <option>2027/2028</option>
+                        </select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-black text-[#172033] uppercase tracking-wider">Semester Aktif</label>
+                        <select className="w-full h-10 px-3 rounded-xl border border-[#E6E8EC] bg-white text-xs font-bold text-[#172033] focus:outline-none focus:ring-2 focus:ring-[#0362D0]">
+                          <option selected>Ganjil (16 Tahap)</option>
+                          <option>Genap (16 Tahap)</option>
+                        </select>
+                      </div>
                     </div>
                   </div>
                   <div className="pt-2 flex justify-end">
-                    <Button type="submit" className="bg-[#0362D0] hover:bg-[#0252b3] text-white font-black px-6 py-2.5 rounded-xl cursor-pointer">
-                      <Save size={16} className="mr-2" /> Perbarui Konfigurasi
+                    <Button type="submit" className="btn btn-primary px-6">
+                      <Save size={16} /> Perbarui Konfigurasi
                     </Button>
                   </div>
                 </form>
@@ -150,22 +170,27 @@ export function Settings() {
             <Card className="border border-[#E6E8EC] rounded-3xl overflow-hidden shadow-xs bg-white">
               <CardContent className="p-6 space-y-5">
                 <h3 className="text-lg font-black text-[#172033] border-b border-[#E6E8EC] pb-4">Keamanan Akun & Password</h3>
-                <form onSubmit={handleSave} className="space-y-4">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-black text-[#172033] uppercase tracking-wider">Password Lama</label>
-                    <Input type="password" placeholder="••••••••" className="font-bold text-[#172033]" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-black text-[#172033] uppercase tracking-wider">Password Baru</label>
-                    <Input type="password" placeholder="••••••••" className="font-bold text-[#172033]" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-black text-[#172033] uppercase tracking-wider">Konfirmasi Password Baru</label>
-                    <Input type="password" placeholder="••••••••" className="font-bold text-[#172033]" />
+                <form onSubmit={handleSave} className="space-y-6 pt-2">
+                  <div className="bg-[#F5F6F8] p-5 rounded-2xl border border-[#E6E8EC] space-y-4">
+                    <h4 className="text-sm font-bold text-[#172033] flex items-center gap-2 border-b border-[#E6E8EC] pb-2 mb-4">
+                      Ubah Kata Sandi
+                    </h4>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-black text-[#172033] uppercase tracking-wider">Password Lama</label>
+                      <Input type="password" placeholder="••••••••" className="font-bold text-[#172033] bg-white" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-black text-[#172033] uppercase tracking-wider">Password Baru</label>
+                      <Input type="password" placeholder="••••••••" className="font-bold text-[#172033] bg-white" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-black text-[#172033] uppercase tracking-wider">Konfirmasi Password Baru</label>
+                      <Input type="password" placeholder="••••••••" className="font-bold text-[#172033] bg-white" />
+                    </div>
                   </div>
                   <div className="pt-2 flex justify-end">
-                    <Button type="submit" className="bg-[#950415] hover:bg-[#7a0311] text-white font-black px-6 py-2.5 rounded-xl cursor-pointer">
-                      <Shield size={16} className="mr-2" /> Ubah Password
+                    <Button type="submit" className="btn btn-danger px-6">
+                      <Shield size={16} /> Ubah Password
                     </Button>
                   </div>
                 </form>

@@ -1298,7 +1298,7 @@ export function MentorDashboard() {
                 <p className="text-[10px] text-slate-400 mt-1">Jurnal otomatis terisi saat Anda menyelesaikan Sesi Mengajar.</p>
                 <Link 
                   to="/session" 
-                  className="mt-3 inline-block px-3 py-1.5 bg-[#0362D0] text-white rounded-xl text-xs font-bold"
+                  className="btn btn-primary btn-sm mt-3"
                 >
                   Buka Sesi Mengajar
                 </Link>

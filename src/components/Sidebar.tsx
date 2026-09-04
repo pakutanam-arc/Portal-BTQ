@@ -11,7 +11,8 @@ import {
   FileText, 
   Settings,
   BookMarked,
-  Award
+  Award,
+  ShieldCheck
 } from 'lucide-react';
 import { cn } from '../utils/cn';
 import { useAuth } from '../contexts/AuthContext';
@@ -29,6 +30,7 @@ const navItems = [
   { icon: BarChart3, label: 'Progress Siswa', path: '/progress', roles: ['admin'] },
   { icon: BookMarked, label: 'Jurnal Mengajar', path: '/journals', roles: ['admin'] },
   { icon: FileText, label: 'Laporan', path: '/reports', roles: ['admin'] },
+  { icon: ShieldCheck, label: 'Log Audit Sistem', path: '/audit-logs', roles: ['admin'] },
 ];
 
 export function Sidebar({ onClose }: { onClose?: () => void }) {
@@ -52,10 +54,10 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
           />
         </div>
         <div className="min-w-0 flex-1">
-          <h1 className="text-base font-black leading-tight tracking-wide text-white">
+          <h1 className="text-base font-bold text-white">
             {APP_NAME}
           </h1>
-          <p className="text-[11px] font-semibold text-[#C99A2E] truncate mt-0.5">
+          <p className="text-xs font-medium text-[#C99A2E] truncate mt-0.5">
             {APP_SUBTITLE}
           </p>
         </div>
@@ -78,7 +80,7 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
             onClick={onClose}
             className={({ isActive }) =>
               cn(
-                'flex items-center gap-3 px-5 py-3 text-xs sm:text-sm font-semibold transition-all relative group',
+                'nav-item-layout px-5 py-3 text-xs sm:text-sm font-semibold transition-all relative group',
                 isActive 
                   ? 'bg-[#0362D0] text-white shadow-md' 
                   : 'text-slate-300 hover:bg-slate-800/60 hover:text-white'
@@ -91,7 +93,7 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
                 {isActive && (
                   <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-[#C99A2E] rounded-r-sm shadow-sm" />
                 )}
-                <item.icon size={18} className={cn("shrink-0", isActive ? "text-white" : "text-slate-400 group-hover:text-[#C99A2E]")} />
+                <item.icon className={cn("icon-nav", isActive ? "text-white" : "text-slate-400 group-hover:text-[#C99A2E]")} />
                 <span className="truncate">{item.label}</span>
               </>
             )}
@@ -107,14 +109,14 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
             onClick={onClose}
             className={({ isActive }) =>
               cn(
-                'flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all relative',
+                'nav-item-layout px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all relative',
                 isActive 
                   ? 'bg-[#0362D0] text-white' 
                   : 'text-slate-400 hover:bg-slate-800/80 hover:text-white'
               )
             }
           >
-            <Settings size={18} className="shrink-0 text-[#C99A2E]" />
+            <Settings className="icon-nav text-[#C99A2E]" />
             <span className="truncate">Pengaturan</span>
           </NavLink>
         </div>

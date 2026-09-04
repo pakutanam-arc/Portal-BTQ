@@ -168,14 +168,14 @@ export function Header() {
   const getTypeIcon = (type: AppNotification['type']) => {
     switch (type) {
       case 'warning':
-        return <AlertTriangle size={15} className="text-[#C99A2E] shrink-0 mt-0.5" />;
+        return <AlertTriangle className="icon-sm text-[#C99A2E] mt-0.5" />;
       case 'success':
-        return <CheckCircle2 size={15} className="text-emerald-600 shrink-0 mt-0.5" />;
+        return <CheckCircle2 className="icon-sm text-emerald-600 mt-0.5" />;
       case 'alert':
-        return <AlertCircle size={15} className="text-[#950415] shrink-0 mt-0.5" />;
+        return <AlertCircle className="icon-sm text-[#950415] mt-0.5" />;
       case 'info':
       default:
-        return <Info size={15} className="text-[#0362D0] shrink-0 mt-0.5" />;
+        return <Info className="icon-sm text-[#0362D0] mt-0.5" />;
     }
   };
 
@@ -184,7 +184,7 @@ export function Header() {
       {/* Left Section: Breadcrumb */}
       <div className="flex items-center gap-2 text-xs font-semibold">
         <span className="text-[#0362D0] font-bold hidden sm:inline">Portal BTQ</span>
-        <ChevronRight size={14} className="text-slate-400 hidden sm:inline" />
+        <ChevronRight className="icon-sm text-slate-400 hidden sm:inline" />
         <h2 className="text-sm sm:text-base font-extrabold text-[#172033] tracking-tight">{currentPathName}</h2>
       </div>
 
@@ -196,7 +196,7 @@ export function Header() {
             placeholder="Cari siswa, kelompok, atau menu..." 
             className="w-full pl-9 pr-4 py-1.5 bg-[#F5F6F8] border border-[#E6E8EC] rounded-full text-xs text-[#172033] focus:bg-white focus:border-[#0362D0] focus:ring-2 focus:ring-[#0362D0]/20 outline-none transition-all placeholder:text-slate-400"
           />
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 icon-md" />
         </div>
       </div>
 
@@ -216,7 +216,7 @@ export function Header() {
             className="relative p-2 bg-[#F5F6F8] border border-[#E6E8EC] rounded-full text-[#172033] hover:text-[#0362D0] hover:border-[#0362D0]/40 hover:bg-white transition-all active:scale-95"
             aria-label="Lihat Notifikasi"
           >
-            <Bell size={18} />
+            <Bell className="icon-nav" />
             {unreadCount > 0 && (
               <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-[#950415] text-white rounded-full text-[10px] font-extrabold flex items-center justify-center border-2 border-white shadow-sm animate-pulse">
                 {unreadCount > 9 ? '9+' : unreadCount}
@@ -244,7 +244,7 @@ export function Header() {
                     {userRole === 'admin' && (
                       <button 
                         onClick={() => { setIsNotifOpen(false); setIsBroadcastOpen(true); }}
-                        className="px-2.5 py-1 bg-[#0362D0] hover:bg-[#0252b3] text-white text-[11px] font-bold rounded-lg flex items-center gap-1 transition-all shadow-sm"
+                        className="btn btn-primary btn-sm !px-2.5 !py-1 text-[11px]"
                         title="Buat Pengumuman Baru"
                       >
                         <PlusCircle size={13} /> Buat
@@ -390,7 +390,7 @@ export function Header() {
             onClick={() => { setIsProfileOpen(!isProfileOpen); setIsNotifOpen(false); }}
           >
             <div className="w-8 h-8 rounded-xl bg-[#0362D0] text-white flex items-center justify-center text-xs font-bold shadow-sm ring-2 ring-[#0362D0]/20 group-hover:bg-[#0252b3] transition-colors">
-              <User size={16} />
+              <User className="icon-md" />
             </div>
             <div className="hidden md:block text-left">
               <p className="text-xs font-extrabold text-[#172033] leading-tight capitalize">{username}</p>
@@ -410,9 +410,9 @@ export function Header() {
                 <div className="p-1.5">
                   <button 
                     onClick={handleLogout}
-                    className="w-full text-left px-3 py-2 text-xs font-bold text-[#950415] hover:bg-red-50 rounded-xl flex items-center gap-2 transition-colors"
+                    className="btn btn-ghost !text-[#950415] hover:!bg-red-50 w-full justify-start action-icon-layout"
                   >
-                    <LogOut size={14} />
+                    <LogOut className="icon-sm" />
                     Keluar Sistem
                   </button>
                 </div>
@@ -435,7 +435,7 @@ export function Header() {
                 onClick={() => setIsBroadcastOpen(false)} 
                 className="text-slate-400 hover:text-[#172033] p-1.5 rounded-lg hover:bg-[#F5F6F8] transition-colors"
               >
-                <X size={18} />
+                <X className="icon-nav" />
               </button>
             </div>
 
@@ -513,14 +513,14 @@ export function Header() {
                 <button
                   type="button"
                   onClick={() => setIsBroadcastOpen(false)}
-                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-[#F5F6F8] rounded-xl transition-colors"
+                  className="btn btn-ghost btn-sm"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
                   disabled={isSending}
-                  className="px-5 py-2 bg-[#0362D0] hover:bg-[#0252b3] text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-md active:scale-95 transition-all disabled:opacity-50"
+                  className="btn btn-primary btn-sm"
                 >
                   <Send size={13} /> {isSending ? 'Mengirim...' : 'Kirim Sekarang'}
                 </button>

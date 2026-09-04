@@ -49,7 +49,7 @@ export function BottomNav() {
                 )
               }
             >
-              <item.icon size={20} className={cn("shrink-0")} />
+              <item.icon className="icon-lg" />
               <span className="text-[9px] font-bold tracking-wide text-center leading-tight">{item.label}</span>
             </NavLink>
           ))}
@@ -75,7 +75,7 @@ export function BottomNav() {
                 )
               }
             >
-              <item.icon size={20} className={cn("shrink-0")} />
+              <item.icon className="icon-lg" />
               <span className="text-[9px] font-bold tracking-wide">{item.label}</span>
             </NavLink>
           ))}
@@ -87,7 +87,7 @@ export function BottomNav() {
               isMoreOpen ? 'text-[#0362D0]' : 'text-slate-400 hover:text-slate-600'
             )}
           >
-            {isMoreOpen ? <X size={20} /> : <Menu size={20} />}
+            {isMoreOpen ? <X className="icon-lg" /> : <Menu className="icon-lg" />}
             <span className="text-[9px] font-bold tracking-wide">Menu</span>
           </button>
         </div>
@@ -132,7 +132,7 @@ export function BottomNav() {
                       "w-10 h-10 rounded-full flex items-center justify-center shrink-0",
                       isActive ? "bg-[#0362D0] text-white shadow-md" : "bg-[#F5F6F8] text-slate-500"
                     )}>
-                      <item.icon size={18} />
+                      <item.icon className="icon-nav" />
                     </div>
                     <span className="text-[10px] font-bold text-center leading-tight">{item.label}</span>
                   </>

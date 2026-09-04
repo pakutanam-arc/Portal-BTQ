@@ -64,23 +64,44 @@ export const theme = {
   
   typography: {
     // Page headers
-    h1: 'text-2xl sm:text-3xl font-black text-[#172033] tracking-tight',
+    h1: 'text-2xl sm:text-3xl font-bold text-[#172033] tracking-tight',
     // Section headers
-    h2: 'text-xl sm:text-2xl font-extrabold text-[#172033] tracking-tight',
+    h2: 'text-xl sm:text-2xl font-bold text-[#172033] tracking-tight',
     // Card/Component headers
-    h3: 'text-lg sm:text-xl font-bold text-[#172033]',
+    h3: 'text-lg sm:text-xl font-semibold text-[#172033]',
+    // Sub component headers
+    h4: 'text-base font-semibold text-slate-700',
     // Subtitles
     subtitle: 'text-sm sm:text-base font-medium text-slate-500',
     // Standard body text
     body: 'text-sm text-[#172033]',
     // Small instructional text
-    small: 'text-xs font-medium text-slate-500',
+    small: 'text-xs font-normal text-slate-500',
     // Uppercase labels for badges, table headers, etc.
-    label: 'text-[10px] sm:text-xs font-black uppercase tracking-wider',
+    label: 'text-xs font-semibold uppercase tracking-wide',
   },
   
   animation: {
     hover: 'transition-colors duration-200 ease-in-out',
     slideUp: 'transition-transform duration-300 ease-out transform',
+  },
+  
+  icons: {
+    xs: 'icon-xs',
+    sm: 'icon-sm',
+    md: 'icon-md',
+    nav: 'icon-nav',
+    lg: 'icon-lg',
+    xl: 'icon-xl',
+    margin: {
+      tight: 'icon-margin-tight',
+      inline: 'icon-margin-inline',
+      wide: 'icon-margin-wide',
+    },
+    layout: {
+      nav: 'nav-item-layout',
+      action: 'action-icon-layout',
+      badge: 'badge-icon-layout',
+    }
   }
 };

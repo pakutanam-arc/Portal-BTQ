@@ -252,7 +252,7 @@ export function Login() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full mt-2 py-3 px-4 bg-[#0362D0] hover:bg-[#0252b3] text-white font-extrabold text-xs sm:text-sm rounded-2xl shadow-md active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
+                className="btn btn-primary w-full mt-2"
               >
                 {loading ? (
                   <>
@@ -327,7 +327,7 @@ export function Login() {
 
             <button
               onClick={() => setShowHelpModal(false)}
-              className="w-full mt-4 py-2.5 bg-[#0362D0] hover:bg-[#0252b3] text-white font-bold text-xs rounded-xl transition-colors"
+              className="btn btn-primary w-full mt-4"
             >
               Mengerti
             </button>

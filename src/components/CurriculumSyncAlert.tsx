@@ -41,10 +41,10 @@ export function CurriculumSyncAlert({ className, groupIdFilter, compact = false 
   const [filterType, setFilterType] = useState<string>('all');
   const [dismissed, setDismissed] = useState<boolean>(false);
 
-  const runValidation = async () => {
+  const runValidation = async (force: boolean = false) => {
     setLoading(true);
     try {
-      const res = await validateCurriculumConsistency(groupIdFilter);
+      const res = await validateCurriculumConsistency(groupIdFilter, force);
       setReport(res);
     } catch (err) {
       console.error('Validation error:', err);
@@ -87,7 +87,7 @@ export function CurriculumSyncAlert({ className, groupIdFilter, compact = false 
           </div>
         </div>
         <button 
-          onClick={runValidation} 
+          onClick={() => runValidation(true)} 
           title="Refresh Validasi"
           className="p-1.5 hover:bg-emerald-100 rounded-lg text-emerald-700 transition-colors cursor-pointer"
         >
@@ -146,7 +146,7 @@ export function CurriculumSyncAlert({ className, groupIdFilter, compact = false 
           </button>
           
           <button
-            onClick={runValidation}
+            onClick={() => runValidation(true)}
             disabled={loading}
             title="Muat Ulang Validasi"
             className="p-2 bg-white hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-xl transition-colors cursor-pointer"
@@ -261,7 +261,7 @@ export function CurriculumSyncAlert({ className, groupIdFilter, compact = false 
                     <div className="flex items-center gap-2 shrink-0">
                       <button
                         onClick={() => navigate('/live-session')}
-                        className="px-2.5 py-1 bg-[#0362D0] hover:bg-blue-700 text-white font-bold rounded-lg text-[11px] transition-colors flex items-center gap-1 cursor-pointer"
+                        className="btn btn-primary btn-sm !px-2.5 !py-1 text-[11px]"
                       >
                         <span>Perbaiki di Sesi Mengajar</span>
                         <ArrowRight size={12} />

@@ -27,25 +27,25 @@ export const StatCardsGrid = React.memo(function StatCardsGrid({ cards }: StatCa
           <div className="absolute top-0 left-0 w-full h-1 bg-[#0362D0] opacity-0 group-hover:opacity-100 transition-opacity" />
           
           <div className="flex justify-between items-start">
-            <span className="text-[10px] text-slate-400 uppercase font-black tracking-wider leading-none">
+            <span className="text-xs text-slate-500 uppercase font-semibold tracking-wide">
               {stat.label}
             </span>
             <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${stat.bg} ${stat.color} ${stat.border}`}>
-              <stat.icon size={16} strokeWidth={2.5} />
+              <stat.icon size={16} strokeWidth={2} />
             </div>
           </div>
 
           <div className="mt-3">
-            <p className="text-2xl sm:text-3xl font-black text-[#172033] tracking-tight leading-none">
+            <p className="text-2xl sm:text-3xl font-bold text-[#172033]">
               {stat.value}
             </p>
-            <p className="text-[10px] text-slate-400 font-semibold mt-1">
+            <p className="text-xs text-slate-500 mt-1">
               {stat.sub}
             </p>
           </div>
 
           {/* Micro Trend indicator */}
-          <div className="mt-2.5 pt-2 border-t border-[#F5F6F8] flex items-center gap-1 text-[9px] font-bold">
+          <div className="mt-2.5 pt-2 border-t border-[#F5F6F8] flex items-center gap-1 text-xs font-medium">
             <span className={stat.trend.startsWith('↑') ? 'text-emerald-600' : 'text-slate-500'}>
               {stat.trend}
             </span>

@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, BarChart3, TrendingUp } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell } from 'recharts';
 
 export interface GroupProgressItem {
@@ -13,15 +13,24 @@ interface GroupProgressBarCardProps {
 }
 
 export const GroupProgressBarCard = React.memo(function GroupProgressBarCard({ data }: GroupProgressBarCardProps) {
+  const avgProgress = useMemo(() => {
+    if (!data.length) return 0;
+    return Math.round(data.reduce((acc, curr) => acc + curr.progress, 0) / data.length);
+  }, [data]);
+
   return (
     <div id="dashboard-group-progress-card" className="bg-white p-5 rounded-2xl border border-[#E6E8EC] flex flex-col justify-between shadow-xs">
       <div className="flex justify-between items-center pb-3 border-b border-[#F5F6F8]">
         <div>
-          <h3 className="font-extrabold text-[#172033] text-sm">Progress BTQ per Kelompok</h3>
-          <p className="text-[11px] text-slate-400 font-medium">Peringkat ketercapaian silabus (Utsmani)</p>
+          <div className="flex items-center gap-1.5">
+            <BarChart3 size={16} className="text-[#0362D0]" />
+            <h3 className="font-bold text-[#172033] text-base">Progress BTQ per Kelompok</h3>
+          </div>
+          <p className="text-sm font-medium text-slate-500">Peringkat ketercapaian silabus riil (Pekan 2)</p>
         </div>
-        <span className="text-[11px] font-bold text-[#C99A2E] bg-[#C99A2E]/10 px-2.5 py-1 rounded-xl border border-[#C99A2E]/20">
-          Rata-rata Progress: 68%
+        <span className="text-xs font-bold text-[#0362D0] bg-[#0362D0]/10 px-3 py-1 rounded-xl border border-[#0362D0]/20 flex items-center gap-1">
+          <TrendingUp size={13} className="text-[#0362D0]" />
+          Rata-rata: {avgProgress}%
         </span>
       </div>
 
@@ -38,11 +47,11 @@ export const GroupProgressBarCard = React.memo(function GroupProgressBarCard({ d
               type="category" 
               width={80} 
               interval={0} 
-              style={{ fontSize: '10px', fontWeight: 'bold', fill: '#172033' }} 
+              style={{ fontSize: '12px', fontWeight: '500', fill: '#172033' }} 
             />
             <Tooltip 
               formatter={(value) => [`${value}%`, 'Progress']}
-              contentStyle={{ borderRadius: '12px', border: '1px solid #E6E8EC', fontSize: '11px', fontWeight: 'bold' }}
+              contentStyle={{ borderRadius: '12px', border: '1px solid #E6E8EC', fontSize: '12px', fontWeight: '500' }}
             />
             <Bar dataKey="progress" radius={[0, 4, 4, 0]}>
               {data.map((entry, index) => {

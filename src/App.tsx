@@ -20,6 +20,7 @@ import { Certifications } from './pages/Certifications';
 import { Curriculum } from './pages/Curriculum';
 import { Reports } from './pages/Reports';
 import { Settings } from './pages/Settings';
+import { AuditLogs } from './pages/AuditLogs';
 import { Login } from './pages/Login';
 
 function AdminRoute({ children }: { children: ReactNode }) {
@@ -63,6 +64,7 @@ function AppRoutes() {
               <Route path="curriculum" element={<Curriculum />} />
               <Route path="reports" element={<AdminRoute><Reports /></AdminRoute>} />
               <Route path="settings" element={<AdminRoute><Settings /></AdminRoute>} />
+              <Route path="audit-logs" element={<AdminRoute><AuditLogs /></AdminRoute>} />
             </Route>
             <Route path="/login" element={<Navigate to="/" replace />} />
             <Route path="*" element={<Navigate to="/" replace />} />

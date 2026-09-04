@@ -39,8 +39,8 @@ export function MainLayout() {
                 />
               </div>
               <div className="flex flex-col justify-center">
-                <span className="font-black text-xs sm:text-sm text-[#172033] tracking-tight leading-none mb-0.5">{APP_NAME}</span>
-                <span className="text-[9px] sm:text-[10px] text-[#C99A2E] font-bold truncate">{APP_SUBTITLE}</span>
+                <span className="font-bold text-sm text-[#172033] mb-0.5">{APP_NAME}</span>
+                <span className="text-xs text-[#C99A2E] font-medium truncate">{APP_SUBTITLE}</span>
               </div>
             </div>
           </div>
@@ -56,13 +56,13 @@ export function MainLayout() {
         </main>
         
         {/* Footer (Desktop Only) */}
-        <div className="h-10 bg-white border-t border-[#E6E8EC] px-4 lg:px-8 flex items-center justify-between shrink-0 z-10 hidden lg:flex text-[11px] text-slate-500 font-medium">
+        <div className="h-10 bg-white border-t border-[#E6E8EC] px-4 lg:px-8 flex items-center justify-between shrink-0 z-10 hidden lg:flex text-xs text-slate-500">
           <div className="flex items-center gap-2">
-            <span className="font-bold text-[#172033]">Portal BTQ</span>
+            <span className="font-semibold text-[#172033]">Portal BTQ</span>
             <span>•</span>
-            <span className="font-semibold text-[#950415]">SMP Negeri 102 Jakarta</span>
+            <span className="font-medium text-[#950415]">SMP Negeri 102 Jakarta</span>
           </div>
-          <div className="flex items-center gap-3 text-slate-400">
+          <div className="flex items-center gap-3 text-slate-500">
             <span className="w-2 h-2 bg-[#0362D0] rounded-full animate-pulse" />
             <span>Sistem Terkoneksi & Aktif</span>
           </div>

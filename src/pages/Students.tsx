@@ -448,81 +448,85 @@ export function Students() {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-xs font-extrabold text-[#172033] mb-1">Nama Lengkap Santri</label>
-                <Input 
-                  required
-                  placeholder="Contoh: MUHAMMAD FAIZ"
-                  value={formData.name}
-                  onChange={e => setFormData({ ...formData, name: e.target.value })}
-                  className="font-semibold text-sm"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
+              <div className="bg-[#F5F6F8] p-4 rounded-xl border border-[#E6E8EC] space-y-4">
                 <div>
-                  <label className="block text-xs font-extrabold text-[#172033] mb-1">NIS (Opsional)</label>
+                  <label className="block text-xs font-extrabold text-[#172033] mb-1">Nama Lengkap Santri</label>
                   <Input 
-                    placeholder="Contoh: 1020123"
-                    value={formData.nis}
-                    onChange={e => setFormData({ ...formData, nis: e.target.value })}
-                    className="font-medium text-xs"
+                    required
+                    placeholder="Contoh: MUHAMMAD FAIZ"
+                    value={formData.name}
+                    onChange={e => setFormData({ ...formData, name: e.target.value })}
+                    className="font-semibold text-sm"
                   />
                 </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-extrabold text-[#172033] mb-1">NIS (Opsional)</label>
+                    <Input 
+                      placeholder="Contoh: 1020123"
+                      value={formData.nis}
+                      onChange={e => setFormData({ ...formData, nis: e.target.value })}
+                      className="font-medium text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-extrabold text-[#172033] mb-1">Jenis Kelamin</label>
+                    <Select 
+                      value={formData.gender}
+                      onChange={e => setFormData({ ...formData, gender: e.target.value })}
+                      className="font-medium text-xs"
+                    >
+                      <option value="L">Laki-laki (L)</option>
+                      <option value="P">Perempuan (P)</option>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-[#F5F6F8] p-4 rounded-xl border border-[#E6E8EC] space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-extrabold text-[#172033] mb-1">Kelas</label>
+                    <Input 
+                      placeholder="Contoh: 7A, 8B, 9D"
+                      value={formData.class}
+                      onChange={e => setFormData({ ...formData, class: e.target.value.toUpperCase() })}
+                      className="font-medium text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-extrabold text-[#172033] mb-1">Status</label>
+                    <Select 
+                      value={formData.status}
+                      onChange={e => setFormData({ ...formData, status: e.target.value })}
+                      className="font-medium text-xs"
+                    >
+                      <option value="Aktif">Aktif</option>
+                      <option value="Non-Aktif">Non-Aktif</option>
+                    </Select>
+                  </div>
+                </div>
+
                 <div>
-                  <label className="block text-xs font-extrabold text-[#172033] mb-1">Jenis Kelamin</label>
+                  <label className="block text-xs font-extrabold text-[#172033] mb-1">Kelompok BTQ</label>
                   <Select 
-                    value={formData.gender}
-                    onChange={e => setFormData({ ...formData, gender: e.target.value })}
+                    value={formData.groupId}
+                    onChange={e => setFormData({ ...formData, groupId: e.target.value })}
                     className="font-medium text-xs"
                   >
-                    <option value="L">Laki-laki (L)</option>
-                    <option value="P">Perempuan (P)</option>
+                    {groups.map(g => (
+                      <option key={g.id} value={g.id}>{g.name}</option>
+                    ))}
                   </Select>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-extrabold text-[#172033] mb-1">Kelas</label>
-                  <Input 
-                    placeholder="Contoh: 7A, 8B, 9D"
-                    value={formData.class}
-                    onChange={e => setFormData({ ...formData, class: e.target.value.toUpperCase() })}
-                    className="font-medium text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-extrabold text-[#172033] mb-1">Status</label>
-                  <Select 
-                    value={formData.status}
-                    onChange={e => setFormData({ ...formData, status: e.target.value })}
-                    className="font-medium text-xs"
-                  >
-                    <option value="Aktif">Aktif</option>
-                    <option value="Non-Aktif">Non-Aktif</option>
-                  </Select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-extrabold text-[#172033] mb-1">Kelompok BTQ</label>
-                <Select 
-                  value={formData.groupId}
-                  onChange={e => setFormData({ ...formData, groupId: e.target.value })}
-                  className="font-medium text-xs"
-                >
-                  {groups.map(g => (
-                    <option key={g.id} value={g.id}>{g.name}</option>
-                  ))}
-                </Select>
-              </div>
-
-              <div className="pt-2 flex justify-end gap-2 border-t border-[#E6E8EC]">
+              <div className="pt-2 flex justify-end gap-2 border-t border-[#E6E8EC] mt-4 pt-4">
                 <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)} className="font-bold border-[#E6E8EC]">
                   Batal
                 </Button>
-                <Button type="submit" disabled={isSubmitting} className="bg-[#0362D0] hover:bg-[#0252b3] text-white font-bold">
+                <Button type="submit" disabled={isSubmitting} className="btn-primary font-bold">
                   {isSubmitting ? 'Saving...' : editingStudent ? 'Simpan Perubahan' : 'Tambah Santri'}
                 </Button>
               </div>
