@@ -408,44 +408,44 @@ mockGroups.forEach((group) => {
   }
 });
 
-// Generate some attendance data
+// Kehadiran santri: Sesuai kurikulum telah berjalan 2 pekan resmi (Pekan 1: 15 Agustus 2026 & Pekan 2: 22 Agustus 2026)
 export const mockStudentAttendance: StudentAttendance[] = [];
 export const mockProgress: Progress[] = [];
 
-const today = new Date();
-const dates = [
-  subDays(today, 21),
-  subDays(today, 14),
-  subDays(today, 7),
-  today,
+export const standardCompletedWeeks = [
+  { date: '2026-08-15', meetingNumber: 1, label: 'Pekan 1' },
+  { date: '2026-08-22', meetingNumber: 2, label: 'Pekan 2' }
 ];
 
 mockStudents.forEach(student => {
-  // Attendance
-  dates.forEach(date => {
-    const rand = Math.random();
+  const studentNum = parseInt(student.id.replace(/\D/g, ''), 10) || 1;
+
+  // Generate real data presensi santri untuk 2 pekan yang sudah berjalan
+  standardCompletedWeeks.forEach(({ date, meetingNumber }) => {
+    // Hash deterministik agar data konsisten dan stabil (rata-rata kehadiran ~83%)
+    const seed = (studentNum * 19 + meetingNumber * 37) % 100;
     let status: 'Hadir' | 'Izin' | 'Sakit' | 'Alpa' = 'Hadir';
-    if (rand > 0.95) status = 'Alpa';
-    else if (rand > 0.90) status = 'Sakit';
-    else if (rand > 0.85) status = 'Izin';
+    if (seed > 95) status = 'Alpa';
+    else if (seed > 89) status = 'Sakit';
+    else if (seed > 81) status = 'Izin';
     
     mockStudentAttendance.push({
-      id: `sa_${student.id}_${format(date, 'yyyyMMdd')}`,
+      id: `sa_${student.id}_m${meetingNumber}`,
       studentId: student.id,
       groupId: student.groupId,
-      date: date.toISOString(),
+      date,
+      meetingNumber,
       status,
     });
   });
 
-  // Progress per stage (Tahap 1, 2, 3)
+  // Progress per stage (Hanya Tahap 1 & 2 yang sudah terlaksana, Sesi 3 dst belum berjalan)
   const group = mockGroups.find(g => g.id === student.groupId);
   const gradeId = group?.gradeId || 'grade1';
   const prefix = gradeId === 'grade1' ? 'g1' : gradeId === 'grade2' ? 'g2' : 'g3';
   const isGrade3 = gradeId === 'grade3';
 
   // Seed student trend profile deterministically by student index
-  const studentNum = parseInt(student.id.replace(/\D/g, ''), 10) || 1;
   const trendType = (studentNum % 5 === 0) ? 'menurun' : (studentNum % 4 === 0) ? 'konsisten' : 'meningkat';
 
   let s1Reading = 70 + (studentNum % 15);
@@ -455,7 +455,7 @@ mockStudents.forEach(student => {
 
   const sessionData = [
     { 
-      date: subMonths(today, 2), 
+      date: '2026-08-15', 
       sessionNum: 1,
       r: s1Reading,
       t: s1Tajwid,
@@ -463,24 +463,16 @@ mockStudents.forEach(student => {
       m: s1Memorization
     },
     { 
-      date: subMonths(today, 1), 
+      date: '2026-08-22', 
       sessionNum: 2,
       r: trendType === 'menurun' ? s1Reading - 2 : trendType === 'konsisten' ? s1Reading : s1Reading + 4,
       t: trendType === 'menurun' ? s1Tajwid - 3 : trendType === 'konsisten' ? s1Tajwid : s1Tajwid + 5,
       w: trendType === 'menurun' ? s1Writing - 1 : trendType === 'konsisten' ? s1Writing : s1Writing + 3,
       m: isGrade3 ? (trendType === 'menurun' ? s1Memorization - 2 : trendType === 'konsisten' ? s1Memorization : s1Memorization + 4) : 0
-    },
-    { 
-      date: today, 
-      sessionNum: 3,
-      r: trendType === 'menurun' ? s1Reading - 6 : trendType === 'konsisten' ? s1Reading : s1Reading + 9,
-      t: trendType === 'menurun' ? s1Tajwid - 7 : trendType === 'konsisten' ? s1Tajwid : s1Tajwid + 10,
-      w: trendType === 'menurun' ? s1Writing - 5 : trendType === 'konsisten' ? s1Writing : s1Writing + 7,
-      m: isGrade3 ? (trendType === 'menurun' ? s1Memorization - 6 : trendType === 'konsisten' ? s1Memorization : s1Memorization + 8) : 0
     }
   ];
 
-  const grade3Surahs = ['QS. An-Nas s.d. Al-Falaq', 'QS. Al-Ikhlas s.d. Al-Lahab', 'QS. An-Nashr s.d. Al-Kafirun'];
+  const grade3Surahs = ['QS. An-Nas s.d. Al-Falaq', 'QS. Al-Ikhlas s.d. Al-Lahab'];
 
   sessionData.forEach(({ date, sessionNum, r, t, w, m }) => {
     const reading = isGrade3 ? Math.min(98, Math.max(60, r)) : 0;
@@ -500,8 +492,9 @@ mockStudents.forEach(student => {
       studentId: student.id,
       groupId: student.groupId,
       sessionId: `${prefix}-s${sessionNum}`,
+      meetingNumber: sessionNum,
       semester: 1,
-      date: date.toISOString().split('T')[0],
+      date,
       reading,
       tajwid,
       memorization,
@@ -562,14 +555,14 @@ export const mockCurriculum: Curriculum[] = [
 
 export const mockMentorAttendance: MentorAttendance[] = [];
 mockMentors.forEach(mentor => {
-  dates.forEach(date => {
+  standardCompletedWeeks.forEach(({ date, meetingNumber }) => {
     mockMentorAttendance.push({
-      id: `ma_${mentor.id}_${format(date, 'yyyyMMdd')}`,
+      id: `ma_${mentor.id}_m${meetingNumber}`,
       mentorId: mentor.id,
       groupId: mentor.groupId || '',
-      date: date.toISOString(),
-      time: '15:25',
-      status: Math.random() > 0.1 ? 'Hadir' : 'Izin',
+      date,
+      time: '07:15',
+      status: 'Hadir',
     });
   });
 });

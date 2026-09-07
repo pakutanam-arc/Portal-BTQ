@@ -42,10 +42,11 @@ export interface Mentor {
 export type AttendanceStatus = 'Hadir' | 'Izin' | 'Sakit' | 'Alpa';
 
 export interface StudentAttendance {
-  id: string;
+  id?: string;
   studentId: string;
   groupId: string;
   date: string;
+  meetingNumber?: number;
   status: AttendanceStatus;
   notes?: string;
 }
@@ -65,6 +66,7 @@ export interface Progress {
   studentId: string;
   groupId?: string;
   sessionId?: string;
+  meetingNumber?: number;
   semester?: number;
   date: string;
   reading: number; // 0-100

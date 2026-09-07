@@ -32,6 +32,8 @@ function AdminRoute({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+import { PublicStudentProfile } from './pages/PublicStudentProfile';
+
 function AppRoutes() {
   const { currentUser, loading } = useAuth();
 
@@ -47,6 +49,9 @@ function AppRoutes() {
   return (
     <Router>
       <Routes>
+        {/* Public Routes */}
+        <Route path="/student/card/:studentId" element={<PublicStudentProfile />} />
+        
         {currentUser ? (
           <>
             <Route path="/" element={<MainLayout />}>

@@ -85,9 +85,9 @@ export function Progress() {
   useEffect(() => {
     if (availableSessions.length > 0) {
       if (!availableSessions.find(s => s.id === selectedSessionId)) {
-        // Default to active session 3 if available in semester 1, else session 2, else first
-        const defaultSession = availableSessions.find(s => s.sessionNumber === 3) || 
-                               availableSessions.find(s => s.sessionNumber === 2) || 
+        // Default to session 2 if available in semester 1, else session 1
+        const defaultSession = availableSessions.find(s => s.sessionNumber === 2) || 
+                               availableSessions.find(s => s.sessionNumber === 1) || 
                                availableSessions[0];
         setSelectedSessionId(defaultSession.id);
       }
@@ -160,6 +160,9 @@ export function Progress() {
     setSaving(true);
     try {
       const groupStudents = students;
+      const sessionObj = masterSessions.find(s => s.id === selectedSessionId);
+      const meetingNum = sessionObj?.sessionNumber || 1;
+      const recordDate = meetingNum === 1 ? '2026-08-15' : meetingNum === 2 ? '2026-08-22' : new Date().toISOString().split('T')[0];
       
       for (const student of groupStudents) {
         const p = sessionProgress[student.id];
@@ -169,8 +172,9 @@ export function Progress() {
             studentId: student.id,
             groupId: selectedGroupId,
             sessionId: selectedSessionId,
+            meetingNumber: meetingNum,
             semester: selectedSemester,
-            date: new Date().toISOString().split('T')[0],
+            date: recordDate,
             reading: p.reading || 0,
             tajwid: p.tajwid || 0,
             memorizedSurah: p.memorizedSurah || '',

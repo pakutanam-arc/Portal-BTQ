@@ -148,3 +148,106 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #94A3B8;
 }
+
+@keyframes scan {
+  0% { transform: translateY(-80px); }
+  50% { transform: translateY(80px); }
+  100% { transform: translateY(-80px); }
+}
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 8mm;
+  }
+  
+  *, *::before, *::after {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  html, body, #root, .main-layout, main {
+    background: transparent !important;
+    background-color: white !important;
+    height: auto !important;
+    min-height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow: visible !important;
+  }
+
+  /* Print specific utilities */
+  .print-page-break {
+    page-break-after: always !important;
+    break-after: page !important;
+  }
+
+  .print-avoid-break {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .print-a4-container {
+    display: block !important;
+    width: 100% !important;
+    max-width: 194mm !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    background: white !important;
+  }
+
+  .print-a4-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    column-gap: 8mm !important;
+    row-gap: 6mm !important;
+    width: 100% !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    justify-items: center !important;
+    align-items: start !important;
+  }
+
+  .print-card-wrapper {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    width: 56mm !important;
+    height: 88mm !important;
+    box-sizing: border-box !important;
+    position: relative !important;
+  }
+
+  /* Specific QR Code print styles for maximum readability & crispness */
+  .student-id-qr-container {
+    background-color: #ffffff !important;
+    width: 14mm !important;
+    height: 14mm !important;
+    min-width: 14mm !important;
+    min-height: 14mm !important;
+    max-width: 14mm !important;
+    max-height: 14mm !important;
+    padding: 0.5mm !important;
+    border-radius: 2px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+  }
+
+  .student-id-qr-svg {
+    width: 100% !important;
+    height: 100% !important;
+    max-width: 13mm !important;
+    max-height: 13mm !important;
+    shape-rendering: crispEdges !important;
+    image-rendering: pixelated !important;
+  }
+}

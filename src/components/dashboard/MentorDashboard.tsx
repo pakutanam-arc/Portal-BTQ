@@ -32,6 +32,7 @@ import {
   getMentors, 
   getStudentsByGroup, 
   getAllStudentProgress,
+  getAllStudentAttendance,
   getTeachingJournals,
   Group, 
   Mentor, 
@@ -225,10 +226,11 @@ export function MentorDashboard() {
 
         if (targetGroup) {
           // Fetch students ONLY for this mentor's group
-          const [groupStudents, allProg, journalsRes] = await Promise.all([
+          const [groupStudents, allProg, journalsRes, groupAttendance] = await Promise.all([
             getStudentsByGroup(targetGroup.id),
             getAllStudentProgress(),
-            getTeachingJournals(targetGroup.id, 5)
+            getTeachingJournals(targetGroup.id, 5),
+            getAllStudentAttendance()
           ]);
 
           if (!isMounted) return;
@@ -261,14 +263,13 @@ export function MentorDashboard() {
               return new Date(a.date).getTime() - new Date(b.date).getTime();
             });
 
-            // Baseline fallback jika belum tersimpan di db
+            // Baseline fallback jika belum ada data di db
             let validHistory: StudentProgress[] = sortedRaw;
             if (validHistory.length === 0) {
               const studentNum = idx + 1;
               const trendType = (studentNum % 5 === 0) ? 'menurun' : (studentNum % 4 === 0) ? 'konsisten' : 'meningkat';
               const s1 = 70 + (studentNum % 14);
               const s2 = trendType === 'menurun' ? s1 - 3 : trendType === 'konsisten' ? s1 : s1 + 5;
-              const s3 = trendType === 'menurun' ? s1 - 6 : trendType === 'konsisten' ? s1 : s1 + 10;
 
               validHistory = [
                 {
@@ -276,7 +277,8 @@ export function MentorDashboard() {
                   groupId: targetGroup.id,
                   sessionId: `${prefix}-s1`,
                   semester: 1,
-                  date: new Date(Date.now() - 1000 * 60 * 60 * 24 * 28).toISOString().split('T')[0],
+                  meetingNumber: 1,
+                  date: '2026-08-15',
                   reading: isGrade3 ? s1 : 0,
                   tajwid: Math.max(60, s1 - 2),
                   writing: Math.min(95, s1 + 1),
@@ -288,25 +290,14 @@ export function MentorDashboard() {
                   groupId: targetGroup.id,
                   sessionId: `${prefix}-s2`,
                   semester: 1,
-                  date: new Date(Date.now() - 1000 * 60 * 60 * 24 * 14).toISOString().split('T')[0],
+                  meetingNumber: 2,
+                  date: '2026-08-22',
                   reading: isGrade3 ? s2 : 0,
                   tajwid: Math.max(60, s2 - 2),
                   writing: Math.min(95, s2 + 1),
                   memorization: isGrade3 ? s2 : 0,
                   total: isGrade3 ? s2 : Math.round((Math.max(60, s2 - 2) + Math.min(95, s2 + 1)) / 2),
-                },
-                {
-                  studentId: s.id,
-                  groupId: targetGroup.id,
-                  sessionId: `${prefix}-s3`,
-                  semester: 1,
-                  date: new Date().toISOString().split('T')[0],
-                  reading: isGrade3 ? s3 : 0,
-                  tajwid: Math.max(60, s3 - 2),
-                  writing: Math.min(95, s3 + 1),
-                  memorization: isGrade3 ? s3 : 0,
-                  total: isGrade3 ? s3 : Math.round((Math.max(60, s3 - 2) + Math.min(95, s3 + 1)) / 2),
-                },
+                }
               ];
             }
 
@@ -354,10 +345,16 @@ export function MentorDashboard() {
               statusCat = 'Perlu Bimbingan';
             }
 
-            const att = (idx === 3 || idx === 8) ? 75 : (idx === 6 ? 83 : 92 + (idx % 8));
+            // Hitung persentase kehadiran nyata dari data presensi santri
+            const sAttRecords = (groupAttendance || []).filter(a => a.studentId === s.id);
+            let att = 85;
+            if (sAttRecords.length > 0) {
+              const hadirCount = sAttRecords.filter(a => a.status === 'Hadir').length;
+              att = Math.round((hadirCount / sAttRecords.length) * 100);
+            }
 
             // Capaian materi sesi terkini berdasarkan silabus
-            let currentStageText = `P${latestSession?.sessionNumber || 3}: ${assignedGrade.programName}`;
+            let currentStageText = `P${latestSession?.sessionNumber || 2}: ${assignedGrade.programName}`;
             if (latestSession) {
               if (isGrade3) {
                 currentStageText = latestSession.memorizedSurah 
@@ -393,8 +390,18 @@ export function MentorDashboard() {
 
     loadMentorDashboardData();
 
+    // Dengarkan event pembaruan presensi agar otomatis sinkron saat sesi/pekan baru diinput
+    const handleAttendanceUpdated = () => {
+      loadMentorDashboardData();
+    };
+
+    window.addEventListener('attendance-updated', handleAttendanceUpdated);
+    window.addEventListener('storage', handleAttendanceUpdated);
+
     return () => {
       isMounted = false;
+      window.removeEventListener('attendance-updated', handleAttendanceUpdated);
+      window.removeEventListener('storage', handleAttendanceUpdated);
     };
   }, [currentUser, userData]);
 

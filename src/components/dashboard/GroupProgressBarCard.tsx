@@ -26,7 +26,7 @@ export const GroupProgressBarCard = React.memo(function GroupProgressBarCard({ d
             <BarChart3 size={16} className="text-[#0362D0]" />
             <h3 className="font-bold text-[#172033] text-base">Progress BTQ per Kelompok</h3>
           </div>
-          <p className="text-sm font-medium text-slate-500">Peringkat ketercapaian silabus riil (Pekan 2)</p>
+          <p className="text-sm font-medium text-slate-500">Peringkat ketercapaian silabus</p>
         </div>
         <span className="text-xs font-bold text-[#0362D0] bg-[#0362D0]/10 px-3 py-1 rounded-xl border border-[#0362D0]/20 flex items-center gap-1">
           <TrendingUp size={13} className="text-[#0362D0]" />

@@ -536,7 +536,7 @@ export const GroupSummaryTable = React.memo(function GroupSummaryTable({ groups 
                 <th className="py-3.5 px-3">Mentor</th>
                 <th className="py-3.5 px-3 text-center">Siswa</th>
                 <th className="py-3.5 px-3 text-center">Kehadiran</th>
-                <th className="py-3.5 px-4">Tren Sesi (P1 → P2 Real Data)</th>
+                <th className="py-3.5 px-4">Tren Sesi Mingguan (Data Riil)</th>
                 <th className="py-3.5 px-5 text-right">Status</th>
               </tr>
             </thead>

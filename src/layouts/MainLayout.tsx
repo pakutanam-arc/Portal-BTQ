@@ -13,18 +13,18 @@ export function MainLayout() {
   }, [pathname]);
 
   return (
-    <div className="min-h-screen bg-[#F5F6F8] text-[#172033] flex font-sans w-full">
+    <div className="min-h-screen bg-[#F5F6F8] text-[#172033] flex font-sans w-full print:bg-white print:min-h-0 print:block">
       
       {/* Sidebar Component (Desktop Only) */}
-      <div className="hidden lg:block fixed inset-y-0 left-0 z-50 w-64 border-r border-[#E6E8EC]">
+      <div className="hidden lg:block fixed inset-y-0 left-0 z-50 w-64 border-r border-[#E6E8EC] print:hidden">
         <Sidebar />
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-h-screen w-full relative lg:pl-64 pb-16 lg:pb-0">
+      <div className="flex-1 flex flex-col min-h-screen w-full relative lg:pl-64 pb-16 lg:pb-0 print:pl-0 print:pb-0 print:min-h-0 print:block">
         
         {/* Top Navbar */}
-        <div className="flex items-center bg-white border-b border-[#E6E8EC] sticky top-0 z-30 shrink-0 h-16 w-full shadow-xs relative">
+        <div className="flex items-center bg-white border-b border-[#E6E8EC] sticky top-0 z-30 shrink-0 h-16 w-full shadow-xs relative print:hidden">
           {/* Subtle Maroon & Gold Accent Line Under Navbar */}
           <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-[#0362D0] via-[#C99A2E] to-[#950415]" />
           
@@ -51,12 +51,12 @@ export function MainLayout() {
         </div>
 
         {/* Page Content */}
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 xl:px-10 relative z-0 mx-auto w-full max-w-[1440px]">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 xl:px-10 relative z-0 mx-auto w-full max-w-[1440px] print:p-0 print:m-0 print:max-w-none print:w-full">
           <Outlet />
         </main>
         
         {/* Footer (Desktop Only) */}
-        <div className="h-10 bg-white border-t border-[#E6E8EC] px-4 lg:px-8 flex items-center justify-between shrink-0 z-10 hidden lg:flex text-xs text-slate-500">
+        <div className="h-10 bg-white border-t border-[#E6E8EC] px-4 lg:px-8 flex items-center justify-between shrink-0 z-10 hidden lg:flex text-xs text-slate-500 print:hidden">
           <div className="flex items-center gap-2">
             <span className="font-semibold text-[#172033]">Portal BTQ</span>
             <span>•</span>
@@ -69,7 +69,9 @@ export function MainLayout() {
         </div>
 
         {/* Bottom Nav (Mobile Only) */}
-        <BottomNav />
+        <div className="print:hidden">
+          <BottomNav />
+        </div>
       </div>
     </div>
   );

@@ -2,49 +2,73 @@ import React, { useState, useMemo } from 'react';
 import { Filter, UserCheck } from 'lucide-react';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from 'recharts';
 
-type AttendanceFilter = 'today' | 'week' | 'month';
+export type AttendanceFilter = 'thisWeek' | 'month' | 'sixMonths' | 'all';
 
-interface AttendanceSlice {
+export interface AttendanceSlice {
   name: string;
   value: number;
+  count: number;
   color: string;
 }
 
-const ATTENDANCE_DATA_MAP: Record<AttendanceFilter, AttendanceSlice[]> = {
-  today: [
-    { name: 'Hadir', value: 91, color: '#0362D0' },
-    { name: 'Izin', value: 4, color: '#C99A2E' },
-    { name: 'Sakit', value: 3, color: '#94A3B8' },
-    { name: 'Alpa', value: 2, color: '#950415' }
-  ],
-  week: [
-    { name: 'Hadir', value: 93, color: '#0362D0' },
-    { name: 'Izin', value: 3, color: '#C99A2E' },
-    { name: 'Sakit', value: 2, color: '#94A3B8' },
-    { name: 'Alpa', value: 2, color: '#950415' }
-  ],
-  month: [
-    { name: 'Hadir', value: 89, color: '#0362D0' },
-    { name: 'Izin', value: 5, color: '#C99A2E' },
-    { name: 'Sakit', value: 4, color: '#94A3B8' },
-    { name: 'Alpa', value: 2, color: '#950415' }
-  ]
-};
+export interface AttendancePeriodStats {
+  rate: number;
+  present: number;
+  permission: number;
+  sick: number;
+  absent: number;
+  total: number;
+  slices: AttendanceSlice[];
+}
 
-const SUMMARY_MAP: Record<AttendanceFilter, { percentage: string; presentText: string }> = {
-  today: { percentage: '91%', presentText: '91% Kehadiran' },
-  week: { percentage: '93%', presentText: '93% Kehadiran' },
-  month: { percentage: '89%', presentText: '89% Kehadiran' }
-};
+export interface AttendanceChartCardProps {
+  periodData: Record<AttendanceFilter, AttendancePeriodStats>;
+  totalStudents?: number;
+  thisWeekMeetingLabel?: string;
+}
 
-export const AttendanceChartCard = React.memo(function AttendanceChartCard() {
-  const [attendanceFilter, setAttendanceFilter] = useState<AttendanceFilter>('today');
+export const AttendanceChartCard = React.memo(function AttendanceChartCard({ 
+  periodData,
+  totalStudents = 155,
+  thisWeekMeetingLabel = 'pertemuan pekan ini'
+}: AttendanceChartCardProps) {
+  const [attendanceFilter, setAttendanceFilter] = useState<AttendanceFilter>('thisWeek');
 
-  const currentAttendanceData = useMemo(() => {
-    return ATTENDANCE_DATA_MAP[attendanceFilter];
-  }, [attendanceFilter]);
+  const activeStats = useMemo(() => {
+    return periodData[attendanceFilter] || periodData.thisWeek;
+  }, [periodData, attendanceFilter]);
 
-  const summary = SUMMARY_MAP[attendanceFilter];
+  const filterContextText = useMemo(() => {
+    if (attendanceFilter === 'thisWeek') {
+      return {
+        scope: `${totalStudents} siswa dipantau pada ${thisWeekMeetingLabel}`,
+        absentText: activeStats.absent > 0 
+          ? `${activeStats.absent} siswa alpa (${activeStats.slices.find(s => s.name === 'Alpa')?.value || 0}%)`
+          : 'Tidak ada siswa yang alpa (0%)'
+      };
+    } else if (attendanceFilter === 'month') {
+      return {
+        scope: `${activeStats.total} rekaman presensi kumulatif bulan ini`,
+        absentText: activeStats.absent > 0
+          ? `${activeStats.absent} siswa alpa (${activeStats.slices.find(s => s.name === 'Alpa')?.value || 0}%)`
+          : 'Tidak ada siswa yang alpa (0%)'
+      };
+    } else if (attendanceFilter === 'sixMonths') {
+      return {
+        scope: `${activeStats.total} rekaman presensi semester (6 bulan)`,
+        absentText: activeStats.absent > 0
+          ? `${activeStats.absent} siswa alpa (${activeStats.slices.find(s => s.name === 'Alpa')?.value || 0}%)`
+          : 'Tidak ada siswa yang alpa (0%)'
+      };
+    } else {
+      return {
+        scope: `${activeStats.total} total rekaman presensi keseluruhan`,
+        absentText: activeStats.absent > 0
+          ? `${activeStats.absent} siswa alpa (${activeStats.slices.find(s => s.name === 'Alpa')?.value || 0}%)`
+          : 'Tidak ada siswa yang alpa (0%)'
+      };
+    }
+  }, [attendanceFilter, totalStudents, activeStats, thisWeekMeetingLabel]);
 
   return (
     <div id="dashboard-attendance-chart-card" className="bg-white p-5 rounded-2xl border border-[#E6E8EC] flex flex-col justify-between shadow-xs">
@@ -54,7 +78,7 @@ export const AttendanceChartCard = React.memo(function AttendanceChartCard() {
             <UserCheck size={16} className="text-[#0362D0]" />
             <h3 className="font-bold text-[#172033] text-base">Kehadiran Siswa</h3>
           </div>
-          <p className="text-sm text-slate-500 font-medium">Distribusi rekap presensi harian santri</p>
+          <p className="text-sm text-slate-500 font-medium">Distribusi rekap presensi santri</p>
         </div>
         {/* Filter Dropdown */}
         <div className="flex items-center gap-1.5 bg-[#F5F6F8] border border-[#E6E8EC] rounded-xl px-3 py-1">
@@ -66,9 +90,10 @@ export const AttendanceChartCard = React.memo(function AttendanceChartCard() {
             aria-label="Filter Kehadiran Siswa"
             className="text-xs font-semibold text-[#172033] bg-transparent outline-none cursor-pointer border-none p-0 focus:ring-0"
           >
-            <option value="today">Hari Ini</option>
-            <option value="week">Minggu Ini</option>
+            <option value="thisWeek">Minggu Ini</option>
             <option value="month">Bulan Ini</option>
+            <option value="sixMonths">6 Bulan</option>
+            <option value="all">Keseluruhan</option>
           </select>
         </div>
       </div>
@@ -79,7 +104,7 @@ export const AttendanceChartCard = React.memo(function AttendanceChartCard() {
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
-                data={currentAttendanceData}
+                data={activeStats.slices}
                 cx="50%"
                 cy="50%"
                 innerRadius={50}
@@ -87,7 +112,7 @@ export const AttendanceChartCard = React.memo(function AttendanceChartCard() {
                 paddingAngle={3}
                 dataKey="value"
               >
-                {currentAttendanceData.map((entry, index) => (
+                {activeStats.slices.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={entry.color} />
                 ))}
               </Pie>
@@ -98,7 +123,7 @@ export const AttendanceChartCard = React.memo(function AttendanceChartCard() {
             </PieChart>
           </ResponsiveContainer>
           <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-            <span className="text-2xl font-bold text-[#172033]">{summary.percentage}</span>
+            <span className="text-2xl font-bold text-[#172033]">{activeStats.rate}%</span>
             <span className="text-xs text-slate-500 font-medium uppercase tracking-wide mt-0.5">Hadir</span>
           </div>
         </div>
@@ -107,19 +132,19 @@ export const AttendanceChartCard = React.memo(function AttendanceChartCard() {
         <div className="md:col-span-6 space-y-3">
           <div className="bg-[#0362D0]/5 p-3.5 rounded-xl border border-[#0362D0]/10">
             <p className="text-sm font-semibold text-[#0362D0] leading-none">
-              {summary.presentText}
+              {activeStats.rate}% Kehadiran
             </p>
             <p className="text-xs text-slate-500 font-medium mt-1.5">
-              126 siswa dipantau hari ini
+              {filterContextText.scope}
             </p>
-            <p className="text-xs text-[#950415] font-medium mt-1">
-              11 siswa belum hadir / alpa
+            <p className={`text-xs font-medium mt-1 ${activeStats.absent > 0 ? 'text-[#950415]' : 'text-emerald-700'}`}>
+              {filterContextText.absentText}
             </p>
           </div>
 
           {/* Legends list */}
           <div className="grid grid-cols-2 gap-2 text-xs font-medium text-slate-600">
-            {currentAttendanceData.map((item, idx) => (
+            {activeStats.slices.map((item, idx) => (
               <div key={idx} className="flex items-center gap-2">
                 <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
                 <span>{item.name} <span className="font-semibold text-[#172033]">({item.value}%)</span></span>

@@ -100,12 +100,27 @@ export function StudentAttendance() {
     if (availableSessions.length > 0) {
       const match = availableSessions.find(s => s.id === selectedSessionId);
       if (!match) {
-        // Default to active session 3 in semester 1, else first
-        const defaultSession = availableSessions.find(s => s.sessionNumber === 3) || availableSessions[0];
+        // Default to session 2 (Pekan 2, 22 Agustus) in semester 1, else first
+        const defaultSession = availableSessions.find(s => s.sessionNumber === 2) || availableSessions[0];
         setSelectedSessionId(defaultSession.id);
+        if (selectedSemester === 1) {
+          if (defaultSession.sessionNumber === 1) setSelectedDate('2026-08-15');
+          else if (defaultSession.sessionNumber === 2) setSelectedDate('2026-08-22');
+          else if (defaultSession.sessionNumber === 3) setSelectedDate('2026-08-29');
+        }
       }
     }
   }, [selectedGroup, currentGradeId, selectedSemester]);
+
+  const handleSessionChange = (sessId: string) => {
+    setSelectedSessionId(sessId);
+    const session = availableSessions.find(s => s.id === sessId);
+    if (session && selectedSemester === 1) {
+      if (session.sessionNumber === 1) setSelectedDate('2026-08-15');
+      else if (session.sessionNumber === 2) setSelectedDate('2026-08-22');
+      else if (session.sessionNumber === 3) setSelectedDate('2026-08-29');
+    }
+  };
 
   // Load students and attendance records
   useEffect(() => {
@@ -116,8 +131,11 @@ export function StudentAttendance() {
         const students = await getStudentsByGroup(selectedGroup);
         setGroupStudents(students);
         
-        // Load existing attendance
-        const attendanceRecords = await getStudentAttendance(selectedGroup, selectedDate);
+        // Load existing attendance by meetingNumber or date
+        const meetingNum = activeSessionObj?.sessionNumber || (
+          selectedDate === '2026-08-15' ? 1 : selectedDate === '2026-08-22' ? 2 : 3
+        );
+        const attendanceRecords = await getStudentAttendance(selectedGroup, selectedDate, meetingNum);
         const newAttendanceState: Record<string, { status: string, notes: string }> = {};
         
         students.forEach(s => {
@@ -137,7 +155,7 @@ export function StudentAttendance() {
       }
     }
     loadGroupData();
-  }, [selectedGroup, selectedDate]);
+  }, [selectedGroup, selectedDate, activeSessionObj?.sessionNumber]);
 
   const handleStatusChange = (studentId: string, status: string) => {
     setAttendance(prev => ({
@@ -171,10 +189,14 @@ export function StudentAttendance() {
     if (!selectedGroup || groupStudents.length === 0) return;
     setSaving(true);
     try {
+      const meetingNum = activeSessionObj?.sessionNumber || (
+        selectedDate === '2026-08-15' ? 1 : selectedDate === '2026-08-22' ? 2 : 3
+      );
       const recordsToSave = groupStudents.map(student => ({
         studentId: student.id,
         groupId: selectedGroup,
         date: selectedDate,
+        meetingNumber: meetingNum,
         status: attendance[student.id]?.status || 'Hadir',
         notes: attendance[student.id]?.notes || ''
       }));
@@ -326,7 +348,7 @@ export function StudentAttendance() {
               <label className="text-xs font-black text-[#172033] uppercase tracking-wider">Materi Kurikulum</label>
               <Select 
                 value={selectedSessionId}
-                onChange={(e) => setSelectedSessionId(e.target.value)}
+                onChange={(e) => handleSessionChange(e.target.value)}
                 className="w-full font-bold text-xs"
               >
                 {availableSessions.map(s => {

@@ -1,6 +1,6 @@
 import { collection, doc, getDocs, getDoc, addDoc, updateDoc, deleteDoc, query, where, orderBy, setDoc, onSnapshot, limit, startAfter, QueryDocumentSnapshot, getCountFromServer } from 'firebase/firestore';
 import { db, auth } from './firebase';
-import { mockGroups, mockStudents, mockMentors, mockStudentAttendance, mockProgress } from './mockData';
+import { mockGroups, mockStudents, mockMentors, mockStudentAttendance, mockProgress, mockMentorAttendance } from './mockData';
 
 export enum OperationType {
   CREATE = 'create',
@@ -86,7 +86,24 @@ const LOCAL_STORAGE_KEY_PROGRESS = 'sibtq_student_progress';
 function getLocalAttendance(): StudentAttendance[] {
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_KEY_ATTENDANCE);
-    return raw ? JSON.parse(raw) : mockStudentAttendance;
+    if (raw) {
+      const parsed: StudentAttendance[] = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        // Gabungkan dengan baseline mockStudentAttendance (Pekan 1: 15 Agu & Pekan 2: 22 Agu)
+        const mergedMap = new Map<string, StudentAttendance>();
+        mockStudentAttendance.forEach(r => {
+          const key = r.meetingNumber ? `${r.studentId}_m${r.meetingNumber}` : `${r.studentId}_${r.date.split('T')[0]}`;
+          mergedMap.set(key, r);
+        });
+        parsed.forEach(r => {
+          const key = r.meetingNumber ? `${r.studentId}_m${r.meetingNumber}` : `${r.studentId}_${r.date.split('T')[0]}`;
+          mergedMap.set(key, r);
+        });
+        return Array.from(mergedMap.values());
+      }
+    }
+    localStorage.setItem(LOCAL_STORAGE_KEY_ATTENDANCE, JSON.stringify(mockStudentAttendance));
+    return mockStudentAttendance;
   } catch {
     return mockStudentAttendance;
   }
@@ -97,14 +114,23 @@ function saveLocalAttendance(records: StudentAttendance[]) {
     const existing = getLocalAttendance();
     const updated = [...existing];
     records.forEach(rec => {
-      const idx = updated.findIndex(r => r.studentId === rec.studentId && r.date.split('T')[0] === rec.date.split('T')[0]);
+      const recDate = rec.date.split('T')[0];
+      const idx = updated.findIndex(r => 
+        r.studentId === rec.studentId && (
+          (rec.meetingNumber && r.meetingNumber === rec.meetingNumber) ||
+          (r.date && r.date.split('T')[0] === recDate)
+        )
+      );
       if (idx >= 0) {
-        updated[idx] = { ...updated[idx], ...rec };
+        updated[idx] = { ...updated[idx], ...rec, date: recDate };
       } else {
-        updated.push(rec);
+        updated.push({ ...rec, date: recDate });
       }
     });
     localStorage.setItem(LOCAL_STORAGE_KEY_ATTENDANCE, JSON.stringify(updated));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('attendance-updated', { detail: { records } }));
+    }
   } catch (e) {
     console.warn("Could not save to localStorage", e);
   }
@@ -1072,9 +1098,10 @@ export interface Curriculum {
 
 export async function getStudentAttendance(groupId: string, date: string, meetingNumber?: number): Promise<StudentAttendance[]> {
   const datePrefix = date.split('T')[0];
+  const mNum = meetingNumber || (datePrefix === '2026-08-15' ? 1 : datePrefix === '2026-08-22' ? 2 : undefined);
   try {
-    if (meetingNumber) {
-      const qByM = query(collection(db, 'student_attendance'), where('groupId', '==', groupId), where('meetingNumber', '==', meetingNumber));
+    if (mNum) {
+      const qByM = query(collection(db, 'student_attendance'), where('groupId', '==', groupId), where('meetingNumber', '==', mNum));
       const snapByM = await getDocs(qByM);
       if (!snapByM.empty) {
         return snapByM.docs.map(doc => ({ id: doc.id, ...doc.data() } as StudentAttendance));
@@ -1091,23 +1118,62 @@ export async function getStudentAttendance(groupId: string, date: string, meetin
   }
 
   const local = getLocalAttendance();
-  if (meetingNumber) {
-    const byMeeting = local.filter(a => a.groupId === groupId && a.meetingNumber === meetingNumber);
+  if (mNum) {
+    const byMeeting = local.filter(a => a.groupId === groupId && (a.meetingNumber === mNum || (mNum === 1 && a.date.startsWith('2026-08-15')) || (mNum === 2 && a.date.startsWith('2026-08-22'))));
     if (byMeeting.length > 0) return byMeeting;
   }
   return local.filter(a => a.groupId === groupId && a.date.startsWith(datePrefix));
+}
+
+export async function getAllStudentAttendance(): Promise<StudentAttendance[]> {
+  try {
+    const snapshot = await getDocs(collection(db, 'student_attendance'));
+    if (!snapshot.empty) {
+      const firestoreRecords = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as StudentAttendance));
+
+      const local = getLocalAttendance();
+      const mergedMap = new Map<string, StudentAttendance>();
+      
+      // 1. Masukkan baseline seed presensi (Pekan 1: 15 Agustus & Pekan 2: 22 Agustus)
+      mockStudentAttendance.forEach(r => {
+        const key = r.meetingNumber ? `${r.studentId}_m${r.meetingNumber}` : `${r.studentId}_${r.date.split('T')[0]}`;
+        mergedMap.set(key, r);
+      });
+
+      // 2. Masukkan local cache
+      local.forEach(r => {
+        const key = r.meetingNumber ? `${r.studentId}_m${r.meetingNumber}` : `${r.studentId}_${r.date.split('T')[0]}`;
+        mergedMap.set(key, r);
+      });
+      
+      // 3. Override atau tambahkan dari Firestore
+      firestoreRecords.forEach(r => {
+        const key = r.meetingNumber ? `${r.studentId}_m${r.meetingNumber}` : `${r.studentId}_${r.date.split('T')[0]}`;
+        mergedMap.set(key, r);
+      });
+
+      return Array.from(mergedMap.values());
+    }
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, 'student_attendance');
+  }
+  return getLocalAttendance();
 }
 
 export async function saveStudentAttendance(records: StudentAttendance[]): Promise<void> {
   saveLocalAttendance(records);
   for (const record of records) {
     const datePrefix = record.date.split('T')[0];
-    const docId = record.meetingNumber 
-      ? `${record.studentId}_m${record.meetingNumber}`
-      : `${record.studentId}_${datePrefix}`;
+    const meetingNum = record.meetingNumber || (datePrefix === '2026-08-15' ? 1 : datePrefix === '2026-08-22' ? 2 : 3);
+    const docId = `${record.studentId}_m${meetingNum}`;
     const { id, ...data } = record;
     try {
-      await setDoc(doc(db, 'student_attendance', docId), { ...data, date: datePrefix }, { merge: true });
+      await setDoc(doc(db, 'student_attendance', docId), { 
+        ...data, 
+        date: datePrefix, 
+        meetingNumber: meetingNum 
+      }, { merge: true });
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `student_attendance/${docId}`);
     }
@@ -1138,10 +1204,51 @@ export async function getMentorAttendance(date: string): Promise<MentorAttendanc
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_KEY_MENTOR_ATTENDANCE);
     const local = raw ? JSON.parse(raw) : [];
-    return local.filter((m: MentorAttendance) => m.date.startsWith(datePrefix));
+    const filtered = local.filter((m: MentorAttendance) => m.date.startsWith(datePrefix));
+    if (filtered.length > 0) return filtered;
   } catch {
-    return [];
   }
+
+  return mockMentorAttendance.filter(m => m.date.startsWith(datePrefix));
+}
+
+export async function getAllMentorAttendance(): Promise<MentorAttendance[]> {
+  try {
+    const q = query(collection(db, 'mentor_attendance'));
+    const snapshot = await getDocs(q);
+    if (!snapshot.empty) {
+      const firestoreRecords = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MentorAttendance));
+      const localRaw = localStorage.getItem(LOCAL_STORAGE_KEY_MENTOR_ATTENDANCE);
+      const local: MentorAttendance[] = localRaw ? JSON.parse(localRaw) : [];
+      const mergedMap = new Map<string, MentorAttendance>();
+      
+      // 1. Mock base
+      mockMentorAttendance.forEach(m => mergedMap.set(`${m.mentorId}_${m.date.split('T')[0]}`, m));
+      // 2. Local
+      local.forEach(m => mergedMap.set(`${m.mentorId}_${m.date.split('T')[0]}`, m));
+      // 3. Firestore
+      firestoreRecords.forEach(m => mergedMap.set(`${m.mentorId}_${m.date.split('T')[0]}`, m));
+
+      return Array.from(mergedMap.values());
+    }
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, 'mentor_attendance');
+  }
+
+  try {
+    const raw = localStorage.getItem(LOCAL_STORAGE_KEY_MENTOR_ATTENDANCE);
+    if (raw) {
+      const parsed: MentorAttendance[] = JSON.parse(raw);
+      if (parsed.length > 0) {
+        const mergedMap = new Map<string, MentorAttendance>();
+        mockMentorAttendance.forEach(m => mergedMap.set(`${m.mentorId}_${m.date.split('T')[0]}`, m));
+        parsed.forEach(m => mergedMap.set(`${m.mentorId}_${m.date.split('T')[0]}`, m));
+        return Array.from(mergedMap.values());
+      }
+    }
+  } catch {}
+
+  return mockMentorAttendance;
 }
 
 export async function saveMentorAttendance(records: MentorAttendance[]): Promise<void> {
@@ -1203,7 +1310,10 @@ export async function getAllStudentProgress(): Promise<StudentProgress[]> {
     const q = query(collection(db, 'student_progress'));
     const snapshot = await getDocs(q);
     if (!snapshot.empty) {
-      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as StudentProgress));
+      const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as StudentProgress));
+      if (docs.length > 0) {
+        return docs;
+      }
     }
   } catch (error) {
     handleFirestoreError(error, OperationType.LIST, 'student_progress');
@@ -1211,7 +1321,10 @@ export async function getAllStudentProgress(): Promise<StudentProgress[]> {
 
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_KEY_PROGRESS);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed: StudentProgress[] = JSON.parse(raw);
+      if (parsed.length > 0) return parsed;
+    }
   } catch {}
 
   return mockProgress.map(p => {
@@ -1728,8 +1841,8 @@ const defaultSeedJournals: TeachingJournal[] = [
     sessionId: 'session_1',
     sessionIds: ['session_1'],
     meetingNumber: 1,
-    sessionTitle: 'Tahap 1: Makharijul Huruf & Q.S. An-Nas - Al-Falaq',
-    date: '2026-08-01',
+    sessionTitle: 'Tahap 1: Pengenalan Mentor & Makharijul Huruf',
+    date: '2026-08-15',
     materialTaught: 'Tilawati Jilid 3 Hal 1-5 dan Tahsin Q.S. An-Nas sampai Al-Ikhlas',
     pagesCovered: 'Hal 1 - 5',
     studentObstacles: 'Beberapa santri masih sering tertukar antara huruf Ha (ح) dan Kha (خ).',
@@ -1737,7 +1850,7 @@ const defaultSeedJournals: TeachingJournal[] = [
     attendanceSummary: 'Hadir 5 dari 5 santri.',
     mentorId: 'mentor_1',
     mentorName: 'Kak Alumni 1',
-    createdAt: '2026-08-01T09:30:00.000Z'
+    createdAt: '2026-08-15T09:30:00.000Z'
   },
   {
     id: 'journal_seed_2',
@@ -1747,15 +1860,15 @@ const defaultSeedJournals: TeachingJournal[] = [
     sessionIds: ['session_2'],
     meetingNumber: 2,
     sessionTitle: 'Tahap 2: Sifatul Huruf & Q.S. Al-Ikhlas - Al-Lahab',
-    date: '2026-08-08',
+    date: '2026-08-22',
     materialTaught: 'Tilawati Jilid 3 Hal 6-10 dan penguatan Sifatul Huruf',
     pagesCovered: 'Hal 6 - 10',
     studentObstacles: 'Pelafalan hams pada ta dan kaf perlu penekanan ulang.',
-    nextPlan: 'Tahap 3: Hukum Nun Sukin & Tanwin (Izhar Halqi).',
+    nextPlan: 'Tahap 3: Hukum Nun Sukun & Tanwin (Izhar Halqi).',
     attendanceSummary: 'Hadir 5 dari 5 santri.',
     mentorId: 'mentor_1',
     mentorName: 'Kak Alumni 1',
-    createdAt: '2026-08-08T09:30:00.000Z'
+    createdAt: '2026-08-22T09:30:00.000Z'
   },
   {
     id: 'journal_seed_3',
@@ -1764,8 +1877,8 @@ const defaultSeedJournals: TeachingJournal[] = [
     sessionId: 'session_1',
     sessionIds: ['session_1'],
     meetingNumber: 1,
-    sessionTitle: 'Tahap 1: Makharijul Huruf & Q.S. An-Nas - Al-Falaq',
-    date: '2026-08-01',
+    sessionTitle: 'Tahap 1: Pengenalan Mentor & Makharijul Huruf',
+    date: '2026-08-15',
     materialTaught: 'Latihan makhraj Hal 1-4 dan Tahsin An-Nas & Al-Falaq',
     pagesCovered: 'Hal 1 - 4',
     studentObstacles: 'Antusiasme baik, artikulasi konsonan sudah cukup fasih.',
@@ -1773,7 +1886,7 @@ const defaultSeedJournals: TeachingJournal[] = [
     attendanceSummary: 'Hadir 5 dari 5 santri.',
     mentorId: 'mentor_2',
     mentorName: 'Ustadzah Nurul Hidayah, S.Pd',
-    createdAt: '2026-08-01T09:45:00.000Z'
+    createdAt: '2026-08-15T09:45:00.000Z'
   },
   {
     id: 'journal_seed_4',
@@ -1783,7 +1896,7 @@ const defaultSeedJournals: TeachingJournal[] = [
     sessionIds: ['session_2'],
     meetingNumber: 2,
     sessionTitle: 'Tahap 2: Sifatul Huruf & Q.S. Al-Ikhlas - Al-Lahab',
-    date: '2026-08-08',
+    date: '2026-08-22',
     materialTaught: 'Qur\'an Juz 30 Surah Al-Kafirun & An-Nasr dengan hukum Mad Thabi\'i',
     pagesCovered: 'Surah Al-Kafirun & An-Nasr',
     studentObstacles: 'Penguasaan panjang 2 harakat pada mad thabi\'i sudah baik, santri antusias.',
@@ -1791,7 +1904,7 @@ const defaultSeedJournals: TeachingJournal[] = [
     attendanceSummary: 'Hadir 5 santri lengkap.',
     mentorId: 'mentor_2',
     mentorName: 'Ustadzah Nurul Hidayah, S.Pd',
-    createdAt: '2026-08-08T09:45:00.000Z'
+    createdAt: '2026-08-22T09:45:00.000Z'
   }
 ];
 
@@ -2445,6 +2558,7 @@ export async function getAuditLogs(): Promise<AuditLogEntry[]> {
 
   return initialSeed;
 }
+
 
 
 

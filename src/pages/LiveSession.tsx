@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { theme } from '../theme';
-import { Calendar, Save, Loader2, BookOpen, Users, UserCheck, AlertCircle, MessageSquare, CheckCircle, ChevronRight, Award, ChevronDown, Hash, CheckSquare, Edit3, PlusCircle } from 'lucide-react';
+import { Calendar, Save, Loader2, BookOpen, Users, UserCheck, AlertCircle, MessageSquare, CheckCircle, ChevronRight, Award, ChevronDown, Hash, CheckSquare, Edit3, PlusCircle, Camera } from 'lucide-react';
 import { Select } from '../components/ui/Select';
 import { Input } from '../components/ui/Input';
 import { cn } from '../utils/cn';
 import { useAuth } from '../contexts/AuthContext';
 import { CurriculumSyncAlert } from '../components/CurriculumSyncAlert';
+import { QRScanner } from '../components/QRScanner';
 import { 
   getGroups, 
   getMentors, 
@@ -61,6 +62,9 @@ export function LiveSession() {
   const [journalPages, setJournalPages] = useState('');
   const [journalObstacles, setJournalObstacles] = useState('');
   const [journalNextPlan, setJournalNextPlan] = useState('');
+
+  // Scanner state
+  const [showScanner, setShowScanner] = useState(false);
 
   const isMentor = userRole === 'mentor' && currentUser?.email !== 'admin@smpn102.sch.id';
 
@@ -122,7 +126,7 @@ export function LiveSession() {
       if (valid.length > 0) {
         setSelectedSessionIds(valid);
       } else {
-        const defaultSession = availableSessions.find(s => s.sessionNumber === 3) || availableSessions[0];
+        const defaultSession = availableSessions.find(s => s.sessionNumber === 2) || availableSessions[0];
         setSelectedSessionIds([defaultSession.id]);
       }
     }
@@ -419,6 +423,71 @@ export function LiveSession() {
       });
       return nextProg;
     });
+  };
+
+  const handleScanSuccess = (decodedText: string) => {
+    try {
+      const parts = decodedText.split('/');
+      const scannedId = parts[parts.length - 1];
+      
+      const foundStudent = students.find(s => s.id === scannedId);
+      if (foundStudent) {
+        setAttendance(prev => ({
+          ...prev,
+          [scannedId]: { ...prev[scannedId], status: 'Hadir' }
+        }));
+        
+        // Play success beep using Web Audio API
+        try {
+          const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+          if (AudioContext) {
+            const ctx = new AudioContext();
+            const osc = ctx.createOscillator();
+            const gainNode = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(880, ctx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(1760, ctx.currentTime + 0.1);
+            gainNode.gain.setValueAtTime(0, ctx.currentTime);
+            gainNode.gain.linearRampToValueAtTime(0.3, ctx.currentTime + 0.05);
+            gainNode.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.2);
+            osc.connect(gainNode);
+            gainNode.connect(ctx.destination);
+            osc.start();
+            osc.stop(ctx.currentTime + 0.2);
+          }
+        } catch (audioErr) {
+          console.warn("Audio feedback failed");
+        }
+
+        // Ensure progress is also restored/set for Hadir
+        setProgress(prev => {
+          const nextProg = { ...prev };
+          const current = nextProg[scannedId] || {};
+          const r = (current.reading && current.reading > 0) ? current.reading : 80;
+          const t = (current.tajwid && current.tajwid > 0) ? current.tajwid : 80;
+          const w = (current.writing && current.writing > 0) ? current.writing : 80;
+          const m = currentGradeId === 'grade3' ? ((current.memorization && current.memorization > 0) ? current.memorization : 80) : 0;
+          
+          const scores: number[] = [];
+          if (currentGradeId === 'grade3' && r > 0) scores.push(r);
+          if (t > 0) scores.push(t);
+          if (w > 0) scores.push(w);
+          const calculatedTotal = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 80;
+
+          nextProg[scannedId] = {
+            ...current,
+            reading: r,
+            tajwid: t,
+            writing: w,
+            memorization: m,
+            total: calculatedTotal
+          };
+          return nextProg;
+        });
+      }
+    } catch (e) {
+      console.warn("Invalid QR code format");
+    }
   };
 
   const toggleTahapSelection = (sessionId: string) => {
@@ -760,6 +829,9 @@ export function LiveSession() {
             </p>
           </div>
           <div className="flex gap-2 w-full sm:w-auto">
+            <button onClick={() => setShowScanner(true)} className="flex-1 sm:flex-none px-4 py-2 bg-[#172033] text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition-colors cursor-pointer flex items-center justify-center gap-1.5 shadow-xs">
+              <Camera size={14} /> Scan Hadir
+            </button>
             <button onClick={() => setAllAttendance('Hadir')} className="flex-1 sm:flex-none px-4 py-2 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-bold hover:bg-emerald-100 transition-colors cursor-pointer">
               Set Semua Hadir
             </button>
@@ -989,6 +1061,13 @@ export function LiveSession() {
             <p className="text-xs text-emerald-100 font-medium">Absensi, Progress ({selectedTahapObjects.map(s => `Tahap ${s.sessionNumber}`).join(', ')}) & Jurnal tercatat.</p>
           </div>
         </div>
+      )}
+
+      {showScanner && (
+        <QRScanner 
+          onScanSuccess={handleScanSuccess} 
+          onClose={() => setShowScanner(false)} 
+        />
       )}
     </div>
   );
