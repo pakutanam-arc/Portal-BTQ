@@ -1,6 +1,6 @@
-import logoRohis from './images/rohis_avicenna_logo_1787538916097.jpg';
+import { APP_LOGO_BASE64 } from './cardAssetsBase64';
 
-export const APP_LOGO = logoRohis;
+export const APP_LOGO = APP_LOGO_BASE64;
 export const APP_NAME = "PORTAL BTQ";
 export const APP_SUBTITLE = "SMP Negeri 102 Jakarta";
 export const APP_DESC = "Portal Administrasi dan Pembelajaran Baca Tulis Al-Qur'an";

@@ -106,6 +106,7 @@ export function PublicStudentProfile() {
           <!DOCTYPE html>
           <html>
             <head>
+              <base href="${window.location.origin}/" />
               <title>Cetak Kartu Santri - ${student?.name}</title>
               ${styles}
               <style>
@@ -123,15 +124,37 @@ export function PublicStudentProfile() {
         `);
         doc.close();
 
-        setTimeout(() => {
-          try {
-            iframe.contentWindow?.focus();
-            iframe.contentWindow?.print();
-          } catch (e) {
-            console.warn("Iframe print fallback to window.print():", e);
-            window.print();
-          }
-        }, 350);
+        const triggerPrint = () => {
+          const iframeDoc = iframe.contentWindow?.document || iframe.contentDocument;
+          const images = Array.from(iframeDoc?.querySelectorAll('img') || []);
+          
+          const imagePromises = images.map(img => {
+            if (img.complete && img.naturalHeight !== 0) return Promise.resolve();
+            return new Promise<void>((resolve) => {
+              img.onload = () => resolve();
+              img.onerror = () => resolve();
+              setTimeout(resolve, 600);
+            });
+          });
+
+          Promise.all(imagePromises).then(() => {
+            setTimeout(() => {
+              try {
+                iframe.contentWindow?.focus();
+                iframe.contentWindow?.print();
+              } catch (e) {
+                console.warn("Iframe print fallback to window.print():", e);
+                window.print();
+              }
+            }, 250);
+          });
+        };
+
+        if (iframe.contentWindow) {
+          triggerPrint();
+        } else {
+          iframe.onload = triggerPrint;
+        }
         return;
       }
     } catch (err) {

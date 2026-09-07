@@ -67,7 +67,7 @@ export function StudentIdCard({ student, group, mentor }: StudentIdCardProps) {
       {/* Avatar Container */}
       <div className="absolute top-[14mm] left-0 right-0 z-20 flex justify-center">
         <div 
-          className="w-[23mm] h-[23mm] flex items-center justify-center bg-[#C99A2E] drop-shadow-md"
+          className="w-[23mm] h-[23mm] flex items-center justify-center bg-[#C99A2E] drop-shadow-md print:drop-shadow-none"
           style={{ clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)' }}
         >
           <div 

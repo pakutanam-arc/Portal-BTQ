@@ -4,7 +4,7 @@ import { Camera, X, Check } from 'lucide-react';
 import { Button } from './ui/Button';
 
 interface QRScannerProps {
-  onScanSuccess: (decodedText: string) => void;
+  onScanSuccess: (decodedText: string) => void | string | Promise<void | string>;
   onClose: () => void;
 }
 

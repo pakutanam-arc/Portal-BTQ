@@ -11,6 +11,7 @@ import { getStudents, addStudent, updateStudent, deleteStudent, getGroups, getMe
 import { getPublicStudentUrl } from '../utils/studentUtils';
 import { useAuth } from '../contexts/AuthContext';
 import { StudentIdCard } from '../components/cards/StudentIdCard';
+import { StudentTableSkeleton } from '../components/students/StudentTableSkeleton';
 
 export function Students() {
   const { currentUser, userData, userRole } = useAuth();
@@ -219,6 +220,7 @@ export function Students() {
           <!DOCTYPE html>
           <html>
             <head>
+              <base href="${window.location.origin}/" />
               <title>Cetak Kartu Santri BTQ SMPN 102</title>
               ${styles}
               <style>
@@ -236,15 +238,37 @@ export function Students() {
         `);
         doc.close();
 
-        setTimeout(() => {
-          try {
-            iframe.contentWindow?.focus();
-            iframe.contentWindow?.print();
-          } catch (e) {
-            console.warn("Iframe print fallback to window.print():", e);
-            window.print();
-          }
-        }, 350);
+        const triggerPrint = () => {
+          const iframeDoc = iframe.contentWindow?.document || iframe.contentDocument;
+          const images = Array.from(iframeDoc?.querySelectorAll('img') || []);
+          
+          const imagePromises = images.map(img => {
+            if (img.complete && img.naturalHeight !== 0) return Promise.resolve();
+            return new Promise<void>((resolve) => {
+              img.onload = () => resolve();
+              img.onerror = () => resolve();
+              setTimeout(resolve, 600);
+            });
+          });
+
+          Promise.all(imagePromises).then(() => {
+            setTimeout(() => {
+              try {
+                iframe.contentWindow?.focus();
+                iframe.contentWindow?.print();
+              } catch (e) {
+                console.warn("Iframe print fallback to window.print():", e);
+                window.print();
+              }
+            }, 250);
+          });
+        };
+
+        if (iframe.contentWindow) {
+          triggerPrint();
+        } else {
+          iframe.onload = triggerPrint;
+        }
         return;
       }
     } catch (err) {
@@ -314,12 +338,7 @@ export function Students() {
         </div>
 
         {loading ? (
-          <div className="py-16 flex justify-center">
-            <div className="animate-pulse flex flex-col items-center gap-4 text-[#0362D0]">
-              <Users size={32} />
-              <p className="font-semibold text-[#172033]">Memuat data santri dari Firebase...</p>
-            </div>
-          </div>
+          <StudentTableSkeleton rowCount={8} mobileCount={4} showFooter={true} />
         ) : (
           <>
             {/* Desktop Table View */}

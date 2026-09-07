@@ -47,6 +47,7 @@ import {
   StudentWithStats, 
   SessionHistoryItem 
 } from './StudentProgressChartModal';
+import { AttendanceHistoryWidget } from './AttendanceHistoryWidget';
 
 // Mini grafik sparkline nilai per tahap untuk baris tabel
 function SparklineProgress({ history, score }: { history: SessionHistoryItem[]; score?: number }) {
@@ -179,6 +180,7 @@ export function MentorDashboard() {
   const [mentorGroup, setMentorGroup] = useState<Group | null>(null);
   const [mentorProfile, setMentorProfile] = useState<Mentor | null>(null);
   const [students, setStudents] = useState<StudentWithStats[]>([]);
+  const [recentAttendances, setRecentAttendances] = useState<any[]>([]);
   const [journals, setJournals] = useState<TeachingJournal[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'Sangat Baik' | 'Baik' | 'Perlu Bimbingan'>('ALL');
@@ -235,6 +237,7 @@ export function MentorDashboard() {
 
           if (!isMounted) return;
 
+          setRecentAttendances(groupAttendance || []);
           setJournals(journalsRes.data || []);
 
           // Kurikulum Seragam Berdasarkan Kelompok (Grade 1: Utsmani Jilid 1, Grade 2: Utsmani Jilid 2, Grade 3: Al-Qur'an & Hafalan Juz 30)
@@ -1260,8 +1263,15 @@ export function MentorDashboard() {
           </div>
         </div>
 
-        {/* SIDEBAR RIGHT: JURNAL MENGAJAR TERAKHIR & PENGINGAT MENTOR */}
+        {/* SIDEBAR RIGHT: ATTENDANCE HISTORY WIDGET, JURNAL MENGAJAR & PENGINGAT MENTOR */}
         <div className="lg:col-span-4 xl:col-span-4 2xl:col-span-3 flex flex-col gap-6">
+
+          {/* WIDGET ATTENDANCE HISTORY (SESI AKTIF) */}
+          <AttendanceHistoryWidget 
+            currentGroup={mentorGroup}
+            students={students}
+            recentAttendances={recentAttendances}
+          />
 
           {/* RIWAYAT JURNAL HALAQAH SAYA */}
           <div className="bg-white rounded-2xl border border-[#E6E8EC] p-5 shadow-xs flex flex-col justify-between">

@@ -11,7 +11,7 @@ import { QRScanner } from '../components/QRScanner';
 import { 
   getGroups, 
   getMentors, 
-  getStudentsByGroup, 
+  getStudentsByGroup, getStudents, 
   getStudentAttendance, 
   getStudentProgressBySession,
   getStudentProgressByMeeting,
@@ -27,6 +27,7 @@ import {
   TeachingJournal
 } from '../services/db';
 import { masterGrades, masterSessions, getGradeForGroup, JUZ_30_SURAHS } from '../services/curriculumData';
+import { recordSuccessfulScan } from '../services/scanHistory';
 
 export function LiveSession() {
   const { currentUser, userData, userRole } = useAuth();
@@ -425,7 +426,7 @@ export function LiveSession() {
     });
   };
 
-  const handleScanSuccess = (decodedText: string) => {
+  const handleScanSuccess = async (decodedText: string) => {
     try {
       const parts = decodedText.split('/');
       const scannedId = parts[parts.length - 1];
@@ -436,6 +437,24 @@ export function LiveSession() {
           ...prev,
           [scannedId]: { ...prev[scannedId], status: 'Hadir' }
         }));
+
+        // Record successful scan in current session's attendance history
+        try {
+          const currentGroupObj = groups.find(g => g.id === selectedGroup);
+          recordSuccessfulScan({
+            studentId: foundStudent.id,
+            studentName: foundStudent.name,
+            studentNis: foundStudent.nis,
+            studentClass: foundStudent.class,
+            groupName: currentGroupObj?.name || 'Kelompok BTQ',
+            status: 'Hadir',
+            verificationStatus: 'Terverifikasi QR',
+            mentorEmail: currentUser?.email,
+            method: 'QR_SCAN'
+          }, currentUser?.email);
+        } catch (e) {
+          console.warn('Failed to record scan in session history', e);
+        }
         
         // Play success beep using Web Audio API
         try {
@@ -484,9 +503,46 @@ export function LiveSession() {
           };
           return nextProg;
         });
+      } else {
+        // Find out which group the student belongs to
+        try {
+          const allStudents = await getStudents();
+          const trueStudent = allStudents.find(s => s.id === scannedId);
+          if (trueStudent) {
+            const allGroups = await getGroups();
+            const trueGroup = allGroups.find(g => g.id === trueStudent.groupId);
+            
+            // Play error beep
+            try {
+              const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+              if (AudioContext) {
+                const ctx = new AudioContext();
+                const osc = ctx.createOscillator();
+                const gainNode = ctx.createGain();
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(150, ctx.currentTime);
+                osc.frequency.setValueAtTime(100, ctx.currentTime + 0.2);
+                gainNode.gain.setValueAtTime(0, ctx.currentTime);
+                gainNode.gain.linearRampToValueAtTime(0.3, ctx.currentTime + 0.05);
+                gainNode.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.4);
+                osc.connect(gainNode);
+                gainNode.connect(ctx.destination);
+                osc.start();
+                osc.stop(ctx.currentTime + 0.4);
+              }
+            } catch(e) {}
+
+            return "TIDAK VALID: " + trueStudent.name + " berada di " + (trueGroup ? trueGroup.name : "Kelompok lain") + ".";
+          } else {
+            return "QR Code tidak dikenali atau siswa tidak terdaftar.";
+          }
+        } catch (dbErr) {
+          return "Siswa tidak terdaftar di kelompok ini.";
+        }
       }
     } catch (e) {
       console.warn("Invalid QR code format");
+      return "Format QR Code tidak valid.";
     }
   };
 

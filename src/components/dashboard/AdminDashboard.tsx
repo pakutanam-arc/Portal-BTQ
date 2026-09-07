@@ -40,6 +40,7 @@ import { GroupProgressBarCard, GroupProgressItem } from './GroupProgressBarCard'
 import { GroupSummaryTable, GroupDetailItem, WeeklyProgressPoint } from './GroupSummaryTable';
 import { AttentionPanel, AttentionAlert } from './AttentionPanel';
 import { RecentActivitiesCard } from './RecentActivitiesCard';
+import { AttendanceHistoryWidget } from './AttendanceHistoryWidget';
 import { CurriculumSyncAlert } from '../CurriculumSyncAlert';
 import { WeeklyAttendanceSummaryCard, WeeklyOverallAttendancePoint } from './WeeklyAttendanceSummaryCard';
 import { GroupWeeklyAttendanceCard, WeeklyGroupDataPoint, GroupAttendanceDetail } from './GroupWeeklyAttendanceCard';
@@ -584,9 +585,11 @@ export function AdminDashboard() {
 
     // Ambil daftar nomor pekan unik
     const allWeekNumbersSet = new Set<number>();
-    // Pastikan minimal ada Pekan 1 & Pekan 2
+    // Pastikan minimal ada Pekan 1 s.d. 4 untuk visualisasi tren yang komprehensif
     allWeekNumbersSet.add(1);
     allWeekNumbersSet.add(2);
+    allWeekNumbersSet.add(3);
+    allWeekNumbersSet.add(4);
 
     allAttendance.forEach(a => {
       if (a.meetingNumber && a.meetingNumber > 0) {
@@ -615,6 +618,7 @@ export function AdminDashboard() {
       if (weekNum === 1) return '15 Agu';
       if (weekNum === 2) return '22 Agu';
       if (weekNum === 3) return '29 Agu';
+      if (weekNum === 4) return '05 Sep';
 
       // 1. Cek dari rekaman presensi langsung
       const matchedRecord = allAttendance.find(a => a.meetingNumber === weekNum && a.date);
@@ -1079,6 +1083,12 @@ export function AdminDashboard() {
           <div className="hidden lg:block">
             <AttentionPanel alerts={attentionAlerts} isLoading={loading} />
           </div>
+
+          {/* WIDGET ATTENDANCE HISTORY (SESI AKTIF) */}
+          <AttendanceHistoryWidget 
+            students={students}
+            recentAttendances={allAttendance}
+          />
 
           {/* RECENT ACTIVITIES */}
           <RecentActivitiesCard 

@@ -10,6 +10,7 @@ import { masterGrades, masterSessions, CurriculumSession } from '../services/cur
 import { cn } from '../utils/cn';
 import { useAuth } from '../contexts/AuthContext';
 import { theme } from '../theme';
+import { StudentTableSkeleton } from '../components/students/StudentTableSkeleton';
 
 export function StudentAttendance() {
   const { currentUser, userData, userRole } = useAuth();
@@ -426,10 +427,7 @@ export function StudentAttendance() {
 
         {/* Student List */}
         {loading ? (
-          <div className="p-16 text-center text-slate-500 flex flex-col items-center justify-center gap-3">
-            <Loader2 size={32} className="animate-spin text-[#0362D0]" />
-            <p className="text-sm font-bold text-[#172033]">Memuat data santri...</p>
-          </div>
+          <StudentTableSkeleton rowCount={6} mobileCount={4} showFooter={false} variant="attendance" />
         ) : groupStudents.length === 0 ? (
           <div className="p-16 text-center text-slate-500">
             <Users size={36} className="mx-auto mb-2 text-slate-400" />
