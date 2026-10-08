@@ -12,8 +12,8 @@ export const RecentActivitiesCard = React.memo(function RecentActivitiesCard({
   onOpenModal
 }: RecentActivitiesCardProps) {
   return (
-    <section id="dashboard-recent-activities-card" className="bg-white rounded-2xl border border-[#E6E8EC] p-4 sm:p-5 flex-1 flex flex-col overflow-hidden shadow-xs">
-      <div className="flex justify-between items-center mb-4 pb-2 border-b border-[#E6E8EC]">
+    <section id="dashboard-recent-activities-card" className="bg-white rounded-2xl border border-transparent shadow-sm p-4 sm:p-5 flex-1 flex flex-col overflow-hidden shadow-xs">
+      <div className="flex justify-between items-center mb-4 pb-2 border-b border-transparent shadow-sm">
         <h3 className="font-bold text-[#172033] text-base">
           Aktivitas Terbaru
         </h3>
@@ -31,7 +31,7 @@ export const RecentActivitiesCard = React.memo(function RecentActivitiesCard({
           activities.slice(0, 5).map((act, idx) => (
             <div key={act.id} className="flex gap-3 items-start relative pl-4">
               {idx < Math.min(activities.length, 5) - 1 && (
-                <div className="absolute left-[4.5px] top-[16px] bottom-[-16px] w-[1.5px] bg-[#E6E8EC]" />
+                <div className="absolute left-[4.5px] top-[16px] bottom-[-16px] w-[1.5px] bg-[#f1f5f9]" />
               )}
               <div className={`w-2.5 h-2.5 rounded-full absolute left-[-0.5px] top-[6px] ring-4 ${
                 act.type === 'progress' ? 'bg-[#0362D0] ring-[#0362D0]/10' : 

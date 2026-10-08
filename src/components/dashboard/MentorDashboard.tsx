@@ -31,8 +31,8 @@ import {
   getGroups, 
   getMentors, 
   getStudentsByGroup, 
-  getAllStudentProgress,
-  getAllStudentAttendance,
+  getStudentProgressByGroup,
+  getStudentAttendanceByGroup,
   getTeachingJournals,
   Group, 
   Mentor, 
@@ -48,6 +48,7 @@ import {
   SessionHistoryItem 
 } from './StudentProgressChartModal';
 import { AttendanceHistoryWidget } from './AttendanceHistoryWidget';
+import { useDebounce } from '../../hooks/useDebounce';
 
 // Mini grafik sparkline nilai per tahap untuk baris tabel
 function SparklineProgress({ history, score }: { history: SessionHistoryItem[]; score?: number }) {
@@ -183,6 +184,7 @@ export function MentorDashboard() {
   const [recentAttendances, setRecentAttendances] = useState<any[]>([]);
   const [journals, setJournals] = useState<TeachingJournal[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const debouncedSearchQuery = useDebounce(searchQuery, 250);
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'Sangat Baik' | 'Baik' | 'Perlu Bimbingan'>('ALL');
   const [trendFilter, setTrendFilter] = useState<'ALL' | 'Meningkat' | 'Konsisten' | 'Menurun'>('ALL');
   const [selectedStudentForChart, setSelectedStudentForChart] = useState<StudentWithStats | null>(null);
@@ -230,9 +232,9 @@ export function MentorDashboard() {
           // Fetch students ONLY for this mentor's group
           const [groupStudents, allProg, journalsRes, groupAttendance] = await Promise.all([
             getStudentsByGroup(targetGroup.id),
-            getAllStudentProgress(),
+            getStudentProgressByGroup(targetGroup.id),
             getTeachingJournals(targetGroup.id, 5),
-            getAllStudentAttendance()
+            getStudentAttendanceByGroup(targetGroup.id, 20)
           ]);
 
           if (!isMounted) return;
@@ -521,14 +523,14 @@ export function MentorDashboard() {
 
   // Filtered students in this group (berdasarkan kata kunci, kualitas, dan tren)
   const filteredStudents = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
+    const q = debouncedSearchQuery.trim().toLowerCase();
     return students.filter(s => {
       const matchSearch = !q || s.name.toLowerCase().includes(q) || s.class.toLowerCase().includes(q) || (s.nis && s.nis.includes(q));
       const matchStatus = statusFilter === 'ALL' || s.statusCategory === statusFilter;
       const matchTrend = trendFilter === 'ALL' || s.trend === trendFilter;
       return matchSearch && matchStatus && matchTrend;
     });
-  }, [students, searchQuery, statusFilter, trendFilter]);
+  }, [students, debouncedSearchQuery, statusFilter, trendFilter]);
 
   // Indonesian Date Formatting
   const todayDateString = useMemo(() => {
@@ -572,7 +574,7 @@ export function MentorDashboard() {
 
   if (loading) {
     return (
-      <div className="flex-1 flex items-center justify-center h-full py-16 bg-[#F5F6F8]">
+      <div className="flex-1 flex items-center justify-center h-full py-16 bg-slate-50">
         <div className="animate-pulse flex flex-col items-center gap-4 text-[#0362D0]">
           <Loader2 size={32} className="animate-spin" />
           <p className="font-bold text-[#172033] text-sm">Memuat Beranda Halaqah Binaan...</p>
@@ -720,7 +722,7 @@ export function MentorDashboard() {
       <section id="mentor-group-statistics" className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
         
         {/* Total Santri */}
-        <div className="bg-white p-4 rounded-2xl border border-[#E6E8EC] shadow-xs flex flex-col justify-between">
+        <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-xs flex flex-col justify-between">
           <div className="flex justify-between items-start">
             <span className="text-[10px] text-slate-400 uppercase font-black tracking-wider leading-none">
               Santri Binaan
@@ -737,13 +739,13 @@ export function MentorDashboard() {
               Santri aktif di {groupTitle}
             </p>
           </div>
-          <div className="mt-2.5 pt-2 border-t border-[#F5F6F8] text-[9px] font-bold text-emerald-600">
+          <div className="mt-2.5 pt-2 border-t border-slate-50 text-[9px] font-bold text-emerald-600">
             ✓ Terdaftar lengkap
           </div>
         </div>
 
         {/* Kehadiran Sesi Terakhir */}
-        <div className="bg-white p-4 rounded-2xl border border-[#E6E8EC] shadow-xs flex flex-col justify-between">
+        <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-xs flex flex-col justify-between">
           <div className="flex justify-between items-start">
             <span className="text-[10px] text-slate-400 uppercase font-black tracking-wider leading-none">
               Kehadiran Kelompok
@@ -760,13 +762,13 @@ export function MentorDashboard() {
               Rata-rata presensi santri
             </p>
           </div>
-          <div className="mt-2.5 pt-2 border-t border-[#F5F6F8] text-[9px] font-bold text-slate-500">
+          <div className="mt-2.5 pt-2 border-t border-slate-50 text-[9px] font-bold text-slate-500">
             Target standar &gt; 80%
           </div>
         </div>
 
         {/* Rata-rata Progres Silabus */}
-        <div className="bg-white p-4 rounded-2xl border border-[#E6E8EC] shadow-xs flex flex-col justify-between">
+        <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-xs flex flex-col justify-between">
           <div className="flex justify-between items-start">
             <span className="text-[10px] text-slate-400 uppercase font-black tracking-wider leading-none">
               Rata-rata Progres
@@ -783,13 +785,13 @@ export function MentorDashboard() {
               Ketercapaian materi jilid
             </p>
           </div>
-          <div className="mt-2.5 pt-2 border-t border-[#F5F6F8] text-[9px] font-bold text-[#C99A2E]">
+          <div className="mt-2.5 pt-2 border-t border-slate-50 text-[9px] font-bold text-[#C99A2E]">
             ★ Capaian Halaqah
           </div>
         </div>
 
         {/* Santri Siap Ujian */}
-        <div className="bg-white p-4 rounded-2xl border border-[#E6E8EC] shadow-xs flex flex-col justify-between">
+        <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-xs flex flex-col justify-between">
           <div className="flex justify-between items-start">
             <span className="text-[10px] text-slate-400 uppercase font-black tracking-wider leading-none">
               Siap Ujian / Munaqasyah
@@ -806,13 +808,13 @@ export function MentorDashboard() {
               Santri tuntas target jilid
             </p>
           </div>
-          <div className="mt-2.5 pt-2 border-t border-[#F5F6F8] text-[9px] font-bold text-emerald-600">
+          <div className="mt-2.5 pt-2 border-t border-slate-50 text-[9px] font-bold text-emerald-600">
             Dapat diajukan sertifikasi
           </div>
         </div>
 
         {/* Perlu Bimbingan Ekstra */}
-        <div className="bg-white p-4 rounded-2xl border border-[#E6E8EC] shadow-xs flex flex-col justify-between">
+        <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-xs flex flex-col justify-between">
           <div className="flex justify-between items-start">
             <span className="text-[10px] text-slate-400 uppercase font-black tracking-wider leading-none">
               Perlu Pendampingan
@@ -829,13 +831,13 @@ export function MentorDashboard() {
               Santri butuh perhatian khusus
             </p>
           </div>
-          <div className="mt-2.5 pt-2 border-t border-[#F5F6F8] text-[9px] font-bold text-[#950415]">
+          <div className="mt-2.5 pt-2 border-t border-slate-50 text-[9px] font-bold text-[#950415]">
             Perlu simak intensif
           </div>
         </div>
 
         {/* Status Jurnal Halaqah */}
-        <div className="bg-white p-4 rounded-2xl border border-[#E6E8EC] shadow-xs flex flex-col justify-between">
+        <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-xs flex flex-col justify-between">
           <div className="flex justify-between items-start">
             <span className="text-[10px] text-slate-400 uppercase font-black tracking-wider leading-none">
               Jurnal Halaqah
@@ -852,7 +854,7 @@ export function MentorDashboard() {
               {journals.length > 0 ? `${journals.length} catatan sesi tersimpan` : 'Siap diisi pekan ini'}
             </p>
           </div>
-          <div className="mt-2.5 pt-2 border-t border-[#F5F6F8] text-[9px] font-bold text-[#0362D0]">
+          <div className="mt-2.5 pt-2 border-t border-slate-50 text-[9px] font-bold text-[#0362D0]">
             Update berkala di sesi
           </div>
         </div>
@@ -860,7 +862,7 @@ export function MentorDashboard() {
       </section>
 
       {/* RINGKASAN TREN CAPAIAN ANTAR TAHAP (T1 → T2 → T3) */}
-      <div className="bg-white rounded-2xl border border-[#E6E8EC] p-3.5 sm:p-4 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+      <div className="bg-white rounded-2xl border border-slate-100 p-3.5 sm:p-4 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-xl bg-[#0362D0]/10 text-[#0362D0] flex items-center justify-center shrink-0">
             <Activity size={18} />
@@ -924,8 +926,8 @@ export function MentorDashboard() {
       <section className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         
         {/* DISTRIBUSI KUALITAS BACAAN SANTRI BINAAN (PIE CHART) */}
-        <div className="lg:col-span-6 bg-white p-5 rounded-2xl border border-[#E6E8EC] shadow-xs flex flex-col justify-between">
-          <div className="flex justify-between items-center pb-3 border-b border-[#F5F6F8]">
+        <div className="lg:col-span-6 bg-white p-5 rounded-2xl border border-slate-100 shadow-xs flex flex-col justify-between">
+          <div className="flex justify-between items-center pb-3 border-b border-slate-50">
             <div>
               <h3 className="font-extrabold text-[#172033] text-sm">
                 Distribusi Kualitas Progres {groupTitle}
@@ -958,7 +960,7 @@ export function MentorDashboard() {
                   </Pie>
                   <Tooltip 
                     formatter={(value, name) => [`${value} Santri`, `${name}`]}
-                    contentStyle={{ borderRadius: '12px', border: '1px solid #E6E8EC', fontSize: '11px', fontWeight: 'bold' }}
+                    contentStyle={{ borderRadius: '12px', border: '1px solid #f1f5f9', fontSize: '11px', fontWeight: 'bold' }}
                   />
                 </PieChart>
               </ResponsiveContainer>
@@ -970,7 +972,7 @@ export function MentorDashboard() {
 
             <div className="sm:col-span-6 space-y-2">
               {qualityDistribution.map((item, idx) => (
-                <div key={idx} className="p-2 rounded-xl bg-[#F5F6F8] border border-[#E6E8EC]">
+                <div key={idx} className="p-2 rounded-xl bg-slate-50 border border-slate-100">
                   <div className="flex items-center justify-between mb-0.5">
                     <div className="flex items-center gap-1.5">
                       <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
@@ -984,7 +986,7 @@ export function MentorDashboard() {
             </div>
           </div>
 
-          <div className="pt-3 border-t border-[#F5F6F8] flex justify-between items-center text-[10px] text-slate-500 font-medium">
+          <div className="pt-3 border-t border-slate-50 flex justify-between items-center text-[10px] text-slate-500 font-medium">
             <span className="truncate max-w-[280px]">Buku: <strong>{targetGrade.bookTitle}</strong></span>
             <Link to="/curriculum" className="text-[#0362D0] font-bold hover:underline shrink-0 flex items-center gap-0.5">
               Silabus Lengkap <ChevronRight size={13} />
@@ -993,8 +995,8 @@ export function MentorDashboard() {
         </div>
 
         {/* TARGET KURIKULUM & PANDUAN MENGAJAR PEKAN INI */}
-        <div className="lg:col-span-6 bg-white p-5 rounded-2xl border border-[#E6E8EC] shadow-xs flex flex-col justify-between">
-          <div className="flex justify-between items-center pb-3 border-b border-[#F5F6F8]">
+        <div className="lg:col-span-6 bg-white p-5 rounded-2xl border border-slate-100 shadow-xs flex flex-col justify-between">
+          <div className="flex justify-between items-center pb-3 border-b border-slate-50">
             <div>
               <h3 className="font-extrabold text-[#172033] text-sm">
                 Target Silabus Pekan Ini
@@ -1029,13 +1031,13 @@ export function MentorDashboard() {
             </div>
 
             <div className="grid grid-cols-2 gap-2 text-xs font-semibold">
-              <div className="p-2.5 bg-[#F5F6F8] rounded-xl border border-[#E6E8EC]">
+              <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-100">
                 <span className="text-[9px] text-slate-400 font-bold uppercase block mb-0.5">Buku / Pedoman</span>
                 <span className="text-xs font-black text-[#172033] truncate block" title={targetGrade.bookTitle}>
                   {targetGrade.id === 'grade3' ? 'Mushaf Al-Qur\'an & Juz 30' : targetGrade.programName}
                 </span>
               </div>
-              <div className="p-2.5 bg-[#F5F6F8] rounded-xl border border-[#E6E8EC]">
+              <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-100">
                 <span className="text-[9px] text-slate-400 font-bold uppercase block mb-0.5">
                   {targetGrade.id === 'grade3' ? 'Target Hafalan / Bacaan' : 'Halaman Silabus'}
                 </span>
@@ -1048,7 +1050,7 @@ export function MentorDashboard() {
             </div>
           </div>
 
-          <div className="pt-3 border-t border-[#F5F6F8] flex justify-between items-center">
+          <div className="pt-3 border-t border-slate-50 flex justify-between items-center">
             <span className="text-[10px] text-slate-400 font-medium">
               {targetGrade.id === 'grade3' 
                 ? 'Kurikulum Al-Qur\'an & Hafalan — evaluasi mutqin & setoran' 
@@ -1070,10 +1072,10 @@ export function MentorDashboard() {
         
         {/* TABEL SANTRI BINAAN SAYA */}
         <div className="lg:col-span-8 xl:col-span-8 2xl:col-span-9 flex flex-col gap-4">
-          <div className="bg-white rounded-2xl border border-[#E6E8EC] overflow-hidden shadow-xs">
+          <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-xs">
             
             {/* Header Table & Filters */}
-            <div className="p-4 sm:p-5 border-b border-[#E6E8EC] bg-[#F5F6F8] flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+            <div className="p-4 sm:p-5 border-b border-slate-100 bg-slate-50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
               <div>
                 <h3 className="font-extrabold text-[#172033] text-sm sm:text-base">
                   Daftar Santri Binaan {groupTitle}
@@ -1091,12 +1093,12 @@ export function MentorDashboard() {
                     placeholder="Cari santri / kelas..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-8 pr-3 h-9 bg-white border border-[#E6E8EC] rounded-xl text-xs text-[#172033] focus:border-[#0362D0] focus:ring-1 focus:ring-[#0362D0] outline-none w-full sm:w-48 placeholder:text-slate-400 font-medium"
+                    className="pl-8 pr-3 h-9 bg-white border border-slate-100 rounded-xl text-xs text-[#172033] focus:border-[#0362D0] focus:ring-1 focus:ring-[#0362D0] outline-none w-full sm:w-48 placeholder:text-slate-400 font-medium"
                   />
                   <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
                 </div>
 
-                <div className="flex items-center gap-1.5 bg-white border border-[#E6E8EC] rounded-xl h-9 px-2">
+                <div className="flex items-center gap-1.5 bg-white border border-slate-100 rounded-xl h-9 px-2">
                   <select 
                     id="mentor-student-filter-select"
                     value={statusFilter}
@@ -1111,7 +1113,7 @@ export function MentorDashboard() {
                   </select>
                 </div>
 
-                <div className="flex items-center gap-1.5 bg-white border border-[#E6E8EC] rounded-xl h-9 px-2">
+                <div className="flex items-center gap-1.5 bg-white border border-slate-100 rounded-xl h-9 px-2">
                   <select 
                     id="mentor-student-trend-filter"
                     value={trendFilter}
@@ -1137,7 +1139,7 @@ export function MentorDashboard() {
               ) : (
                 <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[780px]">
                   <thead>
-                    <tr className="text-slate-400 border-b border-[#E6E8EC] text-[10px] uppercase tracking-wider font-extrabold bg-[#F5F6F8]/50 whitespace-nowrap">
+                    <tr className="text-slate-400 border-b border-slate-100 text-[10px] uppercase tracking-wider font-extrabold bg-slate-50/50 whitespace-nowrap">
                       <th className="py-3 px-4">Santri</th>
                       <th className="py-3 px-3">Kelas</th>
                       <th className="py-3 px-3">Materi Sesi</th>
@@ -1147,7 +1149,7 @@ export function MentorDashboard() {
                       <th className="py-3 px-4 text-right">Aksi</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#E6E8EC]">
+                  <tbody className="divide-y divide-slate-100">
                     {filteredStudents.map((s) => {
                       let badgeStyle = '';
                       if (s.statusCategory === 'Sangat Baik') {
@@ -1159,14 +1161,14 @@ export function MentorDashboard() {
                       }
 
                       return (
-                        <tr key={s.id} className="hover:bg-[#F5F6F8]/60 transition-colors">
+                        <tr key={s.id} className="hover:bg-slate-50/60 transition-colors">
                           <td className="py-3 px-4 whitespace-nowrap">
                             <div className="font-extrabold text-[#172033]">{s.name}</div>
                             <span className="text-[10px] text-slate-400 font-semibold">{s.nis ? `NIS: ${s.nis}` : 'Santri Aktif'}</span>
                           </td>
                           <td className="py-3 px-3 font-bold text-slate-700 whitespace-nowrap">{s.class}</td>
                           <td className="py-3 px-3 whitespace-nowrap">
-                            <span className="font-bold text-[#172033] bg-[#F5F6F8] px-2.5 py-1 rounded-md text-[11px] border border-[#E6E8EC] inline-block whitespace-nowrap">
+                            <span className="font-bold text-[#172033] bg-slate-50 px-2.5 py-1 rounded-md text-[11px] border border-slate-100 inline-block whitespace-nowrap">
                               {s.currentStage}
                             </span>
                           </td>
@@ -1221,7 +1223,7 @@ export function MentorDashboard() {
                   }
 
                   return (
-                    <div key={s.id} className="bg-white border border-[#E6E8EC] rounded-xl p-3.5 shadow-xs">
+                    <div key={s.id} className="bg-white border border-slate-100 rounded-xl p-3.5 shadow-xs">
                       <div className="flex justify-between items-start mb-2">
                         <div>
                           <h4 className="font-extrabold text-[#172033] text-xs sm:text-sm">{s.name}</h4>
@@ -1232,13 +1234,13 @@ export function MentorDashboard() {
                         </span>
                       </div>
 
-                      <div className="bg-[#F5F6F8] p-2 rounded-lg text-xs font-bold text-[#172033] mb-2.5 border border-[#E6E8EC] flex justify-between items-center">
+                      <div className="bg-slate-50 p-2 rounded-lg text-xs font-bold text-[#172033] mb-2.5 border border-slate-100 flex justify-between items-center">
                         <span>Materi: {s.currentStage}</span>
                         <span className="text-[#0362D0] font-black">Nilai: {s.progressScore}</span>
                       </div>
 
                       {/* Sparkline & Trend in Mobile Card */}
-                      <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-50 border border-[#E6E8EC] mb-2.5">
+                      <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-50 border border-slate-100 mb-2.5">
                         <div className="flex items-center gap-2">
                           <SparklineProgress history={s.sessionHistory} score={s.progressScore} />
                         </div>
@@ -1274,8 +1276,8 @@ export function MentorDashboard() {
           />
 
           {/* RIWAYAT JURNAL HALAQAH SAYA */}
-          <div className="bg-white rounded-2xl border border-[#E6E8EC] p-5 shadow-xs flex flex-col justify-between">
-            <div className="flex justify-between items-center pb-3 border-b border-[#F5F6F8] mb-3">
+          <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-xs flex flex-col justify-between">
+            <div className="flex justify-between items-center pb-3 border-b border-slate-50 mb-3">
               <div className="flex items-center gap-2">
                 <FileText size={16} className="text-[#0362D0]" />
                 <h3 className="font-extrabold text-[#172033] text-sm">
@@ -1289,7 +1291,7 @@ export function MentorDashboard() {
 
             {journals.length > 0 ? (
               <div className="space-y-3">
-                <div className="p-3 bg-[#F5F6F8] rounded-xl border border-[#E6E8EC]">
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
                   <div className="flex justify-between items-center text-[10px] text-slate-400 font-bold mb-1">
                     <span>{journals[0].date}</span>
                     <span className="text-[#0362D0] font-black">{journals[0].pagesCovered || 'Sesi Terakhir'}</span>
@@ -1322,10 +1324,10 @@ export function MentorDashboard() {
               </div>
             )}
 
-            <div className="mt-4 pt-3 border-t border-[#F5F6F8]">
+            <div className="mt-4 pt-3 border-t border-slate-50">
               <Link 
                 to="/session" 
-                className="w-full py-2 bg-[#F5F6F8] hover:bg-[#E6E8EC] text-slate-700 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors block text-center"
+                className="w-full py-2 bg-slate-50 hover:bg-[#f1f5f9] text-slate-700 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors block text-center"
               >
                 <span>Lihat Formulir Sesi Lengkap</span>
                 <ChevronRight size={13} />

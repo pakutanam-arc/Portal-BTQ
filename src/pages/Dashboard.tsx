@@ -14,3 +14,5 @@ export function Dashboard() {
 
   return <MentorDashboard />;
 }
+
+export default Dashboard;

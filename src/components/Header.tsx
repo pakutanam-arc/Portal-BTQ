@@ -30,12 +30,15 @@ import {
   createNotification, 
   deleteNotification 
 } from '../services/db';
+import { PWAInstallButton } from './pwa/PWAInstallButton';
+import { NetworkStatusIndicator } from './network/NetworkStatusIndicator';
 
 const routeNames: Record<string, string> = {
   '/': 'Dashboard',
+  '/session': 'Sesi Mengajar',
   '/students': 'Data Siswa',
   '/groups': 'Kelompok BTQ',
-  '/attendance/students': 'Absensi Siswa',
+  '/attendance/students': 'Presensi Siswa',
   '/attendance/mentors': 'Kehadiran Mentor',
   '/progress': 'Progress BTQ',
   '/journals': 'Jurnal Mengajar',
@@ -43,6 +46,7 @@ const routeNames: Record<string, string> = {
   '/curriculum': 'Kurikulum & Timeline',
   '/reports': 'Laporan',
   '/settings': 'Pengaturan',
+  '/audit-logs': 'Log Audit Sistem',
 };
 
 function formatRelativeTime(dateStr: string): string {
@@ -91,6 +95,30 @@ export function Header() {
   const userIdentifier = currentUser?.uid || userData?.id || currentUser?.email || 'guest_user';
   const username = userData?.name || currentUser?.email?.split('@')[0] || 'User';
   const roleDisplay = userRole === 'admin' ? 'Administrator' : 'Mentor BTQ';
+
+  // Dynamic Academic Year Config
+  const [academicConfig, setAcademicConfig] = useState<{ academicYear: string; semester: string }>({
+    academicYear: '2026/2027',
+    semester: 'Ganjil',
+  });
+
+  useEffect(() => {
+    const readConfig = () => {
+      try {
+        const raw = localStorage.getItem('sibtq_academic_config');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          setAcademicConfig({
+            academicYear: parsed.academicYear || '2026/2027',
+            semester: parsed.semester || 'Ganjil',
+          });
+        }
+      } catch {}
+    };
+    readConfig();
+    window.addEventListener('sibtq_academic_updated', readConfig);
+    return () => window.removeEventListener('sibtq_academic_updated', readConfig);
+  }, []);
 
   // Real-time subscription to notifications
   useEffect(() => {
@@ -194,18 +222,24 @@ export function Header() {
           <input 
             type="text" 
             placeholder="Cari siswa, kelompok, atau menu..." 
-            className="w-full pl-9 pr-4 py-1.5 bg-[#F5F6F8] border border-[#E6E8EC] rounded-full text-xs text-[#172033] focus:bg-white focus:border-[#0362D0] focus:ring-2 focus:ring-[#0362D0]/20 outline-none transition-all placeholder:text-slate-400"
+            className="w-full pl-9 pr-4 py-1.5 bg-slate-50 border border-slate-100 rounded-full text-xs text-[#172033] focus:bg-white focus:border-[#0362D0] focus:ring-2 focus:ring-[#0362D0]/20 outline-none transition-all placeholder:text-slate-400"
           />
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 icon-md" />
         </div>
       </div>
 
       {/* Right Section: Notification, Academic Year, Profile */}
-      <div className="flex items-center gap-3 lg:gap-4 ml-auto">
+      <div className="flex items-center gap-2 sm:gap-2.5 lg:gap-3 ml-auto">
+        {/* Network Connectivity Status Indicator (Online/Offline) */}
+        <NetworkStatusIndicator />
+
+        {/* PWA Install Button */}
+        <PWAInstallButton compact={true} />
+
         {/* Academic Year Badge */}
-        <div className="hidden lg:flex items-center gap-1.5 px-3 py-1 bg-[#F5F6F8] border border-[#E6E8EC] rounded-full text-[11px] font-bold text-[#172033]">
+        <div className="hidden lg:flex items-center gap-1.5 px-3 py-1 bg-slate-50 border border-slate-100 rounded-full text-[11px] font-bold text-[#172033]">
           <span className="w-2 h-2 rounded-full bg-[#C99A2E]" />
-          <span>Tahun Pelajaran 2026/2027 • Ganjil</span>
+          <span>Tahun Pelajaran {academicConfig.academicYear} • {academicConfig.semester}</span>
         </div>
 
         {/* Notification Bell */}
@@ -213,7 +247,7 @@ export function Header() {
           <button 
             id="notification-bell-btn"
             onClick={() => { setIsNotifOpen(!isNotifOpen); setIsProfileOpen(false); }}
-            className="relative p-2 bg-[#F5F6F8] border border-[#E6E8EC] rounded-full text-[#172033] hover:text-[#0362D0] hover:border-[#0362D0]/40 hover:bg-white transition-all active:scale-95"
+            className="relative p-2 bg-slate-50 border border-slate-100 rounded-full text-[#172033] hover:text-[#0362D0] hover:border-[#0362D0]/40 hover:bg-white transition-all active:scale-95"
             aria-label="Lihat Notifikasi"
           >
             <Bell className="icon-nav" />
@@ -228,12 +262,12 @@ export function Header() {
           {isNotifOpen && (
             <>
               <div className="fixed inset-0 z-40" onClick={() => setIsNotifOpen(false)} />
-              <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-[#E6E8EC] overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
                 
                 {/* Header */}
-                <div className="p-3.5 border-b border-[#E6E8EC] bg-[#172033] text-white flex justify-between items-center">
+                <div className="p-3.5 border-b border-slate-100 bg-[#172033] text-white flex justify-between items-center">
                   <div className="flex items-center gap-2">
-                    <h3 className="font-bold text-xs sm:text-sm">Notifikasi Portal</h3>
+                    <h3 className="font-bold text-xs sm:text-sm text-white">Notifikasi Portal</h3>
                     {unreadCount > 0 && (
                       <span className="px-2 py-0.5 bg-[#950415] text-white text-[10px] font-extrabold rounded-full">
                         {unreadCount} baru
@@ -260,7 +294,7 @@ export function Header() {
                 </div>
 
                 {/* Filter Tabs */}
-                <div className="flex border-b border-[#E6E8EC] bg-[#F5F6F8] px-3 pt-2">
+                <div className="flex border-b border-slate-100 bg-slate-50 px-3 pt-2">
                   <button
                     onClick={() => setNotifTab('all')}
                     className={cn(
@@ -286,7 +320,7 @@ export function Header() {
                 </div>
 
                 {/* Notification List */}
-                <div className="max-h-[340px] overflow-y-auto divide-y divide-[#E6E8EC]">
+                <div className="max-h-[340px] overflow-y-auto divide-y divide-slate-100">
                   {displayedNotifs.length > 0 ? (
                     displayedNotifs.map(notif => {
                       const isRead = notif.readBy && notif.readBy.includes(userIdentifier);
@@ -295,7 +329,7 @@ export function Header() {
                           key={notif.id} 
                           onClick={() => handleNotificationClick(notif)}
                           className={cn(
-                            "p-3.5 hover:bg-[#F5F6F8] cursor-pointer transition-colors group relative flex gap-3 items-start",
+                            "p-3.5 hover:bg-slate-50 cursor-pointer transition-colors group relative flex gap-3 items-start",
                             !isRead ? "bg-blue-50/40" : "bg-white"
                           )}
                         >
@@ -321,7 +355,7 @@ export function Header() {
                             <div className="flex items-center justify-between mt-2 pt-1">
                               <div className="flex items-center gap-1.5">
                                 {notif.createdBy && (
-                                  <span className="text-[9px] px-1.5 py-0.5 bg-[#F5F6F8] text-slate-600 font-bold rounded border border-[#E6E8EC]">
+                                  <span className="text-[9px] px-1.5 py-0.5 bg-slate-50 text-slate-600 font-bold rounded border border-slate-100">
                                     {notif.createdBy}
                                   </span>
                                 )}
@@ -358,7 +392,7 @@ export function Header() {
 
                 {/* Footer */}
                 {notifications.length > 0 && (
-                  <div className="p-2.5 px-3 bg-[#F5F6F8] border-t border-[#E6E8EC] flex justify-between items-center">
+                  <div className="p-2.5 px-3 bg-slate-50 border-t border-slate-100 flex justify-between items-center">
                     <button 
                       onClick={handleMarkAllRead}
                       className="text-xs font-bold text-[#0362D0] hover:underline flex items-center gap-1.5 transition-colors disabled:opacity-50"
@@ -382,11 +416,11 @@ export function Header() {
         </div>
 
         {/* User Profile */}
-        <div className="h-6 w-px bg-[#E6E8EC]" />
+        <div className="h-6 w-px bg-[#f1f5f9]" />
 
         <div className="relative">
           <div 
-            className="flex items-center gap-2.5 cursor-pointer group p-1 rounded-xl hover:bg-[#F5F6F8] transition-colors"
+            className="flex items-center gap-2.5 cursor-pointer group p-1 rounded-xl hover:bg-slate-50 transition-colors"
             onClick={() => { setIsProfileOpen(!isProfileOpen); setIsNotifOpen(false); }}
           >
             <div className="w-8 h-8 rounded-xl bg-[#0362D0] text-white flex items-center justify-center text-xs font-bold shadow-sm ring-2 ring-[#0362D0]/20 group-hover:bg-[#0252b3] transition-colors">
@@ -401,8 +435,8 @@ export function Header() {
           {isProfileOpen && (
             <>
               <div className="fixed inset-0 z-40" onClick={() => setIsProfileOpen(false)} />
-              <div className="absolute right-0 mt-2 w-52 bg-white rounded-2xl shadow-xl border border-[#E6E8EC] overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
-                <div className="p-3 border-b border-[#E6E8EC] bg-[#F5F6F8]">
+              <div className="absolute right-0 mt-2 w-52 bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="p-3 border-b border-slate-100 bg-slate-50">
                   <p className="text-xs font-extrabold text-[#172033] capitalize">{username}</p>
                   <p className="text-[10px] text-[#950415] font-bold">{roleDisplay}</p>
                   <p className="text-[10px] text-slate-500 mt-0.5 truncate">{currentUser?.email || ''}</p>
@@ -425,15 +459,15 @@ export function Header() {
       {/* Broadcast Announcement Modal */}
       {isBroadcastOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#172033]/60 backdrop-blur-xs p-4 animate-in fade-in">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-[#E6E8EC] animate-in zoom-in-95 duration-200">
-            <div className="flex justify-between items-center mb-4 border-b border-[#E6E8EC] pb-3">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 animate-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-3">
               <div>
                 <h3 className="font-extrabold text-base text-[#172033]">Kirim Notifikasi Real-time</h3>
                 <p className="text-xs text-slate-500 mt-0.5">Portal BTQ SMP Negeri 102 Jakarta</p>
               </div>
               <button 
                 onClick={() => setIsBroadcastOpen(false)} 
-                className="text-slate-400 hover:text-[#172033] p-1.5 rounded-lg hover:bg-[#F5F6F8] transition-colors"
+                className="text-slate-400 hover:text-[#172033] p-1.5 rounded-lg hover:bg-slate-50 transition-colors"
               >
                 <X className="icon-nav" />
               </button>
@@ -448,7 +482,7 @@ export function Header() {
                   placeholder="Contoh: Pengingat Absensi Sesi Sabtu"
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
-                  className="w-full px-3 py-2 bg-[#F5F6F8] border border-[#E6E8EC] rounded-xl text-xs focus:ring-2 focus:ring-[#0362D0]/20 focus:border-[#0362D0] focus:bg-white outline-none"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-100 rounded-xl text-xs focus:ring-2 focus:ring-[#0362D0]/20 focus:border-[#0362D0] focus:bg-white outline-none"
                 />
               </div>
 
@@ -460,7 +494,7 @@ export function Header() {
                   placeholder="Tuliskan instruksi atau pengumuman..."
                   value={newMessage}
                   onChange={(e) => setNewMessage(e.target.value)}
-                  className="w-full px-3 py-2 bg-[#F5F6F8] border border-[#E6E8EC] rounded-xl text-xs focus:ring-2 focus:ring-[#0362D0]/20 focus:border-[#0362D0] focus:bg-white outline-none resize-none"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-100 rounded-xl text-xs focus:ring-2 focus:ring-[#0362D0]/20 focus:border-[#0362D0] focus:bg-white outline-none resize-none"
                 />
               </div>
 
@@ -470,7 +504,7 @@ export function Header() {
                   <select 
                     value={newType}
                     onChange={(e) => setNewType(e.target.value as any)}
-                    className="w-full px-3 py-2 bg-[#F5F6F8] border border-[#E6E8EC] rounded-xl text-xs focus:ring-2 focus:ring-[#0362D0] outline-none font-medium"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-100 rounded-xl text-xs focus:ring-2 focus:ring-[#0362D0] outline-none font-medium"
                   >
                     <option value="info">Informasi (Biru)</option>
                     <option value="warning">Peringatan (Emas)</option>
@@ -484,7 +518,7 @@ export function Header() {
                   <select 
                     value={newTargetRole}
                     onChange={(e) => setNewTargetRole(e.target.value as any)}
-                    className="w-full px-3 py-2 bg-[#F5F6F8] border border-[#E6E8EC] rounded-xl text-xs focus:ring-2 focus:ring-[#0362D0] outline-none font-medium"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-100 rounded-xl text-xs focus:ring-2 focus:ring-[#0362D0] outline-none font-medium"
                   >
                     <option value="all">Semua (Mentor & Admin)</option>
                     <option value="mentor">Khusus Mentor BTQ</option>
@@ -498,7 +532,7 @@ export function Header() {
                 <select 
                   value={newLink}
                   onChange={(e) => setNewLink(e.target.value)}
-                  className="w-full px-3 py-2 bg-[#F5F6F8] border border-[#E6E8EC] rounded-xl text-xs focus:ring-2 focus:ring-[#0362D0] outline-none font-medium"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-100 rounded-xl text-xs focus:ring-2 focus:ring-[#0362D0] outline-none font-medium"
                 >
                   <option value="/attendance/students">Halaman Absensi Siswa</option>
                   <option value="/attendance/mentors">Halaman Kehadiran Mentor</option>
@@ -509,7 +543,7 @@ export function Header() {
                 </select>
               </div>
 
-              <div className="flex justify-end gap-2 pt-3 border-t border-[#E6E8EC]">
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setIsBroadcastOpen(false)}

@@ -7,11 +7,12 @@ import { Input } from '../components/ui/Input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/Table';
 import { getMentors, getMentorAttendance, saveMentorAttendance, Mentor } from '../services/db';
 import { cn } from '../utils/cn';
+import { Toast } from '../components/Toast';
 
 export function MentorAttendance() {
   const [mentors, setMentors] = useState<Mentor[]>([]);
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
-  const [showToast, setShowToast] = useState(false);
+  const [toast, setToast] = useState<{ show: boolean, type: 'success' | 'error', message: string, description?: string }>({ show: false, type: 'success', message: '' });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   
@@ -100,11 +101,10 @@ export function MentorAttendance() {
       }));
       
       await saveMentorAttendance(recordsToSave);
-      setShowToast(true);
-      setTimeout(() => setShowToast(false), 3000);
+      setToast({ show: true, type: 'success', message: 'Presensi Mentor Berhasil Disimpan', description: `Data presensi mentor tanggal ${selectedDate} telah tersimpan.` });
     } catch (error) {
       console.error("Error saving attendance:", error);
-      alert("Gagal menyimpan absensi mentor");
+      setToast({ show: true, type: 'error', message: 'Gagal Menyimpan', description: 'Gagal menyimpan absensi mentor.' });
     } finally {
       setSaving(false);
     }
@@ -124,7 +124,7 @@ export function MentorAttendance() {
   return (
     <div className="flex flex-col gap-4 sm:gap-6 w-full pb-12">
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-3xl border border-[#E6E8EC] shadow-xs">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-3xl border border-slate-100 shadow-xs">
         <div>
           <div className="flex items-center gap-2">
             <h1 className={theme.typography.h1}>Presensi Kehadiran Mentor</h1>
@@ -138,8 +138,8 @@ export function MentorAttendance() {
         </div>
       </div>
 
-      <Card className="border border-[#E6E8EC] rounded-3xl overflow-hidden shadow-xs bg-white">
-        <div className="p-5 border-b border-[#E6E8EC] bg-[#F5F6F8]/60">
+      <Card className="border border-slate-100 rounded-3xl overflow-hidden shadow-xs bg-white">
+        <div className="p-5 border-b border-slate-100 bg-slate-50/60">
           <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
             <div className="space-y-1.5 w-full md:w-80">
               <label className="text-xs font-black text-[#172033] uppercase tracking-wider">Tanggal Bimbingan</label>
@@ -157,13 +157,13 @@ export function MentorAttendance() {
           </div>
         </div>
         
-        <div className="p-4 flex items-center justify-between border-b border-[#E6E8EC] bg-white">
+        <div className="p-4 flex items-center justify-between border-b border-slate-100 bg-white">
           <h3 className="font-extrabold text-[#172033] text-sm">Daftar Mentor Terdaftar ({mentors.length} orang)</h3>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => setAllStatus('Hadir')} className="border-[#E6E8EC] text-[#172033] font-bold text-xs hover:bg-[#F5F6F8]">
+            <Button variant="outline" size="sm" onClick={() => setAllStatus('Hadir')} className="border-slate-100 text-[#172033] font-bold text-xs hover:bg-slate-50">
               Hadir Semua
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setAllStatus('Hadir')} className="border-[#E6E8EC] text-slate-600 font-bold text-xs hover:bg-[#F5F6F8]">
+            <Button variant="outline" size="sm" onClick={() => setAllStatus('Hadir')} className="border-slate-100 text-slate-600 font-bold text-xs hover:bg-slate-50">
               <RotateCcw size={14} className="mr-1.5" /> Reset
             </Button>
           </div>
@@ -171,8 +171,8 @@ export function MentorAttendance() {
 
         <div className="hidden md:block">
           <Table>
-            <TableHeader className="bg-[#F5F6F8]">
-              <TableRow className="border-b border-[#E6E8EC]">
+            <TableHeader className="bg-slate-50">
+              <TableRow className="border-b border-slate-100">
                 <TableHead className="w-12 text-center font-black text-[#172033] text-xs">No</TableHead>
                 <TableHead className="font-black text-[#172033] text-xs">Nama Mentor</TableHead>
                 <TableHead className="text-center font-black text-[#172033] text-xs">Status Presensi</TableHead>
@@ -192,14 +192,14 @@ export function MentorAttendance() {
                   const currentNotes = attendance[mentor.id]?.notes || '';
                   
                   return (
-                    <TableRow key={mentor.id} className="hover:bg-[#F5F6F8]/60 transition-colors border-b border-[#E6E8EC]">
+                    <TableRow key={mentor.id} className="hover:bg-slate-50/60 transition-colors border-b border-slate-100">
                       <TableCell className="text-center text-slate-500 font-bold text-xs py-3.5">{idx + 1}</TableCell>
                       <TableCell className="py-3.5">
                         <div className="font-extrabold text-[#172033] text-sm">{mentor.name}</div>
                         <div className="text-[11px] text-slate-400 font-medium">{mentor.email}</div>
                       </TableCell>
                       <TableCell className="text-center py-3.5">
-                        <div className="inline-flex rounded-xl border border-[#E6E8EC] overflow-hidden p-1 bg-[#F5F6F8]">
+                        <div className="inline-flex rounded-xl border border-slate-100 overflow-hidden p-1 bg-slate-50">
                           {[
                             { label: 'Hadir', activeClass: 'bg-emerald-600 text-white shadow-2xs' },
                             { label: 'Izin', activeClass: 'bg-amber-500 text-white shadow-2xs' },
@@ -230,7 +230,7 @@ export function MentorAttendance() {
                             value={currentNotes}
                             onChange={(e) => handleNotesChange(mentor.id, e.target.value)}
                             placeholder="Catatan keutamaan/keterangan..." 
-                            className="w-full text-xs border border-[#E6E8EC] bg-white rounded-xl py-2 pl-9 pr-3 focus:outline-none focus:ring-2 focus:ring-[#0362D0] text-[#172033]"
+                            className="w-full text-xs border border-slate-100 bg-white rounded-xl py-2 pl-9 pr-3 focus:outline-none focus:ring-2 focus:ring-[#0362D0] text-[#172033]"
                           />
                         </div>
                       </TableCell>
@@ -243,7 +243,7 @@ export function MentorAttendance() {
         </div>
 
         {/* Mobile Card View */}
-        <div className="md:hidden divide-y divide-[#E6E8EC]">
+        <div className="md:hidden divide-y divide-slate-100">
           {mentors.length === 0 ? (
             <div className="p-8 text-center text-xs text-slate-500 font-medium">
               Belum ada data mentor di database.
@@ -260,7 +260,7 @@ export function MentorAttendance() {
                     <div className="text-[11px] text-slate-400">{mentor.email}</div>
                   </div>
                   
-                  <div className="grid grid-cols-4 gap-1.5 p-1 bg-[#F5F6F8] rounded-xl border border-[#E6E8EC]">
+                  <div className="grid grid-cols-4 gap-1.5 p-1 bg-slate-50 rounded-xl border border-slate-100">
                     {[
                       { label: 'Hadir', activeClass: 'bg-emerald-600 text-white' },
                       { label: 'Izin', activeClass: 'bg-amber-500 text-white' },
@@ -290,7 +290,7 @@ export function MentorAttendance() {
                       value={currentNotes}
                       onChange={(e) => handleNotesChange(mentor.id, e.target.value)}
                       placeholder="Catatan..." 
-                      className="w-full text-xs border border-[#E6E8EC] bg-white rounded-xl py-2 pl-9 pr-3 focus:outline-none focus:ring-2 focus:ring-[#0362D0]"
+                      className="w-full text-xs border border-slate-100 bg-white rounded-xl py-2 pl-9 pr-3 focus:outline-none focus:ring-2 focus:ring-[#0362D0]"
                     />
                   </div>
                 </div>
@@ -299,7 +299,7 @@ export function MentorAttendance() {
           )}
         </div>
         
-        <div className="p-5 border-t border-[#E6E8EC] bg-[#F5F6F8]/70 flex justify-end">
+        <div className="p-5 border-t border-slate-100 bg-slate-50/70 flex justify-end">
           <Button onClick={handleSave} className="w-full sm:w-auto bg-[#0362D0] hover:bg-[#0252b3] text-white font-bold py-2.5 shadow-xs cursor-pointer" disabled={saving}>
             {saving ? <Loader2 size={18} className="mr-2 animate-spin" /> : <Save size={18} className="mr-2" />} 
             {saving ? 'Menyimpan Absensi...' : 'Simpan Presensi Mentor'}
@@ -308,14 +308,13 @@ export function MentorAttendance() {
       </Card>
 
       {/* Toast Notification */}
-      {showToast && (
-        <div className="fixed bottom-8 right-8 bg-[#172033] text-white px-5 py-4 rounded-2xl shadow-2xl flex items-center gap-3 animate-in slide-in-from-bottom-5 fade-in duration-300 z-50 border border-[#E6E8EC]/20">
-          <CheckCircle className="text-[#C99A2E] shrink-0" size={24} />
-          <div>
-            <p className="text-sm font-black">Presensi Mentor Berhasil Disimpan</p>
-            <p className="text-xs text-slate-300 font-medium">Data presensi mentor tanggal {selectedDate} telah tersimpan.</p>
-          </div>
-        </div>
+      {toast.show && (
+        <Toast
+          message={toast.message}
+          description={toast.description}
+          type={toast.type}
+          onClose={() => setToast(prev => ({ ...prev, show: false }))}
+        />
       )}
     </div>
   );

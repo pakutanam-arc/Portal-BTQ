@@ -22,7 +22,7 @@ export function StudentTableSkeleton({
   return (
     <div id="student-table-skeleton-container" className="w-full">
       {/* Top Subtle Sync Status Indicator */}
-      <div className="px-4 py-2 bg-gradient-to-r from-[#0362D0]/5 via-[#F5F6F8] to-[#0362D0]/5 border-b border-[#E6E8EC] flex items-center justify-between text-xs">
+      <div className="px-4 py-2 bg-gradient-to-r from-[#0362D0]/5 via-[#F5F6F8] to-[#0362D0]/5 border-b border-slate-100 flex items-center justify-between text-xs">
         <div className="flex items-center gap-2 text-slate-500 font-medium">
           <span className="relative flex h-2 w-2">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#0362D0] opacity-75"></span>
@@ -39,8 +39,8 @@ export function StudentTableSkeleton({
       {/* Desktop Table Skeleton */}
       <div className="hidden md:block">
         <Table>
-          <TableHeader className="bg-[#F5F6F8]">
-            <TableRow className="border-b border-[#E6E8EC]">
+          <TableHeader className="bg-slate-50">
+            <TableRow className="border-b border-slate-100">
               <TableHead className="w-16 text-center font-black text-[#172033] text-xs whitespace-nowrap px-4 py-3.5">
                 No
               </TableHead>
@@ -83,7 +83,7 @@ export function StudentTableSkeleton({
               return (
                 <TableRow
                   key={`skeleton-row-${idx}`}
-                  className="border-b border-[#E6E8EC]/80 animate-pulse"
+                  className="border-b border-slate-100/80 animate-pulse"
                 >
                   {/* No */}
                   <TableCell className="text-center px-4 py-3.5">
@@ -113,7 +113,7 @@ export function StudentTableSkeleton({
                     <>
                       {/* Kelompok BTQ */}
                       <TableCell className="px-4 py-3.5 whitespace-nowrap">
-                        <div className={`h-6 ${groupW} bg-slate-100 border border-[#E6E8EC] rounded-md`} />
+                        <div className={`h-6 ${groupW} bg-slate-100 border border-slate-100 rounded-md`} />
                       </TableCell>
 
                       {/* Status */}
@@ -134,7 +134,7 @@ export function StudentTableSkeleton({
                     <>
                       {/* Status Presensi Pills (Hadir, Izin, Sakit, Alpa) */}
                       <TableCell className="text-center px-4 py-3.5 whitespace-nowrap">
-                        <div className="inline-grid grid-cols-4 gap-1 p-1 bg-[#F5F6F8] rounded-xl border border-[#E6E8EC] w-64">
+                        <div className="inline-grid grid-cols-4 gap-1 p-1 bg-slate-50 rounded-xl border border-slate-100 w-64">
                           <div className="h-7 bg-emerald-100/70 rounded-lg" />
                           <div className="h-7 bg-slate-200 rounded-lg" />
                           <div className="h-7 bg-slate-200 rounded-lg" />
@@ -144,7 +144,7 @@ export function StudentTableSkeleton({
 
                       {/* Catatan Mentor Input */}
                       <TableCell className="px-4 py-3.5 whitespace-nowrap">
-                        <div className="h-8 w-48 bg-slate-100 border border-[#E6E8EC] rounded-lg" />
+                        <div className="h-8 w-48 bg-slate-100 border border-slate-100 rounded-lg" />
                       </TableCell>
                     </>
                   )}
@@ -164,7 +164,7 @@ export function StudentTableSkeleton({
           return (
             <div
               key={`skeleton-mobile-${idx}`}
-              className="bg-white border border-[#E6E8EC] rounded-xl p-4 shadow-xs animate-pulse"
+              className="bg-white border border-slate-100 rounded-xl p-4 shadow-xs animate-pulse"
             >
               {/* Top Row: Avatar, Name/NIS, and Status Pill */}
               <div className="flex justify-between items-start mb-3">
@@ -183,11 +183,11 @@ export function StudentTableSkeleton({
                   {/* Badges Row */}
                   <div className="flex flex-wrap gap-2 mb-4">
                     <div className="h-6 w-16 bg-[#0362D0]/10 border border-[#0362D0]/15 rounded-md" />
-                    <div className="h-6 w-32 bg-slate-100 border border-[#E6E8EC] rounded-md" />
+                    <div className="h-6 w-32 bg-slate-100 border border-slate-100 rounded-md" />
                   </div>
 
                   {/* Action Buttons Row */}
-                  <div className="flex items-center justify-end gap-2 pt-3 border-t border-[#E6E8EC]">
+                  <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
                     <div className="h-8 flex-1 bg-slate-200/80 rounded-md" />
                     <div className="h-8 flex-1 bg-[#0362D0]/15 rounded-md" />
                     <div className="h-8 flex-1 bg-rose-100/70 rounded-md" />
@@ -196,14 +196,14 @@ export function StudentTableSkeleton({
               ) : (
                 <>
                   {/* 4 Status Buttons in Mobile */}
-                  <div className="grid grid-cols-4 gap-1.5 p-1 bg-[#F5F6F8] rounded-xl border border-[#E6E8EC] my-3">
+                  <div className="grid grid-cols-4 gap-1.5 p-1 bg-slate-50 rounded-xl border border-slate-100 my-3">
                     <div className="h-7 bg-emerald-100/70 rounded-lg" />
                     <div className="h-7 bg-slate-200 rounded-lg" />
                     <div className="h-7 bg-slate-200 rounded-lg" />
                     <div className="h-7 bg-slate-200 rounded-lg" />
                   </div>
                   {/* Catatan input in Mobile */}
-                  <div className="h-8 w-full bg-slate-100 border border-[#E6E8EC] rounded-lg" />
+                  <div className="h-8 w-full bg-slate-100 border border-slate-100 rounded-lg" />
                 </>
               )}
             </div>
@@ -213,7 +213,7 @@ export function StudentTableSkeleton({
 
       {/* Skeleton Pagination Footer */}
       {showFooter && (
-        <div className="p-4 border-t border-[#E6E8EC] bg-[#F5F6F8]/50 flex flex-col sm:flex-row items-center justify-between gap-4 animate-pulse">
+        <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row items-center justify-between gap-4 animate-pulse">
           <div className="h-4 w-48 bg-slate-200 rounded" />
           <div className="flex gap-1.5">
             <div className="h-8 w-20 bg-slate-200 rounded-md" />

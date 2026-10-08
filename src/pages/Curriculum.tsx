@@ -83,7 +83,7 @@ export function Curriculum() {
   return (
     <div className="flex flex-col gap-4 sm:gap-6 w-full pb-12">
       {/* Header Title */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-3xl border border-[#E6E8EC] shadow-xs">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-3xl border border-slate-100 shadow-xs">
         <div>
           <div className="flex items-center gap-2">
             <h1 className={theme.typography.h1}>Kurikulum & Timeline Pembelajaran</h1>
@@ -108,7 +108,7 @@ export function Curriculum() {
       <CurriculumSyncAlert groupIdFilter={selectedGroup} />
 
       {/* Info Status Banner (Jadwal & Riwayat Tahap) */}
-      <div className="bg-gradient-to-r from-[#172033] via-[#0362D0] to-[#172033] text-white rounded-3xl p-6 shadow-md border border-[#E6E8EC]">
+      <div className="bg-gradient-to-r from-[#172033] via-[#0362D0] to-[#172033] text-white rounded-3xl p-6 shadow-md border border-slate-100">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">
@@ -122,7 +122,7 @@ export function Curriculum() {
                 Status: {completedMeetings.length} Pertemuan Terlaksana
               </span>
             </div>
-            <h2 className="text-xl md:text-2xl font-black tracking-tight">
+            <h2 className="text-xl md:text-2xl font-black tracking-tight text-white">
               Timeline Kegiatan BTQ SMP Negeri 102 Jakarta
             </h2>
             <p className="text-xs md:text-sm text-slate-200 leading-relaxed max-w-3xl font-medium">
@@ -154,8 +154,8 @@ export function Curriculum() {
       </div>
 
       {/* Filters Bar */}
-      <Card className="border border-[#E6E8EC] rounded-3xl overflow-hidden shadow-xs bg-white">
-        <div className="p-5 bg-[#F5F6F8]/60 flex flex-col md:flex-row gap-4">
+      <Card className="border border-slate-100 rounded-3xl overflow-hidden shadow-xs bg-white">
+        <div className="p-5 bg-slate-50/60 flex flex-col md:flex-row gap-4">
           <div className="flex-1 space-y-1.5">
             <label className="text-xs font-black text-[#172033] uppercase tracking-wider flex items-center justify-between">
               <span>Program / Grade</span>
@@ -208,7 +208,7 @@ export function Curriculum() {
       <div className="flex flex-col xl:flex-row gap-6">
         {/* Timeline View */}
         <div className="flex-1">
-          <div className="mb-6 bg-white p-6 rounded-3xl border border-[#E6E8EC] shadow-xs">
+          <div className="mb-6 bg-white p-6 rounded-3xl border border-slate-100 shadow-xs">
             <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
               <span className="px-3 py-1 rounded-xl bg-[#0362D0]/10 text-[#0362D0] text-xs font-black border border-[#0362D0]/20">
                 {currentGrade?.name} — {currentGrade?.programName}
@@ -219,17 +219,17 @@ export function Curriculum() {
             </div>
             <h2 className="text-lg font-black text-[#172033] mb-1">{currentGrade?.bookTitle}</h2>
             <p className="text-xs text-slate-600 leading-relaxed mb-3 font-medium">{currentGrade?.description}</p>
-            <div className="flex flex-wrap items-center gap-1.5 pt-3 border-t border-[#E6E8EC]">
+            <div className="flex flex-wrap items-center gap-1.5 pt-3 border-t border-slate-100">
               <span className="text-xs font-black text-[#172033] mr-1">Kelompok Binaan:</span>
               {currentGrade?.groups.map(grp => (
-                <span key={grp} className="px-2.5 py-0.5 rounded-lg bg-[#F5F6F8] text-[#172033] text-xs font-bold border border-[#E6E8EC]">
+                <span key={grp} className="px-2.5 py-0.5 rounded-lg bg-slate-50 text-[#172033] text-xs font-bold border border-slate-100">
                   {grp}
                 </span>
               ))}
             </div>
           </div>
 
-          <div className="relative border-l-2 border-[#E6E8EC] ml-4 md:ml-6 space-y-6 py-2">
+          <div className="relative border-l-2 border-slate-100 ml-4 md:ml-6 space-y-6 py-2">
             {currentSessions.map((session) => {
               const sessionNum = session.sessionNumber;
               const isCompleted = completedMeetings.includes(sessionNum);
@@ -251,7 +251,7 @@ export function Curriculum() {
                   <Card className={cn(
                     "transition-all border rounded-3xl overflow-hidden shadow-xs",
                     isActive ? "ring-2 ring-[#C99A2E] border-[#C99A2E] bg-[#C99A2E]/5" :
-                    isCompleted ? "border-[#E6E8EC] bg-white" : "border-[#E6E8EC] bg-white opacity-90"
+                    isCompleted ? "border-slate-100 bg-white" : "border-slate-100 bg-white opacity-90"
                   )}>
                     <CardContent className="p-5 md:p-6">
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
@@ -261,7 +261,7 @@ export function Curriculum() {
                               "text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-lg border",
                               isCompleted ? "text-emerald-800 bg-emerald-50 border-emerald-200" :
                               isActive ? "text-[#172033] bg-[#C99A2E]/20 border-[#C99A2E]" :
-                              "text-slate-600 bg-[#F5F6F8] border-[#E6E8EC]"
+                              "text-slate-600 bg-slate-50 border-slate-100"
                             )}>
                               Tahap {session.sessionNumber}
                             </span>
@@ -273,7 +273,7 @@ export function Curriculum() {
                             )}
 
                             {session.pageRef && (
-                              <span className="text-[10px] font-bold text-slate-600 bg-[#F5F6F8] px-2.5 py-1 rounded-lg border border-[#E6E8EC]">
+                              <span className="text-[10px] font-bold text-slate-600 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-100">
                                 {session.pageRef}
                               </span>
                             )}
@@ -292,7 +292,7 @@ export function Curriculum() {
                             </span>
                           )}
                           {isUpcoming && (
-                            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-[#F5F6F8] text-slate-500 text-xs font-bold border border-[#E6E8EC]">
+                            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-slate-50 text-slate-500 text-xs font-bold border border-slate-100">
                               Mendatang
                             </span>
                           )}
@@ -303,7 +303,7 @@ export function Curriculum() {
                         "rounded-2xl p-4 border mt-3",
                         isCompleted ? "bg-emerald-50/50 border-emerald-100" :
                         isActive ? "bg-white border-[#C99A2E]/30" :
-                        "bg-[#F5F6F8] border-[#E6E8EC]"
+                        "bg-slate-50 border-slate-100"
                       )}>
                         <h5 className="text-xs font-black text-[#172033] mb-1">Target Capaian & Kompetensi</h5>
                         <p className="text-xs text-slate-700 leading-relaxed font-medium">{session.target}</p>
@@ -318,10 +318,10 @@ export function Curriculum() {
 
         {/* Class Progress Sidebar */}
         <div className="xl:w-[350px] shrink-0">
-          <Card className="sticky top-24 border border-[#E6E8EC] rounded-3xl overflow-hidden shadow-xs bg-white">
-            <div className="p-5 border-b border-[#E6E8EC] bg-[#172033] text-white">
+          <Card className="sticky top-24 border border-slate-100 rounded-3xl overflow-hidden shadow-xs bg-white">
+            <div className="p-5 border-b border-slate-100 bg-[#172033] text-white">
               <div className="flex items-center justify-between">
-                <h3 className="font-black text-sm">Progres Tahap Kelompok</h3>
+                <h3 className="font-black text-sm text-white">Progres Tahap Kelompok</h3>
                 <span className="text-[10px] bg-[#C99A2E] text-slate-950 px-2.5 py-0.5 rounded-md font-black">
                   Semester {selectedSemester}
                 </span>
@@ -343,7 +343,7 @@ export function Curriculum() {
                     return (
                       <div key={group.id} className={cn(
                         "p-3.5 rounded-2xl border transition-colors",
-                        isMentorSelectedGroup ? "bg-[#0362D0]/10 border-[#0362D0]" : "border-[#E6E8EC] bg-white hover:bg-[#F5F6F8]"
+                        isMentorSelectedGroup ? "bg-[#0362D0]/10 border-[#0362D0]" : "border-slate-100 bg-white hover:bg-slate-50"
                       )}>
                         <div className="flex justify-between items-center mb-1">
                           <span className="font-extrabold text-sm text-[#172033]">{group.name}</span>
@@ -352,7 +352,7 @@ export function Curriculum() {
                         <p className="text-[11px] text-slate-500 font-medium mb-2">
                           Jadwal: Setiap Sabtu • {groupCompletedCount} Sesi Terlaksana
                         </p>
-                        <div className="w-full bg-[#F5F6F8] h-2 rounded-full overflow-hidden border border-[#E6E8EC]">
+                        <div className="w-full bg-slate-50 h-2 rounded-full overflow-hidden border border-slate-100">
                           <div 
                             className="bg-[#0362D0] h-full rounded-full transition-all" 
                             style={{ width: `${calculatedProgress}%` }} 

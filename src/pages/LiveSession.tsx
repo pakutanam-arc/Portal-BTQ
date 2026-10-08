@@ -1,13 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { theme } from '../theme';
-import { Calendar, Save, Loader2, BookOpen, Users, UserCheck, AlertCircle, MessageSquare, CheckCircle, ChevronRight, Award, ChevronDown, Hash, CheckSquare, Edit3, PlusCircle, Camera } from 'lucide-react';
+import { Calendar, Save, Loader2, BookOpen, Users, UserCheck, AlertCircle, MessageSquare, MessageCircle, CheckCircle, ChevronRight, Award, ChevronDown, Hash, CheckSquare, Edit3, PlusCircle, Camera, Sliders, Search, CheckCircle2, Sparkles, Check } from 'lucide-react';
 import { Select } from '../components/ui/Select';
 import { Input } from '../components/ui/Input';
 import { cn } from '../utils/cn';
+import { Toast } from '../components/Toast';
 import { useAuth } from '../contexts/AuthContext';
 import { CurriculumSyncAlert } from '../components/CurriculumSyncAlert';
-import { QRScanner } from '../components/QRScanner';
+import { StudentScoreDrawer } from '../components/session/StudentScoreDrawer';
+import { StudentTableSkeleton } from '../components/students/StudentTableSkeleton';
+
+const QRScanner = React.lazy(() => import('../components/QRScanner').then(m => ({ default: m.QRScanner })));
 import { 
   getGroups, 
   getMentors, 
@@ -51,12 +55,13 @@ export function LiveSession() {
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [showToast, setShowToast] = useState(false);
-  const [toastMessage, setToastMessage] = useState('');
+  const [toast, setToast] = useState<{ show: boolean, type: 'success' | 'error' | 'warning' | 'info', message: string, description?: string }>({ show: false, type: 'success', message: '' });
   
   // States for unified data
   const [attendance, setAttendance] = useState<Record<string, { status: string, notes: string }>>({});
   const [progress, setProgress] = useState<Record<string, Partial<StudentProgress>>>({});
+  const [selectedStudentForDrawer, setSelectedStudentForDrawer] = useState<Student | null>(null);
+  const [studentSearch, setStudentSearch] = useState('');
   
   // Journal states
   const [journalMaterial, setJournalMaterial] = useState('');
@@ -638,16 +643,39 @@ export function LiveSession() {
         createdBy: mentorName
       });
 
-      setToastMessage(isEdit ? `Perubahan Pertemuan Ke-${meetingNumber} Berhasil Diperbarui!` : `Pertemuan Ke-${meetingNumber} Berhasil Disimpan!`);
-      setShowToast(true);
-      setTimeout(() => setShowToast(false), 3000);
+      setToast({ 
+        show: true, 
+        type: 'success', 
+        message: isEdit ? `Perubahan Pertemuan Ke-${meetingNumber} Berhasil Diperbarui!` : `Pertemuan Ke-${meetingNumber} Berhasil Disimpan!`,
+        description: `Absensi, Progress & Jurnal tercatat.` 
+      });
       
     } catch (error) {
       console.error("Error saving live session:", error);
-      alert("Terjadi kesalahan saat menyimpan data sesi mengajar.");
+      setToast({ show: true, type: 'error', message: 'Gagal Menyimpan', description: 'Terjadi kesalahan saat menyimpan data sesi mengajar.' });
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleSendWA = (student: Student, status: string, progressData?: any) => {
+    let text = `Assalamu'alaikum Wr. Wb. Menginformasikan bahwa ananda ${student.name} pada kegiatan BTQ hari ini berstatus ${status}.`;
+    
+    if (status === 'Hadir') {
+      text = `Assalamu'alaikum Wr. Wb. Menginformasikan perkembangan KBM BTQ ananda ${student.name} hari ini.\n\n`;
+      text += `Catatan Penilaian:\n`;
+      text += `- Membaca: ${progressData?.reading || 0}\n`;
+      text += `- Tajwid: ${progressData?.tajwid || 0}\n`;
+      if (progressData?.memorization !== undefined) {
+        text += `- Tahfidz: ${progressData?.memorization || 0}\n`;
+      }
+      text += `\nKami mohon bantuan motivasi dari ayah/bunda agar ananda lebih semangat belajar dan menghafal. Terima kasih.`;
+    } else {
+      text += `\n\nMohon kerja sama ayah/bunda untuk memastikan kehadiran dan kelancaran kegiatan belajar ananda. Terima kasih.`;
+    }
+
+    const encoded = encodeURIComponent(text);
+    window.open(`https://api.whatsapp.com/send?text=${encoded}`, '_blank');
   };
 
   const selectedTahapObjects = availableSessions.filter(s => selectedSessionIds.includes(s.id));
@@ -655,12 +683,12 @@ export function LiveSession() {
   return (
     <div className="flex flex-col gap-4 sm:gap-6 w-full pb-12">
       {/* Header */}
-      <div className="bg-gradient-to-r from-[#172033] via-[#0362D0] to-[#172033] rounded-3xl p-6 lg:p-8 text-white shadow-md border border-[#E6E8EC] flex flex-col md:flex-row md:items-center justify-between gap-6 relative overflow-hidden">
+      <div className="bg-gradient-to-r from-[#172033] via-[#0362D0] to-[#172033] rounded-3xl p-6 lg:p-8 text-white shadow-md border border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-6 relative overflow-hidden">
         <div className="relative z-10 max-w-2xl">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md text-slate-100 text-xs font-bold mb-3 border border-white/10">
             <BookOpen size={14} className="text-[#C99A2E]" /> Manajemen Kelas & Sesi Mengajar
           </div>
-          <h1 className={theme.typography.h1.replace('text-[#172033]', '')}>
+          <h1 className={theme.typography.h1.replace('text-[#172033]', 'text-white')}>
             Sesi Mengajar Terpadu
           </h1>
           <p className="text-slate-200 text-xs sm:text-sm mt-1.5 leading-relaxed font-medium">
@@ -688,7 +716,7 @@ export function LiveSession() {
       <CurriculumSyncAlert groupIdFilter={selectedGroup} />
 
       {/* Configuration Cards */}
-      <div className="bg-white rounded-3xl p-5 border border-[#E6E8EC] shadow-xs space-y-4">
+      <div className="bg-white rounded-3xl p-5 border border-slate-100 shadow-xs space-y-4">
         
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           
@@ -701,7 +729,7 @@ export function LiveSession() {
                 setSelectedGroup(e.target.value);
                 setEditingJournalId(null);
               }} 
-              className="w-full font-bold text-xs h-12"
+              className="w-full font-bold text-xs h-12 bg-slate-50 border-transparent focus:bg-white focus:border-slate-200"
             >
               {groups.map(g => (
                 <option key={g.id} value={g.id}>{g.name}</option>
@@ -750,7 +778,7 @@ export function LiveSession() {
           {/* Semester */}
           <div className="space-y-1.5">
             <label className="text-xs font-black text-[#172033] uppercase tracking-wider">Semester</label>
-            <Select value={selectedSemester.toString()} onChange={(e) => setSelectedSemester(parseInt(e.target.value))} className="w-full font-bold text-xs h-12">
+            <Select value={selectedSemester.toString()} onChange={(e) => setSelectedSemester(parseInt(e.target.value))} className="w-full font-bold text-xs h-12 bg-slate-50 border-transparent focus:bg-white focus:border-slate-200">
               <option value="1">Semester 1 (Tahap 1 – 16)</option>
               <option value="2">Semester 2 (Tahap 17 – 32)</option>
             </Select>
@@ -765,7 +793,7 @@ export function LiveSession() {
             <button
               type="button"
               onClick={() => setShowTahapDropdown(!showTahapDropdown)}
-              className="w-full flex items-center justify-between px-3 py-2 bg-[#F5F6F8] hover:bg-slate-100 border border-[#E6E8EC] rounded-xl text-xs font-bold text-[#172033] h-12 transition-colors cursor-pointer text-left"
+              className="w-full flex items-center justify-between px-3 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-100 rounded-xl text-xs font-bold text-[#172033] h-12 transition-colors cursor-pointer text-left"
             >
               <span className="truncate pr-1">
                 {selectedTahapObjects.length === 0 ? 'Pilih Tahap...' :
@@ -783,7 +811,7 @@ export function LiveSession() {
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: -6, scale: 0.98 }}
                   transition={{ duration: 0.15 }}
-                  className="absolute right-0 z-50 mt-1 w-full sm:w-[380px] bg-white border border-[#E6E8EC] rounded-2xl shadow-xl p-3 max-h-80 overflow-y-auto divide-y divide-slate-100"
+                  className="absolute right-0 z-50 mt-1 w-full sm:w-[380px] bg-white border border-slate-100 rounded-2xl shadow-xl p-3 max-h-80 overflow-y-auto divide-y divide-slate-100"
                 >
                   <div className="text-[10px] font-black uppercase text-slate-400 pb-2 px-1 flex justify-between items-center">
                     <span>Pilih Tahap Kurikulum</span>
@@ -839,7 +867,7 @@ export function LiveSession() {
       </div>
 
       {/* Selected Tahap Summary Chips */}
-      <div className="flex flex-wrap items-center gap-2 bg-[#F5F6F8] px-4 py-3 rounded-2xl border border-[#E6E8EC]">
+      <div className="flex flex-wrap items-center gap-2 bg-slate-50 px-4 py-3 rounded-2xl border border-slate-100">
         <span className="text-xs font-black text-[#172033] flex items-center gap-1.5">
           <CheckSquare size={14} className="text-[#0362D0]" /> Tahap Terpilih Hari Ini:
         </span>
@@ -870,158 +898,233 @@ export function LiveSession() {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -10 }}
           transition={{ duration: 0.22, ease: "easeOut" }}
-          className="bg-white rounded-3xl border border-[#E6E8EC] shadow-xs overflow-hidden"
+          className="bg-white rounded-3xl border border-slate-100 shadow-xs overflow-hidden"
         >
-          <div className="p-4 sm:p-5 border-b border-[#E6E8EC] bg-[#F5F6F8] flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <div className="flex flex-wrap items-center gap-2 mb-1">
-              <h3 className="font-extrabold text-[#172033] text-sm sm:text-base">Daftar Santri & Evaluasi Kualitas</h3>
-              <span className="text-[10px] font-bold bg-[#0362D0]/10 text-[#0362D0] px-2.5 py-0.5 rounded-full border border-[#0362D0]/20">
-                Materi: {currentGradeObj.programName}
-              </span>
+          <div className="p-4 sm:p-5 border-b border-slate-100 bg-slate-50 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+            <div>
+              <div className="flex flex-wrap items-center gap-2 mb-1">
+                <h3 className="font-extrabold text-[#172033] text-sm sm:text-base">Daftar Santri & Evaluasi KBM</h3>
+                <span className="text-[10px] font-bold bg-[#0362D0]/10 text-[#0362D0] px-2.5 py-0.5 rounded-full border border-[#0362D0]/20">
+                  Materi: {currentGradeObj.programName}
+                </span>
+              </div>
+              <p className="text-xs text-slate-500">
+                Pertemuan Ke-<strong>{meetingNumber}</strong> • Target: <strong className="text-[#172033]">{selectedTahapObjects.map(s => `Tahap ${s.sessionNumber}`).join(', ')}</strong> • {currentGradeId === 'grade3' ? 'Penilaian tahsin & hafalan Juz 30' : 'Materi seragam tilawati & tajwid'}
+              </p>
             </div>
-            <p className="text-xs text-slate-500">
-              Pertemuan Ke-<strong>{meetingNumber}</strong> • Target: <strong className="text-[#172033]">{selectedTahapObjects.map(s => `Tahap ${s.sessionNumber}`).join(', ')}</strong> • {currentGradeId === 'grade3' ? 'Penilaian mencakup tahsin & hafalan surah Juz 30' : 'Materi seragam tanpa hafalan surah, fokus pada nilai kualitas bacaan'}
-            </p>
-          </div>
-          <div className="flex gap-2 w-full sm:w-auto">
-            <button onClick={() => setShowScanner(true)} className="flex-1 sm:flex-none px-4 py-2 bg-[#172033] text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition-colors cursor-pointer flex items-center justify-center gap-1.5 shadow-xs">
-              <Camera size={14} /> Scan Hadir
-            </button>
-            <button onClick={() => setAllAttendance('Hadir')} className="flex-1 sm:flex-none px-4 py-2 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-bold hover:bg-emerald-100 transition-colors cursor-pointer">
-              Set Semua Hadir
-            </button>
-          </div>
-        </div>
 
-        {loading ? (
-          <div className="p-16 text-center text-slate-500">
-            <Loader2 size={32} className="animate-spin text-[#0362D0] mx-auto mb-2" />
-            <p className="text-sm font-bold">Memuat data santri...</p>
+            <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
+              {/* Search Filter */}
+              <div className="relative flex-1 sm:w-56 min-w-[180px]">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Cari nama / NIS..."
+                  value={studentSearch}
+                  onChange={(e) => setStudentSearch(e.target.value)}
+                  className="w-full pl-8 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-[#172033] placeholder:text-slate-400 focus:ring-2 focus:ring-[#0362D0] outline-none"
+                />
+              </div>
+
+              <button 
+                onClick={() => setShowScanner(true)} 
+                className="px-3.5 py-2 bg-[#172033] text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition-colors cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
+              >
+                <Camera size={14} /> Scan
+              </button>
+              <button 
+                onClick={() => setAllAttendance('Hadir')} 
+                className="px-3.5 py-2 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-bold hover:bg-emerald-100 transition-colors cursor-pointer flex items-center justify-center gap-1"
+              >
+                <Check size={14} /> Semua Hadir
+              </button>
+            </div>
           </div>
-        ) : students.length === 0 ? (
-          <div className="p-16 text-center text-slate-500">
-            <Users size={36} className="mx-auto mb-2 text-slate-400" />
-            <p className="text-sm font-bold text-[#172033]">Tidak ada santri di kelompok ini.</p>
-          </div>
-        ) : (
-          <div className="divide-y divide-[#E6E8EC]">
-            {students.map((student, idx) => {
-              const currentStatus = attendance[student.id]?.status || 'Hadir';
-              const p = progress[student.id] || {};
-              
-              return (
-                <div key={student.id} className="p-4 sm:p-5 flex flex-col lg:flex-row gap-4 sm:gap-6 hover:bg-[#F5F6F8]/40 transition-colors">
-                  {/* Left: Identity & Attendance */}
-                  <div className="flex flex-col gap-3 lg:w-1/3 shrink-0">
-                    <div>
-                      <div className="font-extrabold text-[#172033] text-sm mb-0.5">{idx + 1}. {student.name}</div>
-                      <div className="flex items-center gap-2">
-                        <span className="px-2 py-0.5 bg-[#0362D0]/10 text-[#0362D0] rounded-md text-[10px] font-black border border-[#0362D0]/20">
-                          Kelas {student.class}
-                        </span>
-                        <span className="text-[10px] text-slate-400 font-semibold">
-                          {student.nis ? `NIS: ${student.nis}` : 'Santri Aktif'}
-                        </span>
-                      </div>
-                    </div>
-                    
-                    <div className="grid grid-cols-4 gap-1 p-1 bg-[#F5F6F8] rounded-xl border border-[#E6E8EC]">
-                      {[
-                        { label: 'Hadir', active: 'bg-emerald-600 text-white shadow-xs' },
-                        { label: 'Izin', active: 'bg-amber-500 text-white shadow-xs' },
-                        { label: 'Sakit', active: 'bg-blue-600 text-white shadow-xs' },
-                        { label: 'Alpa', active: 'bg-rose-600 text-white shadow-xs' }
-                      ].map(opt => (
+
+          {loading ? (
+            <div className="p-6">
+              <StudentTableSkeleton rowCount={6} variant="attendance" />
+            </div>
+          ) : students.length === 0 ? (
+            <div className="p-16 text-center text-slate-500">
+              <Users size={40} className="mx-auto mb-3 text-slate-300" />
+              <h4 className="text-base font-extrabold text-[#172033]">Tidak ada santri di kelompok ini</h4>
+              <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+                Silakan pilih kelompok lain atau tambahkan data santri di menu Data Siswa.
+              </p>
+            </div>
+          ) : (
+            <div className="p-4 sm:p-5 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {students
+                .filter(st => {
+                  if (!studentSearch.trim()) return true;
+                  const query = studentSearch.toLowerCase();
+                  return st.name.toLowerCase().includes(query) || (st.nis && st.nis.toLowerCase().includes(query));
+                })
+                .map((student, idx) => {
+                  const currentStatus = attendance[student.id]?.status || 'Hadir';
+                  const p = progress[student.id] || {};
+                  const isHadir = currentStatus === 'Hadir';
+                  const scoreTotal = p.total ?? (isHadir ? 80 : 0);
+
+                  const scoreBadge = !isHadir 
+                    ? { label: currentStatus, color: 'bg-slate-100 text-slate-600 border-slate-200' }
+                    : scoreTotal >= 85 
+                    ? { label: `${scoreTotal}% • Sangat Baik`, color: 'bg-emerald-50 text-emerald-700 border-emerald-200' }
+                    : scoreTotal >= 75
+                    ? { label: `${scoreTotal}% • Baik`, color: 'bg-[#0362D0]/10 text-[#0362D0] border-[#0362D0]/20' }
+                    : { label: `${scoreTotal}% • Perlu Bimbingan`, color: 'bg-rose-50 text-rose-700 border-rose-200' };
+
+                  return (
+                    <div 
+                      key={student.id} 
+                      className={cn(
+                        "p-4 rounded-2xl border transition-all duration-200 flex flex-col justify-between gap-3 bg-white",
+                        isHadir ? "border-slate-200/80 shadow-2xs hover:shadow-md hover:border-[#0362D0]/40" : "border-slate-100 bg-slate-50/60 opacity-80"
+                      )}
+                    >
+                      {/* Top: Student Info & Quick WA */}
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-3">
+                          <div className={cn(
+                            "w-9 h-9 rounded-xl flex items-center justify-center font-black text-xs shrink-0",
+                            isHadir ? "bg-[#0362D0]/10 text-[#0362D0]" : "bg-slate-200 text-slate-500"
+                          )}>
+                            {idx + 1}
+                          </div>
+                          <div>
+                            <h4 className="font-black text-[#172033] text-sm leading-tight line-clamp-1">
+                              {student.name}
+                            </h4>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <span className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded-md text-[10px] font-black border border-slate-200">
+                                Kelas {student.class}
+                              </span>
+                              <span className="text-[10px] text-slate-400 font-semibold">
+                                {student.nis ? `NIS ${student.nis}` : 'Santri Aktif'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
                         <button
-                          key={opt.label}
-                          onClick={() => handleAttendanceChange(student.id, opt.label)}
-                          className={cn(
-                            "py-2 sm:py-1.5 text-xs font-black rounded-lg transition-all cursor-pointer",
-                            currentStatus === opt.label ? opt.active : "text-slate-500 hover:text-[#172033] bg-transparent"
-                          )}
+                          onClick={() => handleSendWA(student, currentStatus, p)}
+                          className="p-2 shrink-0 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-xl transition-colors cursor-pointer"
+                          title="Kirim Laporan WA ke Wali Santri"
                         >
-                          {opt.label}
+                          <MessageCircle size={15} />
                         </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Right: Progress Tracking */}
-                  <div className={cn(
-                    "flex-1 grid gap-2.5 items-end",
-                    currentGradeId === 'grade3' ? "grid-cols-2 sm:grid-cols-5" : "grid-cols-2 sm:grid-cols-3",
-                    currentStatus !== 'Hadir' && "opacity-40 pointer-events-none"
-                  )}>
-                    {currentGradeId === 'grade3' && (
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-black uppercase text-slate-500">Membaca</label>
-                        <Input 
-                          type="number" min="0" max="100" 
-                          value={p.reading || ''}
-                          placeholder="0-100"
-                          onChange={(e) => handleProgressChange(student.id, 'reading', parseInt(e.target.value) || 0)}
-                          className="text-xs font-bold text-[#0362D0] h-10 text-center"
-                        />
                       </div>
-                    )}
-                    
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-black uppercase text-slate-500">Tajwid & Makhraj</label>
-                      <Input 
-                        type="number" min="0" max="100" 
-                        value={p.tajwid || ''}
-                        placeholder="0-100"
-                        onChange={(e) => handleProgressChange(student.id, 'tajwid', parseInt(e.target.value) || 0)}
-                        className="text-xs font-bold text-[#C99A2E] h-10 text-center"
-                      />
-                    </div>
 
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-black uppercase text-slate-500">Kaidah Menulis</label>
-                      <Input 
-                        type="number" min="0" max="100" 
-                        value={p.writing || ''}
-                        placeholder="0-100"
-                        onChange={(e) => handleProgressChange(student.id, 'writing', parseInt(e.target.value) || 0)}
-                        className="text-xs font-bold text-slate-700 h-10 text-center"
-                      />
-                    </div>
-                    
-                    {currentGradeId === 'grade3' && (
-                      <div className="space-y-1 col-span-2 sm:col-span-1">
-                        <label className="text-[10px] font-black uppercase text-slate-500">Setoran Hafalan</label>
-                        <Input 
-                          type="text" 
-                          list="live-juz30-surahs"
-                          placeholder="QS. An-Naba' 1-20"
-                          value={p.memorizedSurah || ''}
-                          onChange={(e) => handleProgressChange(student.id, 'memorizedSurah', e.target.value)}
-                          className="text-xs font-bold text-emerald-700 h-10 bg-white"
-                        />
+                      {/* Segmented Control for Attendance */}
+                      <div className="bg-slate-100/80 p-1 rounded-xl flex items-center gap-1 border border-slate-200/50">
+                        {[
+                          { label: 'Hadir', active: 'bg-emerald-600 text-white shadow-2xs' },
+                          { label: 'Izin', active: 'bg-amber-500 text-white shadow-2xs' },
+                          { label: 'Sakit', active: 'bg-blue-600 text-white shadow-2xs' },
+                          { label: 'Alpa', active: 'bg-rose-600 text-white shadow-2xs' }
+                        ].map(opt => (
+                          <button
+                            key={opt.label}
+                            onClick={() => handleAttendanceChange(student.id, opt.label)}
+                            className={cn(
+                              "flex-1 py-1 text-xs font-black rounded-lg transition-all text-center cursor-pointer",
+                              currentStatus === opt.label 
+                                ? opt.active 
+                                : "text-slate-500 hover:text-slate-800"
+                            )}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
                       </div>
-                    )}
 
-                    <div className="space-y-1 col-span-2 sm:col-span-1">
-                      <label className="text-[10px] font-black uppercase text-slate-500 text-center block">Rata-Rata Mutu</label>
-                      <div className={cn(
-                        "h-10 rounded-xl flex items-center justify-center font-black text-xs border",
-                        (p.total || 0) >= 85 ? "bg-emerald-50 text-emerald-800 border-emerald-200" :
-                        (p.total || 0) >= 70 ? "bg-[#0362D0]/10 text-[#0362D0] border-[#0362D0]/20" :
-                        (p.total || 0) >= 50 ? "bg-[#C99A2E]/10 text-[#C99A2E] border-[#C99A2E]/20" :
-                        "bg-[#950415]/10 text-[#950415] border-[#950415]/20"
-                      )}>
-                        {p.total || 0}%
-                      </div>
+                      {/* Score Summary & Action Drawer Trigger */}
+                      {isHadir ? (
+                        <div className="pt-2 border-t border-slate-100 flex flex-col gap-2">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-[10px] font-black uppercase text-slate-400">Evaluasi Sesi:</span>
+                            <span className={cn("px-2 py-0.5 rounded-lg text-[10px] font-black border", scoreBadge.color)}>
+                              {scoreBadge.label}
+                            </span>
+                          </div>
+
+                          {/* Mini Score Pills */}
+                          <div className="grid grid-cols-3 gap-1.5 text-center">
+                            {currentGradeId === 'grade3' && (
+                              <div className="p-1 bg-slate-50 rounded-lg border border-slate-100">
+                                <span className="text-[9px] text-slate-400 font-bold block">Baca</span>
+                                <span className="text-xs font-black text-[#0362D0]">{p.reading ?? 80}</span>
+                              </div>
+                            )}
+                            <div className="p-1 bg-slate-50 rounded-lg border border-slate-100">
+                              <span className="text-[9px] text-slate-400 font-bold block">Tajwid</span>
+                              <span className="text-xs font-black text-[#C99A2E]">{p.tajwid ?? 80}</span>
+                            </div>
+                            <div className="p-1 bg-slate-50 rounded-lg border border-slate-100">
+                              <span className="text-[9px] text-slate-400 font-bold block">Tulis</span>
+                              <span className="text-xs font-black text-slate-700">{p.writing ?? 80}</span>
+                            </div>
+                            {currentGradeId === 'grade3' && (
+                              <div className="p-1 bg-slate-50 rounded-lg border border-slate-100">
+                                <span className="text-[9px] text-slate-400 font-bold block">Hafal</span>
+                                <span className="text-xs font-black text-emerald-700">{p.memorization ?? 80}</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Tactile Button to Open Drawer */}
+                          <button
+                            type="button"
+                            onClick={() => setSelectedStudentForDrawer(student)}
+                            className="w-full py-2 bg-gradient-to-r from-[#0362D0] to-[#0250AA] hover:from-[#0250AA] hover:to-[#013F88] text-white rounded-xl text-xs font-black flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer transition-all active:scale-[0.98]"
+                          >
+                            <Sliders size={13} />
+                            <span>Input / Sesuaikan Nilai</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="pt-2 border-t border-slate-100 text-center py-2">
+                          <span className="text-[11px] font-bold text-slate-400">
+                            Presensi {currentStatus} • Nilai dinonaktifkan
+                          </span>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+                  );
+                })}
+            </div>
+          )}
         </motion.div>
       </AnimatePresence>
+
+      {/* Student Score Input Drawer Component */}
+      <StudentScoreDrawer
+        isOpen={Boolean(selectedStudentForDrawer)}
+        onClose={() => setSelectedStudentForDrawer(null)}
+        student={selectedStudentForDrawer}
+        progress={selectedStudentForDrawer ? (progress[selectedStudentForDrawer.id] || {}) : {}}
+        status={selectedStudentForDrawer ? (attendance[selectedStudentForDrawer.id]?.status || 'Hadir') : 'Hadir'}
+        onProgressChange={handleProgressChange}
+        onStatusChange={handleAttendanceChange}
+        currentGrade={currentGradeObj}
+        meetingNumber={meetingNumber}
+        studentIndex={selectedStudentForDrawer ? students.findIndex(s => s.id === selectedStudentForDrawer.id) : 0}
+        totalStudents={students.length}
+        hasPrev={selectedStudentForDrawer ? students.findIndex(s => s.id === selectedStudentForDrawer.id) > 0 : false}
+        hasNext={selectedStudentForDrawer ? students.findIndex(s => s.id === selectedStudentForDrawer.id) < students.length - 1 : false}
+        onPrevStudent={() => {
+          if (!selectedStudentForDrawer) return;
+          const idx = students.findIndex(s => s.id === selectedStudentForDrawer.id);
+          if (idx > 0) setSelectedStudentForDrawer(students[idx - 1]);
+        }}
+        onNextStudent={() => {
+          if (!selectedStudentForDrawer) return;
+          const idx = students.findIndex(s => s.id === selectedStudentForDrawer.id);
+          if (idx < students.length - 1) setSelectedStudentForDrawer(students[idx + 1]);
+        }}
+        onSendWA={(st, stStatus, stProg) => handleSendWA(st, stStatus, stProg)}
+      />
 
       {/* Journal Section with Smooth Motion */}
       <AnimatePresence mode="wait">
@@ -1031,9 +1134,9 @@ export function LiveSession() {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -10 }}
           transition={{ duration: 0.22, delay: 0.05, ease: "easeOut" }}
-          className="bg-white rounded-3xl border border-[#E6E8EC] shadow-xs overflow-hidden mt-2"
+          className="bg-white rounded-3xl border border-slate-100 shadow-xs overflow-hidden mt-2"
         >
-          <div className="p-4 sm:p-5 border-b border-[#E6E8EC] bg-[#F5F6F8]">
+          <div className="p-4 sm:p-5 border-b border-slate-100 bg-slate-50">
             <h3 className="font-extrabold text-[#172033] text-sm sm:text-base">Jurnal Mengajar & Catatan Sesi</h3>
             <p className="text-xs text-slate-500 mt-0.5">Dokumentasi materi, kendala, dan rencana target untuk Pertemuan Ke-{meetingNumber}.</p>
           </div>
@@ -1045,7 +1148,7 @@ export function LiveSession() {
                   value={journalMaterial}
                   onChange={e => setJournalMaterial(e.target.value)}
                   placeholder="Contoh: Pengenalan Makharijul Huruf, Praktik Tilawati Jilid 3"
-                  className="w-full px-4 py-3 bg-[#F5F6F8] border border-[#E6E8EC] rounded-xl text-xs font-medium focus:ring-2 focus:ring-[#0362D0] outline-none min-h-[80px]"
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-medium focus:ring-2 focus:ring-[#0362D0] outline-none min-h-[80px]"
                 />
               </div>
               <div>
@@ -1054,7 +1157,7 @@ export function LiveSession() {
                   value={journalObstacles}
                   onChange={e => setJournalObstacles(e.target.value)}
                   placeholder="Contoh: Sebagian santri kesulitan membedakan huruf dzal dan zai..."
-                  className="w-full px-4 py-3 bg-[#F5F6F8] border border-[#E6E8EC] rounded-xl text-xs font-medium focus:ring-2 focus:ring-[#0362D0] outline-none min-h-[80px]"
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-medium focus:ring-2 focus:ring-[#0362D0] outline-none min-h-[80px]"
                 />
               </div>
             </div>
@@ -1065,7 +1168,7 @@ export function LiveSession() {
                   value={journalPages}
                   onChange={e => setJournalPages(e.target.value)}
                   placeholder="Hal 20-25 / Al-Fatihah"
-                  className="w-full px-4 py-3 bg-[#F5F6F8] border border-[#E6E8EC] rounded-xl text-xs font-medium focus:ring-2 focus:ring-[#0362D0] outline-none"
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-medium focus:ring-2 focus:ring-[#0362D0] outline-none"
                 />
               </div>
               <div>
@@ -1074,7 +1177,7 @@ export function LiveSession() {
                   value={journalNextPlan}
                   onChange={e => setJournalNextPlan(e.target.value)}
                   placeholder="Contoh: Lanjut ujian jilid 3 dan pengenalan hukum nun mati"
-                  className="w-full px-4 py-3 bg-[#F5F6F8] border border-[#E6E8EC] rounded-xl text-xs font-medium focus:ring-2 focus:ring-[#0362D0] outline-none min-h-[80px]"
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-medium focus:ring-2 focus:ring-[#0362D0] outline-none min-h-[80px]"
                 />
               </div>
             </div>
@@ -1083,7 +1186,7 @@ export function LiveSession() {
       </AnimatePresence>
 
       {/* Floating Save Action */}
-      <div className="sticky bottom-4 z-40 bg-white/90 backdrop-blur-xl border border-[#E6E8EC] p-4 rounded-3xl shadow-xl flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div className="sticky bottom-4 z-40 bg-white/90 backdrop-blur-xl border border-slate-100 p-4 rounded-3xl shadow-xl flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="text-xs font-bold text-slate-600 text-center sm:text-left">
           {editingJournalId ? (
             <span className="text-orange-700 font-extrabold flex items-center gap-1.5">
@@ -1109,21 +1212,27 @@ export function LiveSession() {
         </button>
       </div>
 
-      {showToast && (
-        <div className="fixed bottom-24 right-4 bg-emerald-600 text-white px-5 py-4 rounded-2xl shadow-xl flex items-center gap-3 animate-in slide-in-from-bottom-5 z-50">
-          <CheckCircle size={20} />
-          <div>
-            <p className="font-black text-sm">{toastMessage}</p>
-            <p className="text-xs text-emerald-100 font-medium">Absensi, Progress ({selectedTahapObjects.map(s => `Tahap ${s.sessionNumber}`).join(', ')}) & Jurnal tercatat.</p>
-          </div>
-        </div>
+      {toast.show && (
+        <Toast
+          message={toast.message}
+          description={toast.description}
+          type={toast.type}
+          onClose={() => setToast(prev => ({ ...prev, show: false }))}
+        />
       )}
 
       {showScanner && (
-        <QRScanner 
-          onScanSuccess={handleScanSuccess} 
-          onClose={() => setShowScanner(false)} 
-        />
+        <React.Suspense fallback={
+          <div className="fixed inset-0 z-[9999] bg-black/90 flex flex-col items-center justify-center text-white">
+            <Loader2 className="w-10 h-10 animate-spin text-emerald-400 mb-4" />
+            <p className="text-sm text-slate-300">Menyiapkan modul pemindai...</p>
+          </div>
+        }>
+          <QRScanner 
+            onScanSuccess={handleScanSuccess} 
+            onClose={() => setShowScanner(false)} 
+          />
+        </React.Suspense>
       )}
     </div>
   );

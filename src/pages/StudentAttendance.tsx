@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Calendar, Save, CheckCircle, RotateCcw, MessageSquare, Loader2, BookOpen, Users, UserCheck, AlertCircle, Sparkles, Clock, Check, ShieldCheck } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Calendar, Save, CheckCircle, RotateCcw, MessageSquare, MessageCircle, Loader2, BookOpen, Users, UserCheck, AlertCircle, Sparkles, Clock, Check, ShieldCheck, Search, Filter } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Select } from '../components/ui/Select';
@@ -8,9 +8,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { getGroups, getStudentsByGroup, getStudentAttendance, saveStudentAttendance, getMentors, createNotification, Group, Student, Mentor } from '../services/db';
 import { masterGrades, masterSessions, CurriculumSession } from '../services/curriculumData';
 import { cn } from '../utils/cn';
+import { Toast } from '../components/Toast';
 import { useAuth } from '../contexts/AuthContext';
 import { theme } from '../theme';
 import { StudentTableSkeleton } from '../components/students/StudentTableSkeleton';
+import { useDebounce } from '../hooks/useDebounce';
 
 export function StudentAttendance() {
   const { currentUser, userData, userRole } = useAuth();
@@ -21,11 +23,16 @@ export function StudentAttendance() {
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [selectedSemester, setSelectedSemester] = useState<number>(1);
   const [selectedSessionId, setSelectedSessionId] = useState<string>('g1-s3');
-  const [showToast, setShowToast] = useState(false);
+  const [toast, setToast] = useState<{ show: boolean, type: 'success' | 'error', message: string, description?: string }>({ show: false, type: 'success', message: '' });
   const [groupStudents, setGroupStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [currentMentorObj, setCurrentMentorObj] = useState<Mentor | null>(null);
+
+  // Filters for student list
+  const [searchQuery, setSearchQuery] = useState('');
+  const debouncedSearchQuery = useDebounce(searchQuery, 200);
+  const [statusFilter, setStatusFilter] = useState<string>('ALL');
   
   // State for attendance
   const [attendance, setAttendance] = useState<Record<string, { status: string, notes: string }>>({});
@@ -175,8 +182,12 @@ export function StudentAttendance() {
   const setAllStatus = (status: string) => {
     setAttendance(prev => {
       const next = { ...prev };
-      Object.keys(next).forEach(id => {
-        next[id] = { ...next[id], status };
+      filteredGroupStudents.forEach(student => {
+        if (next[student.id]) {
+          next[student.id] = { ...next[student.id], status };
+        } else {
+          next[student.id] = { status, notes: '' };
+        }
       });
       return next;
     });
@@ -204,8 +215,7 @@ export function StudentAttendance() {
       
       await saveStudentAttendance(recordsToSave);
       setInitialAttendance(JSON.parse(JSON.stringify(attendance)));
-      setShowToast(true);
-      setTimeout(() => setShowToast(false), 3000);
+      setToast({ show: true, type: 'success', message: 'Presensi Berhasil Disimpan', description: `Data presensi untuk tanggal ${selectedDate} telah tersimpan.` });
 
       // Real-time notification dispatch
       try {
@@ -230,7 +240,7 @@ export function StudentAttendance() {
       }
     } catch (error) {
       console.error("Error saving attendance:", error);
-      alert("Gagal menyimpan absensi");
+      setToast({ show: true, type: 'error', message: 'Gagal Menyimpan', description: 'Terjadi kesalahan saat menyimpan absensi.' });
     } finally {
       setSaving(false);
     }
@@ -244,10 +254,42 @@ export function StudentAttendance() {
   const sakitCount = attendanceList.filter(a => a.status === 'Sakit').length;
   const alpaCount = attendanceList.filter(a => a.status === 'Alpa').length;
 
+  // Memoized filter for students list
+  const filteredGroupStudents = useMemo(() => {
+    const q = debouncedSearchQuery.trim().toLowerCase();
+    return groupStudents.filter(student => {
+      const matchQuery = !q || 
+        student.name.toLowerCase().includes(q) || 
+        (student.nis && student.nis.toLowerCase().includes(q)) ||
+        (student.class && student.class.toLowerCase().includes(q));
+
+      if (!matchQuery) return false;
+
+      if (statusFilter === 'ALL') return true;
+      const currentStatus = attendance[student.id]?.status || 'Hadir';
+      return currentStatus === statusFilter;
+    });
+  }, [groupStudents, debouncedSearchQuery, statusFilter, attendance]);
+
+  const handleSendWA = (student: Student, status: string) => {
+    let text = `Assalamu'alaikum Wr. Wb. Menginformasikan bahwa ananda ${student.name} pada kegiatan BTQ hari ini berstatus ${status}.`;
+    
+    if (status === 'Hadir') {
+      text = `Assalamu'alaikum Wr. Wb. Menginformasikan perkembangan KBM BTQ ananda ${student.name} hari ini.\n\n`;
+      text += `Status: ${status}\n`;
+      text += `\nKami mohon bantuan motivasi dari ayah/bunda agar ananda lebih semangat belajar dan menghafal. Terima kasih.`;
+    } else {
+      text += `\n\nMohon kerja sama ayah/bunda untuk memastikan kehadiran dan kelancaran kegiatan belajar ananda. Terima kasih.`;
+    }
+
+    const encoded = encodeURIComponent(text);
+    window.open(`https://api.whatsapp.com/send?text=${encoded}`, '_blank');
+  };
+
   return (
     <div className="flex flex-col gap-4 sm:gap-6 w-full pb-12">
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-3xl border border-[#E6E8EC] shadow-xs">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-3xl border border-slate-100 shadow-xs">
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-black text-[#172033] tracking-tight">Presensi Kehadiran Santri</h1>
@@ -263,7 +305,7 @@ export function StudentAttendance() {
 
       {/* Mentor Info Banner if Mentor logged in */}
       {isMentor && (
-        <div className="bg-gradient-to-r from-[#172033] via-[#0362D0] to-[#172033] text-white rounded-3xl p-6 shadow-md border border-[#E6E8EC]">
+        <div className="bg-gradient-to-r from-[#172033] via-[#0362D0] to-[#172033] text-white rounded-3xl p-6 shadow-md border border-slate-100">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="space-y-1">
               <div className="flex items-center gap-2">
@@ -274,7 +316,7 @@ export function StudentAttendance() {
                   <Calendar size={12} /> Bimbingan Sabtu
                 </span>
               </div>
-              <h2 className="text-lg font-black">
+              <h2 className="text-lg font-black text-white">
                 Selamat Datang, {userData?.name || currentMentorObj?.name || 'Ustadz/ah Mentor'}
               </h2>
               <p className="text-xs text-slate-200 font-medium">
@@ -297,8 +339,8 @@ export function StudentAttendance() {
       )}
 
       {/* Main Filter & Control Card */}
-      <Card className="border border-[#E6E8EC] rounded-3xl overflow-hidden shadow-xs bg-white">
-        <div className="p-5 border-b border-[#E6E8EC] bg-[#F5F6F8]/60">
+      <Card className="border border-slate-100 rounded-3xl overflow-hidden shadow-xs bg-white">
+        <div className="p-5 border-b border-slate-100 bg-slate-50/60">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="space-y-1.5">
               <label className="text-xs font-black text-[#172033] uppercase tracking-wider">Kelompok Bimbingan</label>
@@ -385,7 +427,7 @@ export function StudentAttendance() {
                 </p>
               </div>
               <div className="shrink-0 flex items-center gap-2">
-                <span className="px-3 py-1 rounded-full bg-white border border-[#E6E8EC] text-[#172033] text-[11px] font-bold flex items-center gap-1 shadow-2xs">
+                <span className="px-3 py-1 rounded-full bg-white border border-slate-100 text-[#172033] text-[11px] font-bold flex items-center gap-1 shadow-2xs">
                   <Clock size={12} className="text-[#0362D0]" />
                   Sabtu, 07:15 - 08:00 WIB
                 </span>
@@ -395,10 +437,10 @@ export function StudentAttendance() {
         </div>
 
         {/* Attendance Summary Counters Bar */}
-        <div className="p-4 bg-white border-b border-[#E6E8EC] flex flex-wrap items-center justify-between gap-3">
+        <div className="p-4 bg-white border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <span className="text-xs font-black text-[#172033] uppercase tracking-wider">Rekap Presensi:</span>
-            <span className="px-3 py-1 bg-[#F5F6F8] text-[#172033] border border-[#E6E8EC] rounded-xl text-xs font-extrabold flex items-center gap-1">
+            <span className="px-3 py-1 bg-slate-50 text-[#172033] border border-slate-100 rounded-xl text-xs font-extrabold flex items-center gap-1">
               Total: {totalCount} Santri
             </span>
             <span className="px-3 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-extrabold flex items-center gap-1">
@@ -416,14 +458,64 @@ export function StudentAttendance() {
           </div>
 
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => setAllStatus('Hadir')} className="border-[#E6E8EC] text-[#172033] hover:bg-[#F5F6F8] font-bold text-xs">
+            <Button variant="outline" size="sm" onClick={() => setAllStatus('Hadir')} className="border-slate-100 text-[#172033] hover:bg-slate-50 font-bold text-xs">
               <Check size={14} className="mr-1 text-emerald-600" /> Hadir Semua
             </Button>
-            <Button variant="outline" size="sm" onClick={handleReset} className="border-[#E6E8EC] text-slate-600 hover:bg-[#F5F6F8] font-bold text-xs">
+            <Button variant="outline" size="sm" onClick={handleReset} className="border-slate-100 text-slate-600 hover:bg-slate-50 font-bold text-xs">
               <RotateCcw size={14} className="mr-1 text-slate-500" /> Reset
             </Button>
           </div>
         </div>
+
+        {/* Quick Filter & Search Bar */}
+        {groupStudents.length > 0 && (
+          <div className="p-3 bg-slate-50/60 border-b border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="relative w-full sm:w-72">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
+              <input
+                type="text"
+                placeholder="Cari santri, NIS, atau kelas..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-4 py-1.5 bg-white border border-slate-100 rounded-xl text-xs font-bold text-[#172033] focus:ring-2 focus:ring-[#0362D0] outline-none"
+              />
+            </div>
+
+            <div className="flex items-center gap-1 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0 scrollbar-none">
+              <span className="text-[11px] font-black text-slate-500 uppercase tracking-wider mr-1 hidden lg:inline">Filter Status:</span>
+              {[
+                { id: 'ALL', label: 'Semua' },
+                { id: 'Hadir', label: 'Hadir' },
+                { id: 'Izin', label: 'Izin' },
+                { id: 'Sakit', label: 'Sakit' },
+                { id: 'Alpa', label: 'Alpa' }
+              ].map(tab => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setStatusFilter(tab.id)}
+                  className={cn(
+                    "px-2.5 py-1 text-xs font-black rounded-lg transition-all cursor-pointer whitespace-nowrap",
+                    statusFilter === tab.id
+                      ? "bg-[#172033] text-white shadow-2xs"
+                      : "bg-white text-slate-600 hover:text-[#172033] border border-slate-100"
+                  )}
+                >
+                  {tab.label}
+                </button>
+              ))}
+              {(searchQuery || statusFilter !== 'ALL') && (
+                <button
+                  type="button"
+                  onClick={() => { setSearchQuery(''); setStatusFilter('ALL'); }}
+                  className="px-2 py-1 text-[11px] font-bold text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors ml-1 cursor-pointer"
+                >
+                  Reset Filter
+                </button>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Student List */}
         {loading ? (
@@ -434,13 +526,24 @@ export function StudentAttendance() {
             <p className="text-sm font-bold text-[#172033]">Tidak ada santri terdaftar di kelompok ini.</p>
             <p className="text-xs text-slate-400 mt-1 font-medium">Pilih kelompok lain atau periksa konfigurasi kelompok.</p>
           </div>
+        ) : filteredGroupStudents.length === 0 ? (
+          <div className="p-12 text-center text-slate-500 bg-white">
+            <Search size={32} className="mx-auto mb-2 text-slate-400" />
+            <p className="text-sm font-bold text-[#172033]">Tidak ada santri yang cocok dengan filter pencarian.</p>
+            <button
+              onClick={() => { setSearchQuery(''); setStatusFilter('ALL'); }}
+              className="mt-2 text-xs text-[#0362D0] font-bold hover:underline cursor-pointer"
+            >
+              Hapus Filter & Pencarian
+            </button>
+          </div>
         ) : (
           <>
             {/* Desktop Table View */}
             <div className="hidden md:block overflow-x-auto w-full scrollbar-thin">
               <Table>
-                <TableHeader className="bg-[#F5F6F8]">
-                  <TableRow className="border-b border-[#E6E8EC]">
+                <TableHeader className="bg-slate-50">
+                  <TableRow className="border-b border-slate-100">
                     <TableHead className="w-12 text-center font-black text-[#172033] text-xs whitespace-nowrap px-4 py-3.5">No</TableHead>
                     <TableHead className="font-black text-[#172033] text-xs whitespace-nowrap px-4 py-3.5">Nama Santri</TableHead>
                     <TableHead className="text-center font-black text-[#172033] text-xs whitespace-nowrap px-4 py-3.5">Kelas</TableHead>
@@ -449,16 +552,27 @@ export function StudentAttendance() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {groupStudents.map((student, idx) => {
+                  {filteredGroupStudents.map((student, idx) => {
                     const currentStatus = attendance[student.id]?.status || 'Hadir';
                     const currentNotes = attendance[student.id]?.notes || '';
                     
                     return (
-                      <TableRow key={student.id} className="hover:bg-[#F5F6F8]/60 transition-colors border-b border-[#E6E8EC]">
+                      <TableRow key={student.id} className="hover:bg-slate-50/60 transition-colors border-b border-slate-100">
                         <TableCell className="text-center text-slate-500 py-3 font-bold text-xs whitespace-nowrap px-4">{idx + 1}</TableCell>
                         <TableCell className="py-3 whitespace-nowrap px-4">
-                          <div className="font-extrabold text-[#172033] text-sm">{student.name}</div>
-                          <div className="text-[11px] text-slate-400 font-medium">NIS: {student.nis || '-'}</div>
+                          <div className="flex items-center gap-3">
+                            <div>
+                              <div className="font-extrabold text-[#172033] text-sm">{student.name}</div>
+                              <div className="text-[11px] text-slate-400 font-medium">NIS: {student.nis || '-'}</div>
+                            </div>
+                            <button
+                              onClick={() => handleSendWA(student, currentStatus)}
+                              className="p-1.5 shrink-0 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 transition-colors cursor-pointer"
+                              title="Kirim Notifikasi WA ke Ortu"
+                            >
+                              <MessageCircle size={15} />
+                            </button>
+                          </div>
                         </TableCell>
                         <TableCell className="text-center py-3 whitespace-nowrap px-4">
                           <span className="px-2.5 py-1 bg-[#0362D0]/10 text-[#0362D0] rounded-md text-xs font-black border border-[#0362D0]/20 inline-block whitespace-nowrap">
@@ -466,7 +580,7 @@ export function StudentAttendance() {
                           </span>
                         </TableCell>
                         <TableCell className="text-center py-3 whitespace-nowrap px-4">
-                          <div className="inline-flex rounded-xl border border-[#E6E8EC] overflow-hidden p-1 bg-[#F5F6F8]">
+                          <div className="inline-flex rounded-xl border border-slate-100 overflow-hidden p-1 bg-slate-50">
                             {[
                               { label: 'Hadir', activeClass: 'bg-emerald-600 text-white shadow-2xs' },
                               { label: 'Izin', activeClass: 'bg-amber-500 text-white shadow-2xs' },
@@ -478,7 +592,7 @@ export function StudentAttendance() {
                                 type="button"
                                 onClick={() => handleStatusChange(student.id, label)}
                                 className={cn(
-                                  "px-3 py-1.5 text-xs font-extrabold rounded-lg transition-all cursor-pointer",
+                                  "px-3.5 py-1.5 text-xs font-extrabold rounded-lg transition-all cursor-pointer",
                                   currentStatus === label 
                                     ? activeClass
                                     : "text-slate-600 hover:text-[#172033] hover:bg-white"
@@ -497,7 +611,7 @@ export function StudentAttendance() {
                               value={currentNotes}
                               onChange={(e) => handleNotesChange(student.id, e.target.value)}
                               placeholder="Catatan bacaan/adab..." 
-                              className="w-full text-xs border border-[#E6E8EC] bg-white rounded-xl py-2 pl-9 pr-3 focus:outline-none focus:ring-2 focus:ring-[#0362D0] text-[#172033]"
+                              className="w-full text-xs border border-slate-100 bg-white rounded-xl py-2 pl-9 pr-3 focus:outline-none focus:ring-2 focus:ring-[#0362D0] text-[#172033]"
                             />
                           </div>
                         </TableCell>
@@ -509,38 +623,59 @@ export function StudentAttendance() {
             </div>
 
             {/* Mobile Card View */}
-            <div className="md:hidden divide-y divide-[#E6E8EC]">
-              {groupStudents.map((student, idx) => {
+            <div className="md:hidden p-4 space-y-3 bg-slate-50/50">
+              {filteredGroupStudents.map((student, idx) => {
                 const currentStatus = attendance[student.id]?.status || 'Hadir';
                 const currentNotes = attendance[student.id]?.notes || '';
+                const isHadir = currentStatus === 'Hadir';
                 
                 return (
-                  <div key={student.id} className="p-4 space-y-3 bg-white">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <div className="font-extrabold text-[#172033] text-sm">{idx + 1}. {student.name}</div>
+                  <div key={student.id} className="p-4 space-y-3 bg-white rounded-2xl border border-slate-100 shadow-2xs">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2.5">
+                        <div className={cn(
+                          "w-8 h-8 rounded-xl flex items-center justify-center font-black text-xs shrink-0",
+                          isHadir ? "bg-[#0362D0]/10 text-[#0362D0]" : "bg-slate-100 text-slate-500"
+                        )}>
+                          {idx + 1}
+                        </div>
+                        <div>
+                          <div className="font-black text-[#172033] text-sm leading-tight">{student.name}</div>
+                          <div className="text-[11px] text-slate-400 font-medium">NIS: {student.nis || '-'}</div>
+                        </div>
                       </div>
-                      <span className="px-2.5 py-0.5 bg-[#0362D0]/10 text-[#0362D0] border border-[#0362D0]/20 rounded-md text-xs font-black">
-                        Kelas {student.class}
-                      </span>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span className="px-2 py-0.5 bg-slate-100 text-slate-700 border border-slate-200 rounded-md text-[10px] font-black">
+                          Kelas {student.class}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleSendWA(student, currentStatus)}
+                          className="p-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-lg transition-colors cursor-pointer"
+                          title="Kirim WA"
+                        >
+                          <MessageCircle size={15} />
+                        </button>
+                      </div>
                     </div>
                     
-                    <div className="grid grid-cols-4 gap-1.5 p-1 bg-[#F5F6F8] rounded-xl border border-[#E6E8EC]">
+                    {/* Segmented Control */}
+                    <div className="grid grid-cols-4 gap-1 p-1 bg-slate-100/70 rounded-xl border border-slate-200/50">
                       {[
-                        { label: 'Hadir', activeClass: 'bg-emerald-600 text-white' },
-                        { label: 'Izin', activeClass: 'bg-amber-500 text-white' },
-                        { label: 'Sakit', activeClass: 'bg-blue-600 text-white' },
-                        { label: 'Alpa', activeClass: 'bg-rose-600 text-white' }
+                        { label: 'Hadir', activeClass: 'bg-emerald-600 text-white shadow-2xs font-black' },
+                        { label: 'Izin', activeClass: 'bg-amber-500 text-white shadow-2xs font-black' },
+                        { label: 'Sakit', activeClass: 'bg-blue-600 text-white shadow-2xs font-black' },
+                        { label: 'Alpa', activeClass: 'bg-rose-600 text-white shadow-2xs font-black' }
                       ].map(({ label, activeClass }) => (
                         <button
                           key={label}
                           type="button"
                           onClick={() => handleStatusChange(student.id, label)}
                           className={cn(
-                            "py-1.5 text-xs font-extrabold rounded-lg transition-all",
+                            "py-1.5 text-xs rounded-lg transition-all text-center cursor-pointer",
                             currentStatus === label 
                               ? activeClass
-                              : "text-slate-600 bg-white"
+                              : "text-slate-600 hover:text-[#172033]"
                           )}
                         >
                           {label}
@@ -549,13 +684,13 @@ export function StudentAttendance() {
                     </div>
                     
                     <div className="relative">
-                      <MessageSquare className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                      <MessageSquare className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={13} />
                       <input 
                         type="text" 
                         value={currentNotes}
                         onChange={(e) => handleNotesChange(student.id, e.target.value)}
-                        placeholder="Catatan santri..." 
-                        className="w-full text-xs border border-[#E6E8EC] bg-white rounded-xl py-2 pl-9 pr-3 focus:outline-none focus:ring-2 focus:ring-[#0362D0]"
+                        placeholder="Catatan santri / kendala..." 
+                        className="w-full text-xs border border-slate-200 bg-slate-50/50 rounded-xl py-2 pl-8 pr-3 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0362D0] font-medium"
                       />
                     </div>
                   </div>
@@ -566,7 +701,7 @@ export function StudentAttendance() {
         )}
         
         {/* Bottom Save Bar */}
-        <div className="p-5 border-t border-[#E6E8EC] bg-[#F5F6F8]/70 flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div className="p-5 border-t border-slate-100 bg-slate-50/70 flex flex-col sm:flex-row items-center justify-between gap-3">
           <p className="text-xs text-slate-500 font-medium text-center sm:text-left">
             Pastikan data presensi sudah sesuai sebelum menyimpan ke basis data portal.
           </p>
@@ -590,16 +725,13 @@ export function StudentAttendance() {
       </Card>
 
       {/* Toast Notification */}
-      {showToast && (
-        <div className="fixed bottom-8 right-8 bg-[#172033] text-white px-5 py-4 rounded-2xl shadow-2xl flex items-center gap-3 animate-in slide-in-from-bottom-5 fade-in duration-300 z-50 border border-[#E6E8EC]/20">
-          <CheckCircle className="text-[#C99A2E] shrink-0" size={24} />
-          <div>
-            <p className="text-sm font-black">Presensi Berhasil Disimpan</p>
-            <p className="text-xs text-slate-300 font-medium">
-              Data presensi {currentGroupObj?.name || 'Kelompok'} untuk tanggal {selectedDate} telah tersimpan.
-            </p>
-          </div>
-        </div>
+      {toast.show && (
+        <Toast
+          message={toast.message}
+          description={toast.description}
+          type={toast.type}
+          onClose={() => setToast(prev => ({ ...prev, show: false }))}
+        />
       )}
     </div>
   );

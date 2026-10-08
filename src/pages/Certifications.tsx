@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { theme } from '../theme';
 import { 
   Award, 
@@ -18,7 +18,8 @@ import {
   UserCheck, 
   GraduationCap, 
   Download,
-  Share2
+  Share2,
+  RotateCcw
 } from 'lucide-react';
 import { 
   getCertifications, 
@@ -37,8 +38,10 @@ import {
 } from '../services/db';
 import { useAuth } from '../contexts/AuthContext';
 import { cn } from '../utils/cn';
+import { Toast } from '../components/Toast';
 import { APP_LOGO } from '../assets/logo';
 import { getGradeForGroup } from '../services/curriculumData';
+import { useDebounce } from '../hooks/useDebounce';
 
 const CATEGORIES: CertCategory[] = [
   'Khatam Iqro/Tilawati',
@@ -49,7 +52,7 @@ const CATEGORIES: CertCategory[] = [
 ];
 
 const STATUSES: { key: CertStatus; label: string; color: string; bg: string; icon: any }[] = [
-  { key: 'Persiapan', label: 'Persiapan', color: 'text-slate-700', bg: 'bg-[#F5F6F8]', icon: Clock },
+  { key: 'Persiapan', label: 'Persiapan', color: 'text-slate-700', bg: 'bg-slate-50', icon: Clock },
   { key: 'Siap Ujian', label: 'Siap Ujian / Tasmi\'', color: 'text-[#172033]', bg: 'bg-[#C99A2E]/20 border-[#C99A2E]/40', icon: AlertCircle },
   { key: 'Lulus Bersertifikat', label: 'Lulus & Bersertifikat', color: 'text-emerald-800', bg: 'bg-emerald-100 border-emerald-200', icon: CheckCircle2 },
   { key: 'Perbaikan', label: 'Perbaikan / Remedial', color: 'text-[#950415]', bg: 'bg-[#950415]/10 border-[#950415]/20', icon: AlertCircle }
@@ -74,6 +77,7 @@ export function Certifications() {
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('all');
   const [selectedStatusFilter, setSelectedStatusFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const debouncedSearchQuery = useDebounce(searchQuery, 200);
 
   // Modal / Form state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -107,11 +111,10 @@ export function Certifications() {
     examinerName: userData?.name || 'Koordinator BTQ'
   });
 
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ show: boolean, type: 'success' | 'error' | 'warning' | 'info', message: string, description?: string }>({ show: false, type: 'success', message: '' });
 
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3000);
+  const showToast = (msg: string, type: 'success' | 'error' | 'warning' | 'info' = 'success') => {
+    setToast({ show: true, message: msg, type });
   };
 
   useEffect(() => {
@@ -235,7 +238,7 @@ export function Certifications() {
       showToast("Data sertifikasi dihapus");
     } catch (e) {
       console.error(e);
-      alert("Gagal menghapus sertifikasi");
+      showToast("Gagal menghapus sertifikasi", "error");
     }
   };
 
@@ -274,14 +277,14 @@ export function Certifications() {
       }
     } catch (e) {
       console.error(e);
-      alert("Gagal mengubah status");
+      showToast("Gagal mengubah status", "error");
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.studentId || !formData.category) {
-      alert("Mohon pilih santri dan kategori sertifikasi.");
+      showToast("Mohon pilih santri dan kategori sertifikasi.", "warning");
       return;
     }
 
@@ -333,7 +336,7 @@ export function Certifications() {
       await handleFilterChange(selectedGroupFilter);
     } catch (e) {
       console.error(e);
-      alert("Gagal menyimpan sertifikasi");
+      showToast("Gagal menyimpan sertifikasi", "error");
     } finally {
       setIsSaving(false);
     }
@@ -347,41 +350,56 @@ export function Certifications() {
     window.print();
   };
 
-  // Filtered List
-  const filteredCertifications = certifications.filter(c => {
-    const matchGroup = selectedGroupFilter === 'all' || c.groupId === selectedGroupFilter;
-    const matchCategory = selectedCategoryFilter === 'all' || c.category === selectedCategoryFilter;
-    const matchStatus = selectedStatusFilter === 'all' || c.status === selectedStatusFilter;
-    const matchSearch = searchQuery === '' || 
-      (c.studentName && c.studentName.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (c.studentNis && c.studentNis.includes(searchQuery)) ||
-      (c.notes && c.notes.toLowerCase().includes(searchQuery.toLowerCase()));
+  // Memoized Filtered List
+  const filteredCertifications = useMemo(() => {
+    const q = debouncedSearchQuery.trim().toLowerCase();
+    return certifications.filter(c => {
+      const matchGroup = selectedGroupFilter === 'all' || c.groupId === selectedGroupFilter;
+      const matchCategory = selectedCategoryFilter === 'all' || c.category === selectedCategoryFilter;
+      const matchStatus = selectedStatusFilter === 'all' || c.status === selectedStatusFilter;
+      const matchSearch = q === '' || 
+        (c.studentName && c.studentName.toLowerCase().includes(q)) ||
+        (c.studentNis && c.studentNis.toLowerCase().includes(q)) ||
+        (c.notes && c.notes.toLowerCase().includes(q));
 
-    return matchGroup && matchCategory && matchStatus && matchSearch;
-  });
+      return matchGroup && matchCategory && matchStatus && matchSearch;
+    });
+  }, [certifications, selectedGroupFilter, selectedCategoryFilter, selectedStatusFilter, debouncedSearchQuery]);
+
+  // Reset all active filters
+  const handleResetFilters = () => {
+    setSelectedGroupFilter('all');
+    setSelectedCategoryFilter('all');
+    setSelectedStatusFilter('all');
+    setSearchQuery('');
+  };
+
+  const isFilterActive = selectedGroupFilter !== 'all' || selectedCategoryFilter !== 'all' || selectedStatusFilter !== 'all' || searchQuery !== '';
 
   // Summary Metrics
-  const totalLulus = certifications.filter(c => c.status === 'Lulus Bersertifikat').length;
-  const totalSiapUjian = certifications.filter(c => c.status === 'Siap Ujian').length;
-  const totalPersiapan = certifications.filter(c => c.status === 'Persiapan' || c.status === 'Perbaikan').length;
+  const totalLulus = useMemo(() => certifications.filter(c => c.status === 'Lulus Bersertifikat').length, [certifications]);
+  const totalSiapUjian = useMemo(() => certifications.filter(c => c.status === 'Siap Ujian').length, [certifications]);
+  const totalPersiapan = useMemo(() => certifications.filter(c => c.status === 'Persiapan' || c.status === 'Perbaikan').length, [certifications]);
 
   return (
     <div className="flex flex-col gap-4 sm:gap-6 w-full pb-12">
       {/* Toast Notification */}
-      {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-[#172033] text-white px-5 py-3 rounded-2xl shadow-xl border border-[#E6E8EC]/20 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-3">
-          <CheckCircle2 size={18} className="text-[#C99A2E]" />
-          <span className="text-xs font-bold">{toastMessage}</span>
-        </div>
+      {toast.show && (
+        <Toast
+          message={toast.message}
+          description={toast.description}
+          type={toast.type}
+          onClose={() => setToast(prev => ({ ...prev, show: false }))}
+        />
       )}
 
       {/* Header Banner */}
-      <div className="bg-gradient-to-r from-[#172033] via-[#0362D0] to-[#172033] rounded-3xl p-6 lg:p-8 text-white shadow-md border border-[#E6E8EC] flex flex-col md:flex-row md:items-center justify-between gap-6 relative overflow-hidden">
+      <div className="bg-gradient-to-r from-[#172033] via-[#0362D0] to-[#172033] rounded-3xl p-6 lg:p-8 text-white shadow-md border border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-6 relative overflow-hidden">
         <div className="relative z-10 max-w-2xl">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md text-slate-100 text-xs font-bold mb-3 border border-white/10">
             <Award size={14} className="text-[#C99A2E]" /> Sertifikasi & Kesiapan Ujian BTQ
           </div>
-          <h1 className={theme.typography.h1.replace('text-[#172033]', '')}>
+          <h1 className={theme.typography.h1.replace('text-[#172033]', 'text-white')}>
             Status Ujian, Tasmi' & Sertifikasi Kelulusan
           </h1>
           <p className="text-slate-200 text-xs sm:text-sm mt-1.5 leading-relaxed font-medium">
@@ -399,19 +417,33 @@ export function Certifications() {
         </button>
       </div>
 
-      {/* KPI Stats Strip */}
+      {/* KPI Stats Strip with clickable status filter */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white p-5 rounded-3xl border border-[#E6E8EC] shadow-xs flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-[#0362D0]/10 text-[#0362D0] flex items-center justify-center font-bold">
+        <button
+          type="button"
+          onClick={() => setSelectedStatusFilter(selectedStatusFilter === 'Lulus Bersertifikat' ? 'all' : 'Lulus Bersertifikat')}
+          className={cn(
+            "bg-white p-5 rounded-3xl border shadow-xs flex items-center gap-4 text-left transition-all cursor-pointer",
+            selectedStatusFilter === 'Lulus Bersertifikat' ? "ring-2 ring-emerald-500 border-emerald-300" : "border-slate-100 hover:border-emerald-300"
+          )}
+        >
+          <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold">
             <GraduationCap size={24} />
           </div>
           <div>
             <div className="text-2xl font-black text-[#172033]">{totalLulus}</div>
             <div className="text-xs text-slate-500 font-bold">Santri Lulus & Bersertifikat</div>
           </div>
-        </div>
+        </button>
 
-        <div className="bg-white p-5 rounded-3xl border border-[#E6E8EC] shadow-xs flex items-center gap-4">
+        <button
+          type="button"
+          onClick={() => setSelectedStatusFilter(selectedStatusFilter === 'Siap Ujian' ? 'all' : 'Siap Ujian')}
+          className={cn(
+            "bg-white p-5 rounded-3xl border shadow-xs flex items-center gap-4 text-left transition-all cursor-pointer",
+            selectedStatusFilter === 'Siap Ujian' ? "ring-2 ring-[#C99A2E] border-[#C99A2E]" : "border-slate-100 hover:border-[#C99A2E]/50"
+          )}
+        >
           <div className="w-12 h-12 rounded-2xl bg-[#C99A2E]/20 text-[#172033] flex items-center justify-center font-bold">
             <Sparkles size={24} className="text-[#C99A2E]" />
           </div>
@@ -419,21 +451,28 @@ export function Certifications() {
             <div className="text-2xl font-black text-[#172033]">{totalSiapUjian}</div>
             <div className="text-xs text-slate-500 font-bold">Siap Mengikuti Ujian / Tasmi'</div>
           </div>
-        </div>
+        </button>
 
-        <div className="bg-white p-5 rounded-3xl border border-[#E6E8EC] shadow-xs flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-[#F5F6F8] text-slate-700 flex items-center justify-center font-bold">
+        <button
+          type="button"
+          onClick={() => setSelectedStatusFilter(selectedStatusFilter === 'Persiapan' ? 'all' : 'Persiapan')}
+          className={cn(
+            "bg-white p-5 rounded-3xl border shadow-xs flex items-center gap-4 text-left transition-all cursor-pointer",
+            selectedStatusFilter === 'Persiapan' ? "ring-2 ring-[#0362D0] border-[#0362D0]" : "border-slate-100 hover:border-[#0362D0]/40"
+          )}
+        >
+          <div className="w-12 h-12 rounded-2xl bg-slate-50 text-slate-700 flex items-center justify-center font-bold">
             <Clock size={24} />
           </div>
           <div>
             <div className="text-2xl font-black text-[#172033]">{totalPersiapan}</div>
             <div className="text-xs text-slate-500 font-bold">Tahap Bimbingan & Persiapan</div>
           </div>
-        </div>
+        </button>
       </div>
 
       {/* Filter Bar */}
-      <div className="bg-white p-4 rounded-3xl border border-[#E6E8EC] shadow-xs flex flex-col lg:flex-row items-center justify-between gap-4">
+      <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-xs flex flex-col lg:flex-row items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
           <div className="relative flex-1 sm:w-60">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
@@ -442,14 +481,14 @@ export function Certifications() {
               placeholder="Cari santri atau NIS..." 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 bg-[#F5F6F8] border border-[#E6E8EC] rounded-2xl text-xs font-bold text-[#172033] focus:ring-2 focus:ring-[#0362D0] outline-none"
+              className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-bold text-[#172033] focus:ring-2 focus:ring-[#0362D0] outline-none"
             />
           </div>
 
           <select
             value={selectedGroupFilter}
             onChange={(e) => handleFilterChange(e.target.value)}
-            className="px-3 py-2 bg-[#F5F6F8] border border-[#E6E8EC] rounded-2xl text-xs font-bold text-[#172033] outline-none focus:ring-2 focus:ring-[#0362D0]"
+            className="px-3 py-2 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-bold text-[#172033] outline-none focus:ring-2 focus:ring-[#0362D0]"
           >
             <option value="all">Semua Kelompok</option>
             {groups.map(g => {
@@ -463,7 +502,7 @@ export function Certifications() {
           <select
             value={selectedCategoryFilter}
             onChange={(e) => setSelectedCategoryFilter(e.target.value)}
-            className="px-3 py-2 bg-[#F5F6F8] border border-[#E6E8EC] rounded-2xl text-xs font-bold text-[#172033] outline-none focus:ring-2 focus:ring-[#0362D0]"
+            className="px-3 py-2 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-bold text-[#172033] outline-none focus:ring-2 focus:ring-[#0362D0]"
           >
             <option value="all">Semua Kategori Ujian</option>
             {CATEGORIES.map(cat => (
@@ -474,22 +513,32 @@ export function Certifications() {
           <select
             value={selectedStatusFilter}
             onChange={(e) => setSelectedStatusFilter(e.target.value)}
-            className="px-3 py-2 bg-[#F5F6F8] border border-[#E6E8EC] rounded-2xl text-xs font-bold text-[#172033] outline-none focus:ring-2 focus:ring-[#0362D0]"
+            className="px-3 py-2 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-bold text-[#172033] outline-none focus:ring-2 focus:ring-[#0362D0]"
           >
             <option value="all">Semua Status</option>
             {STATUSES.map(st => (
               <option key={st.key} value={st.key}>{st.label}</option>
             ))}
           </select>
+
+          {isFilterActive && (
+            <button
+              type="button"
+              onClick={handleResetFilters}
+              className="flex items-center gap-1 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-2xl transition-colors cursor-pointer"
+            >
+              <RotateCcw size={13} /> Reset Filter
+            </button>
+          )}
         </div>
 
         <div className="text-xs text-slate-500 font-medium self-end lg:self-center">
-          Menampilkan <strong className="text-[#172033] font-bold">{filteredCertifications.length}</strong> santri
+          Menampilkan <strong className="text-[#172033] font-bold">{filteredCertifications.length}</strong> dari {certifications.length} santri
         </div>
       </div>
 
       {/* Certifications Table */}
-      <div className="bg-white rounded-3xl border border-[#E6E8EC] shadow-xs overflow-hidden">
+      <div className="bg-white rounded-3xl border border-slate-100 shadow-xs overflow-hidden">
         {loading ? (
           <div className="p-12 text-center text-slate-400 text-xs font-medium">
             Memuat data sertifikasi & status ujian santri...
@@ -501,7 +550,7 @@ export function Certifications() {
           <div className="hidden md:block overflow-x-auto w-full scrollbar-thin">
             <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[900px]">
               <thead>
-                <tr className="text-slate-400 border-b border-[#E6E8EC] text-[10px] uppercase tracking-wider font-extrabold bg-[#F5F6F8]/50 whitespace-nowrap">
+                <tr className="text-slate-400 border-b border-slate-100 text-[10px] uppercase tracking-wider font-extrabold bg-slate-50/50 whitespace-nowrap">
                   <th className="py-3.5 px-4">Nama Santri</th>
                   <th className="py-3.5 px-4">Kelompok & Kelas</th>
                   <th className="py-3.5 px-4">Kategori Ujian / Target</th>
@@ -511,12 +560,12 @@ export function Certifications() {
                   <th className="py-3.5 px-4 text-right">Aksi</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#E6E8EC]">
+              <tbody className="divide-y divide-slate-100">
                 {filteredCertifications.map(cert => {
                   const statusObj = STATUSES.find(s => s.key === cert.status) || STATUSES[0];
                   const StatusIcon = statusObj.icon;
                   return (
-                    <tr key={cert.id} className="hover:bg-[#F5F6F8]/60 transition-colors group">
+                    <tr key={cert.id} className="hover:bg-slate-50/60 transition-colors group">
                       <td className="py-3.5 px-4 whitespace-nowrap">
                         <div className="font-extrabold text-[#172033] text-xs sm:text-sm">
                           {cert.studentName}
@@ -598,7 +647,7 @@ export function Certifications() {
               const statusObj = STATUSES.find(s => s.key === cert.status) || STATUSES[0];
               const StatusIcon = statusObj.icon;
               return (
-                <div key={cert.id} className="bg-white border border-[#E6E8EC] rounded-xl p-4 shadow-sm relative overflow-hidden">
+                <div key={cert.id} className="bg-white border border-slate-100 rounded-xl p-4 shadow-sm relative overflow-hidden">
                   <div className="flex justify-between items-start mb-3">
                     <div>
                       <h4 className="font-extrabold text-[#172033] text-sm leading-tight">{cert.studentName}</h4>
@@ -625,18 +674,18 @@ export function Certifications() {
                       <Award size={12} /> {cert.category}
                     </span>
                     {cert.notes && (
-                      <div className="text-[11px] text-slate-500 mt-1.5 line-clamp-2 font-medium bg-[#F5F6F8] p-2 rounded-lg">
+                      <div className="text-[11px] text-slate-500 mt-1.5 line-clamp-2 font-medium bg-slate-50 p-2 rounded-lg">
                         {cert.notes}
                       </div>
                     )}
                   </div>
 
                   <div className="grid grid-cols-2 gap-3 mb-3">
-                    <div className="bg-[#F5F6F8] p-2 rounded-lg text-center">
+                    <div className="bg-slate-50 p-2 rounded-lg text-center">
                       <p className="text-[9px] text-slate-400 font-bold uppercase mb-0.5">Nilai Ujian</p>
                       <p className="text-sm font-black text-[#172033]">{cert.score ?? cert.examScore ?? '-'}</p>
                     </div>
-                    <div className="bg-[#F5F6F8] p-2 rounded-lg text-center">
+                    <div className="bg-slate-50 p-2 rounded-lg text-center">
                       <p className="text-[9px] text-slate-400 font-bold uppercase mb-0.5">Tgl Ujian</p>
                       <p className="text-xs font-black text-[#172033]">{cert.completedDate || cert.examDate || '-'}</p>
                     </div>
@@ -649,7 +698,7 @@ export function Certifications() {
                     </div>
                   )}
 
-                  <div className="flex items-center gap-2 pt-3 border-t border-[#E6E8EC]">
+                  <div className="flex items-center gap-2 pt-3 border-t border-slate-100">
                     <button
                       onClick={() => handleEdit(cert)}
                       className="flex-1 flex justify-center items-center gap-1.5 py-2 text-[#0362D0] border border-[#0362D0]/30 hover:bg-[#0362D0]/5 rounded-xl font-bold text-[11px] transition-colors"
@@ -673,7 +722,7 @@ export function Certifications() {
               <button
                 onClick={handleLoadMore}
                 disabled={loadingMore}
-                className="inline-flex items-center gap-2 px-6 py-3 bg-white border border-[#E6E8EC] rounded-2xl text-sm font-black text-[#172033] hover:bg-[#F5F6F8] transition-colors disabled:opacity-50 cursor-pointer"
+                className="inline-flex items-center gap-2 px-6 py-3 bg-white border border-slate-100 rounded-2xl text-sm font-black text-[#172033] hover:bg-slate-50 transition-colors disabled:opacity-50 cursor-pointer"
               >
                 {loadingMore ? (
                   <>
@@ -710,8 +759,8 @@ export function Certifications() {
       {/* Modal Form Tambah / Edit Sertifikasi */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-in fade-in">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-7 shadow-2xl border border-[#E6E8EC] max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200">
-            <div className="flex justify-between items-center mb-5 border-b border-[#E6E8EC] pb-3.5">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-7 shadow-2xl border border-slate-100 max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center mb-5 border-b border-slate-100 pb-3.5">
               <div>
                 <h3 className="font-black text-base sm:text-lg text-[#172033]">
                   {editingCertId ? 'Edit Status Ujian & Sertifikat' : 'Pendaftaran Ujian & Sertifikasi'}
@@ -722,7 +771,7 @@ export function Certifications() {
               </div>
               <button 
                 onClick={() => setIsModalOpen(false)} 
-                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-[#F5F6F8] transition-colors cursor-pointer"
+                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer"
               >
                 <X size={18} />
               </button>
@@ -756,7 +805,7 @@ export function Certifications() {
                     });
                   }}
                   required
-                  className="w-full px-3 py-2.5 bg-[#F5F6F8] border border-[#E6E8EC] rounded-xl text-xs font-bold text-[#172033] focus:ring-2 focus:ring-[#0362D0] outline-none"
+                  className="w-full px-3 py-2.5 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-[#172033] focus:ring-2 focus:ring-[#0362D0] outline-none"
                 >
                   <option value="">-- Pilih Santri --</option>
                   {students.map(s => {
@@ -779,7 +828,7 @@ export function Certifications() {
                   <select 
                     value={formData.category}
                     onChange={(e) => setFormData({ ...formData, category: e.target.value as CertCategory })}
-                    className="w-full px-3 py-2 bg-[#F5F6F8] border border-[#E6E8EC] rounded-xl text-xs font-bold text-[#172033] focus:ring-2 focus:ring-[#0362D0] outline-none"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-[#172033] focus:ring-2 focus:ring-[#0362D0] outline-none"
                   >
                     {CATEGORIES.map(cat => (
                       <option key={cat} value={cat}>{cat}</option>
@@ -794,7 +843,7 @@ export function Certifications() {
                   <select 
                     value={formData.status}
                     onChange={(e) => setFormData({ ...formData, status: e.target.value as CertStatus })}
-                    className="w-full px-3 py-2 bg-[#F5F6F8] border border-[#E6E8EC] rounded-xl text-xs font-bold text-[#172033] focus:ring-2 focus:ring-[#0362D0] outline-none"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-[#172033] focus:ring-2 focus:ring-[#0362D0] outline-none"
                   >
                     {STATUSES.map(st => (
                       <option key={st.key} value={st.key}>{st.label}</option>
@@ -814,7 +863,7 @@ export function Certifications() {
                     max={100}
                     value={formData.score}
                     onChange={(e) => setFormData({ ...formData, score: Number(e.target.value) })}
-                    className="w-full px-3 py-2 bg-[#F5F6F8] border border-[#E6E8EC] rounded-xl text-xs font-bold text-[#172033] focus:ring-2 focus:ring-[#0362D0] outline-none"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-[#172033] focus:ring-2 focus:ring-[#0362D0] outline-none"
                   />
                 </div>
 
@@ -826,7 +875,7 @@ export function Certifications() {
                     type="text"
                     value={formData.examinerName}
                     onChange={(e) => setFormData({ ...formData, examinerName: e.target.value })}
-                    className="w-full px-3 py-2 bg-[#F5F6F8] border border-[#E6E8EC] rounded-xl text-xs font-bold text-[#172033] focus:ring-2 focus:ring-[#0362D0] outline-none"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-[#172033] focus:ring-2 focus:ring-[#0362D0] outline-none"
                   />
                 </div>
               </div>
@@ -868,15 +917,15 @@ export function Certifications() {
                   placeholder="Catatan makhraj, kelancaran tajwid, atau rekomendasi jilid lanjutan..."
                   value={formData.notes}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  className="w-full px-3.5 py-2 bg-[#F5F6F8] border border-[#E6E8EC] rounded-xl text-xs font-bold text-[#172033] focus:ring-2 focus:ring-[#0362D0] outline-none resize-none"
+                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-[#172033] focus:ring-2 focus:ring-[#0362D0] outline-none resize-none"
                 />
               </div>
 
-              <div className="flex justify-end gap-2.5 pt-3 border-t border-[#E6E8EC]">
+              <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-[#F5F6F8] rounded-xl transition-colors cursor-pointer"
+                  className="px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-50 rounded-xl transition-colors cursor-pointer"
                 >
                   Batal
                 </button>
@@ -896,8 +945,8 @@ export function Certifications() {
       {/* Modal Cetak Piagam / Sertifikat Digital */}
       {selectedCertToPrint && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-xs p-4 animate-in fade-in">
-          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl border border-[#E6E8EC] max-h-[95vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4 border-b border-[#E6E8EC] pb-3">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl border border-slate-100 max-h-[95vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-3">
               <h3 className="font-black text-base text-[#172033] flex items-center gap-2">
                 <Award className="text-[#C99A2E]" size={18} /> Piagam Sertifikasi Kelulusan BTQ
               </h3>
@@ -910,7 +959,7 @@ export function Certifications() {
                 </button>
                 <button 
                   onClick={() => setSelectedCertToPrint(null)} 
-                  className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-[#F5F6F8] cursor-pointer"
+                  className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-50 cursor-pointer"
                 >
                   <X size={18} />
                 </button>

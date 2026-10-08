@@ -57,8 +57,8 @@ export class ErrorBoundary extends React.Component<Props, State> {
       }
 
       return (
-        <div className="min-h-screen bg-[#F5F6F8] flex items-center justify-center p-4 sm:p-6 text-[#172033] select-none font-sans">
-          <div className="max-w-md w-full bg-white rounded-3xl p-6 sm:p-8 shadow-xl border border-[#E6E8EC] text-center space-y-5 animate-in fade-in zoom-in-95">
+        <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 sm:p-6 text-[#172033] select-none font-sans">
+          <div className="max-w-md w-full bg-white rounded-3xl p-6 sm:p-8 shadow-xl border border-slate-100 text-center space-y-5 animate-in fade-in zoom-in-95">
             {/* Header / Logo */}
             <div className="flex justify-center">
               <div className="w-16 h-16 rounded-2xl p-1 bg-white ring-2 ring-[#C99A2E]/50 shadow-md">

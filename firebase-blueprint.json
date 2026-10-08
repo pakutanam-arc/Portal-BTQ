@@ -130,6 +130,30 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["type", "title", "description", "createdAt"]
+    },
+    "AuditLog": {
+      "title": "Audit Log",
+      "description": "Administrative security and action audit trail",
+      "type": "object",
+      "properties": {
+        "action": { "type": "string" },
+        "user": { "type": "string" },
+        "details": { "type": "string" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["action", "user", "details", "timestamp"]
+    },
+    "Mentor": {
+      "title": "Mentor",
+      "description": "Mentor and halaqah coordinator profile",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "groupId": { "type": "string" },
+        "role": { "type": "string" }
+      },
+      "required": ["name", "email", "role"]
     }
   },
   "firestore": {
@@ -176,6 +200,14 @@
     "system_activities/{activityId}": {
       "schema": { "$ref": "#/entities/SystemActivity" },
       "description": "Real-time system action logging"
+    },
+    "audit_logs/{logId}": {
+      "schema": { "$ref": "#/entities/AuditLog" },
+      "description": "Audit trail log records"
+    },
+    "mentors/{mentorId}": {
+      "schema": { "$ref": "#/entities/Mentor" },
+      "description": "Mentor directory records"
     }
   }
 }

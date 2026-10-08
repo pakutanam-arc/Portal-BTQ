@@ -21,8 +21,8 @@ export const theme = {
     },
     surface: {
       main: 'bg-white',
-      canvas: 'bg-[#F5F6F8]', // Main app background
-      border: 'border-[#E6E8EC]',
+      canvas: 'bg-[#f8fafc]', // Main app background
+      border: 'border-[#f1f5f9]',
     },
     text: {
       primary: 'text-[#172033]',
@@ -55,11 +55,11 @@ export const theme = {
   
   card: {
     // Base card styles with consistent radii and shadows
-    base: 'bg-white border border-[#E6E8EC] rounded-xl shadow-sm',
+    base: 'bg-white border border-[#f1f5f9] rounded-xl shadow-sm',
     // Standard inner padding for cards
     padding: 'p-4 sm:p-5',
     // Header section inside a card
-    header: 'mb-4 border-b border-[#E6E8EC] pb-3',
+    header: 'mb-4 border-b border-[#f1f5f9] pb-3',
   },
   
   typography: {

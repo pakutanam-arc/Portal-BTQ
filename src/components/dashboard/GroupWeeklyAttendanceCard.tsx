@@ -37,8 +37,8 @@ const CustomGroupTooltip = ({ active, payload }: CustomGroupTooltipProps) => {
     const isAboveTarget = item.rate >= 80;
 
     return (
-      <div className="bg-white p-3.5 rounded-xl border border-[#E6E8EC] shadow-lg text-xs min-w-[210px]">
-        <div className="pb-2 mb-2 border-b border-[#F5F6F8]">
+      <div className="bg-white p-3.5 rounded-xl border border-slate-100 shadow-lg text-xs min-w-[210px]">
+        <div className="pb-2 mb-2 border-b border-slate-50">
           <span className="font-bold text-[#172033] text-sm block">{item.groupName}</span>
           <span className="text-[11px] text-slate-500 font-medium">{item.mentorName}</span>
         </div>
@@ -50,7 +50,7 @@ const CustomGroupTooltip = ({ active, payload }: CustomGroupTooltipProps) => {
           </span>
         </div>
 
-        <div className="grid grid-cols-2 gap-1.5 pt-2 border-t border-[#F5F6F8] text-[11px]">
+        <div className="grid grid-cols-2 gap-1.5 pt-2 border-t border-slate-50 text-[11px]">
           <div className="flex justify-between">
             <span className="text-slate-500">Hadir:</span>
             <span className="font-semibold text-emerald-700">{item.present}</span>
@@ -69,7 +69,7 @@ const CustomGroupTooltip = ({ active, payload }: CustomGroupTooltipProps) => {
           </div>
         </div>
 
-        <div className="mt-2 pt-2 border-t border-[#F5F6F8] flex items-center justify-between text-[11px] font-medium">
+        <div className="mt-2 pt-2 border-t border-slate-50 flex items-center justify-between text-[11px] font-medium">
           <span className="text-slate-500">Total Santri:</span>
           <span className="font-bold text-[#172033]">{item.total} Santri</span>
         </div>
@@ -151,9 +151,9 @@ export const GroupWeeklyAttendanceCard = React.memo(function GroupWeeklyAttendan
   }, [currentGroups]);
 
   return (
-    <div id="dashboard-group-weekly-attendance-card" className="bg-white p-5 rounded-2xl border border-[#E6E8EC] shadow-xs flex flex-col justify-between">
+    <div id="dashboard-group-weekly-attendance-card" className="bg-white p-5 rounded-2xl border border-slate-100 shadow-xs flex flex-col justify-between">
       {/* Header with Week Filter */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-[#F5F6F8] gap-2">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-50 gap-2">
         <div>
           <div className="flex items-center gap-1.5">
             <Users size={16} className="text-[#0362D0]" />
@@ -164,7 +164,7 @@ export const GroupWeeklyAttendanceCard = React.memo(function GroupWeeklyAttendan
 
         {/* Filter Controls: Quick Pills & Dropdown */}
         <div className="flex flex-wrap items-center gap-1.5 self-start sm:self-auto">
-          <div className="flex items-center bg-[#F5F6F8] p-0.5 rounded-xl border border-[#E6E8EC]">
+          <div className="flex items-center bg-slate-50 p-0.5 rounded-xl border border-slate-100">
             {weeklyData.map(w => (
               <button
                 key={`pill-week-${w.week}`}
@@ -235,8 +235,8 @@ export const GroupWeeklyAttendanceCard = React.memo(function GroupWeeklyAttendan
 
       {/* Footer Group Highlights */}
       {insights && (
-        <div className="pt-3 border-t border-[#F5F6F8] grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
-          <div className="bg-[#F5F6F8] p-2.5 rounded-xl flex items-center justify-between">
+        <div className="pt-3 border-t border-slate-50 grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+          <div className="bg-slate-50 p-2.5 rounded-xl flex items-center justify-between">
             <div className="flex items-center gap-1.5 min-w-0">
               <Award size={14} className="text-emerald-600 shrink-0" />
               <div className="truncate">
@@ -247,7 +247,7 @@ export const GroupWeeklyAttendanceCard = React.memo(function GroupWeeklyAttendan
             <span className="font-extrabold text-emerald-700 text-xs ml-1">{insights.highest.rate}%</span>
           </div>
 
-          <div className="bg-[#F5F6F8] p-2.5 rounded-xl flex items-center justify-between">
+          <div className="bg-slate-50 p-2.5 rounded-xl flex items-center justify-between">
             <div className="flex items-center gap-1.5 min-w-0">
               <AlertTriangle size={14} className="text-[#C99A2E] shrink-0" />
               <div className="truncate">
@@ -258,7 +258,7 @@ export const GroupWeeklyAttendanceCard = React.memo(function GroupWeeklyAttendan
             <span className="font-extrabold text-[#C99A2E] text-xs ml-1">{insights.lowest.rate}%</span>
           </div>
 
-          <div className="bg-[#F5F6F8] p-2.5 rounded-xl flex items-center justify-between">
+          <div className="bg-slate-50 p-2.5 rounded-xl flex items-center justify-between">
             <div className="truncate">
               <span className="text-slate-500 block text-[10px]">Rata-rata Kelompok</span>
               <span className="font-semibold text-[#172033] text-xs">Semua Halaqah</span>

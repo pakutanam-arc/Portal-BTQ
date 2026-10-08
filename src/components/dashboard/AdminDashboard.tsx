@@ -6,6 +6,7 @@ import {
   TrendingUp, 
   Loader2, 
   Calendar, 
+  Clock,
   Edit3, 
   PlusCircle, 
   UserCheck2, 
@@ -30,7 +31,10 @@ import {
   getAllStudentAttendance,
   StudentAttendance,
   getTeachingJournals,
-  TeachingJournal
+  TeachingJournal,
+  getActiveSemesterInfo,
+  getRecentWeeksStartDate,
+  SemesterInfo
 } from '../../services/db';
 import { ActivityLogModal } from '../modals/ActivityLogModal';
 import { theme } from '../../theme';
@@ -45,8 +49,12 @@ import { CurriculumSyncAlert } from '../CurriculumSyncAlert';
 import { WeeklyAttendanceSummaryCard, WeeklyOverallAttendancePoint } from './WeeklyAttendanceSummaryCard';
 import { GroupWeeklyAttendanceCard, WeeklyGroupDataPoint, GroupAttendanceDetail } from './GroupWeeklyAttendanceCard';
 
+export type DashboardTimeRange = 'semester' | '8weeks' | '4weeks';
+
 export function AdminDashboard() {
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
+  const [timeRange, setTimeRange] = useState<DashboardTimeRange>('semester');
+  const [rangeLoading, setRangeLoading] = useState(false);
   const [groups, setGroups] = useState<Group[]>([]);
   const [totalStudents, setTotalStudents] = useState(0);
   const [groupCounts, setGroupCounts] = useState<Record<string, number>>({});
@@ -58,6 +66,39 @@ export function AdminDashboard() {
   const [allAttendance, setAllAttendance] = useState<StudentAttendance[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Perhitungan rentang waktu rekap (Semester Aktif / 4-8 Pekan Terakhir)
+  const semesterInfo: SemesterInfo = useMemo(() => getActiveSemesterInfo(), []);
+
+  const activeRangeConfig = useMemo(() => {
+    if (timeRange === '4weeks') {
+      const startDate = getRecentWeeksStartDate(4);
+      return {
+        key: '4weeks' as const,
+        label: '4 Pekan Terakhir',
+        shortLabel: '4 Pekan',
+        startDate,
+        description: `Sejak ${startDate}`
+      };
+    }
+    if (timeRange === '8weeks') {
+      const startDate = getRecentWeeksStartDate(8);
+      return {
+        key: '8weeks' as const,
+        label: '8 Pekan Terakhir',
+        shortLabel: '8 Pekan',
+        startDate,
+        description: `Sejak ${startDate}`
+      };
+    }
+    return {
+      key: 'semester' as const,
+      label: `Semester ${semesterInfo.semesterName} (${semesterInfo.academicYear})`,
+      shortLabel: `Sem. ${semesterInfo.semesterName}`,
+      startDate: semesterInfo.startDate,
+      description: `Semester Aktif (${semesterInfo.startDate} s/d ${semesterInfo.endDate})`
+    };
+  }, [timeRange, semesterInfo]);
+
   useEffect(() => {
     let isMounted = true;
 
@@ -65,7 +106,6 @@ export function AdminDashboard() {
       try {
         const [
           groupsData, 
-          totalStudentsData, 
           mentorsData, 
           activitiesData,
           progressData,
@@ -74,20 +114,19 @@ export function AdminDashboard() {
           attendanceData
         ] = await Promise.all([
           getGroups(),
-          getTotalStudentsCount(),
           getMentors(),
           getSystemActivities(),
           getAllStudentProgress(),
           getStudents(),
-          getTeachingJournals(),
-          getAllStudentAttendance()
+          getTeachingJournals(undefined, 80, undefined, activeRangeConfig.startDate),
+          getAllStudentAttendance(activeRangeConfig.startDate, 2000)
         ]);
         
         if (!isMounted) return;
 
         const sortedGroups = [...groupsData].sort((a, b) => getGroupNumber(a) - getGroupNumber(b));
         setGroups(sortedGroups);
-        setTotalStudents(totalStudentsData);
+        setTotalStudents(studentsData.length);
         setMentors(mentorsData);
         setActivities(activitiesData);
         setAllProgress(progressData);
@@ -95,11 +134,13 @@ export function AdminDashboard() {
         setJournals(journalsRes?.data || []);
         setAllAttendance(attendanceData || []);
 
-        // Fetch group counts concurrently
+        // Pre-calculate group counts directly in memory (Eliminates 20+ N+1 queries)
         const counts: Record<string, number> = {};
-        await Promise.all(sortedGroups.map(async (g) => {
-          counts[g.id] = await getGroupStudentsCount(g.id);
-        }));
+        sortedGroups.forEach((g) => {
+          counts[g.id] = studentsData.filter(
+            s => s.groupId === g.id || (g.id === 'g1' && s.groupId === 'group_1') || (g.id === 'g2' && s.groupId === 'group_2') || (g.id === 'g3' && s.groupId === 'group_3') || (g.id === 'g4' && s.groupId === 'group_4') || (g.id === 'g5' && s.groupId === 'group_5') || (g.id === 'g6' && s.groupId === 'group_6') || (g.id === 'g7' && s.groupId === 'group_7') || (g.id === 'g8' && s.groupId === 'group_8') || (g.id === 'g9' && s.groupId === 'group_9') || (g.id === 'g10' && s.groupId === 'group_10')
+          ).length;
+        });
 
         if (isMounted) {
           setGroupCounts(counts);
@@ -118,7 +159,7 @@ export function AdminDashboard() {
     // Dengarkan event 'attendance-updated' dan 'storage' agar dashboard otomatis tersinkronisasi saat pekan 3 diisi
     const handleAttendanceUpdated = async () => {
       try {
-        const freshAttendance = await getAllStudentAttendance();
+        const freshAttendance = await getAllStudentAttendance(activeRangeConfig.startDate, 2000);
         if (isMounted) {
           setAllAttendance(freshAttendance);
         }
@@ -136,6 +177,36 @@ export function AdminDashboard() {
       window.removeEventListener('storage', handleAttendanceUpdated);
     };
   }, []);
+
+  // Memperbarui presensi & jurnal ketika rentang waktu rekap diubah oleh admin
+  const isInitialMount = React.useRef(true);
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+    let isSubscribed = true;
+    async function updateRangeData() {
+      setRangeLoading(true);
+      try {
+        const [journalsRes, attendanceData] = await Promise.all([
+          getTeachingJournals(undefined, 80, undefined, activeRangeConfig.startDate),
+          getAllStudentAttendance(activeRangeConfig.startDate, 2000)
+        ]);
+        if (!isSubscribed) return;
+        setJournals(journalsRes?.data || []);
+        setAllAttendance(attendanceData || []);
+      } catch (err) {
+        console.error("Gagal memperbarui rentang rekap dashboard:", err);
+      } finally {
+        if (isSubscribed) setRangeLoading(false);
+      }
+    }
+    updateRangeData();
+    return () => {
+      isSubscribed = false;
+    };
+  }, [activeRangeConfig.startDate]);
 
   // Memoize O(1) mentor lookup map
   const mentorMap = useMemo(() => {
@@ -948,7 +1019,7 @@ export function AdminDashboard() {
 
   if (loading) {
     return (
-      <div className="flex-1 flex items-center justify-center h-full py-16 bg-[#F5F6F8]">
+      <div className="flex-1 flex items-center justify-center h-full py-16 bg-slate-50">
         <div className="animate-pulse flex flex-col items-center gap-4 text-[#0362D0]">
           <Loader2 size={32} className="animate-spin" />
           <p className="font-bold text-[#172033] text-sm">Memuat Dashboard Administrator...</p>
@@ -961,7 +1032,7 @@ export function AdminDashboard() {
     <div className="flex flex-col gap-4 sm:gap-6 w-full">
       
       {/* 1. HEADER DASHBOARD ADMIN */}
-      <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pb-3 border-b border-[#E6E8EC]">
+      <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pb-3 border-b border-slate-100">
         <div>
           <div className="flex items-center gap-2">
             <span className="text-2xl">👋</span>
@@ -977,21 +1048,98 @@ export function AdminDashboard() {
           </p>
         </div>
 
-        {/* Calendar & Semester info */}
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3 self-stretch md:self-auto bg-white p-2 rounded-2xl border border-[#E6E8EC]">
-          <div className="flex items-center gap-1.5 px-3 py-1 bg-[#F5F6F8] rounded-xl text-[11px] font-bold text-[#172033] border border-[#E6E8EC]/80">
+        {/* Calendar, Semester info & Time Range Selector */}
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 self-stretch md:self-auto bg-white p-2 rounded-2xl border border-slate-100">
+          <div className="flex items-center gap-1.5 px-3 py-1 bg-slate-50 rounded-xl text-[11px] font-bold text-[#172033] border border-slate-100/80">
             <Calendar size={13} className="text-[#0362D0]" />
             <span>{todayDateString}</span>
           </div>
-          <div className="flex items-center gap-1.5 px-3 py-1 bg-[#F5F6F8] rounded-xl text-[11px] font-bold text-[#172033] border border-[#E6E8EC]/80">
+          <div className="flex items-center gap-1.5 px-3 py-1 bg-slate-50 rounded-xl text-[11px] font-bold text-[#172033] border border-slate-100/80">
             <span className="w-1.5 h-1.5 rounded-full bg-[#C99A2E]" />
-            <span>Tahun Pelajaran 2026/2027 • Ganjil</span>
+            <span>Tahun {semesterInfo.academicYear} • {semesterInfo.semesterName}</span>
+          </div>
+          {/* Batas Rentang Waktu Rekap Presensi & Jurnal */}
+          <div className="flex items-center gap-1.5 bg-[#0362D0]/5 border border-[#0362D0]/20 rounded-xl px-2.5 py-1">
+            <Clock size={12} className="text-[#0362D0]" />
+            <label htmlFor="admin-dashboard-timerange-select" className="text-[10px] uppercase font-bold text-[#0362D0] tracking-wider hidden sm:inline">
+              Rekap:
+            </label>
+            <select 
+              id="admin-dashboard-timerange-select"
+              value={timeRange} 
+              onChange={(e) => setTimeRange(e.target.value as DashboardTimeRange)}
+              aria-label="Filter Batasan Rentang Waktu Rekap Dashboard"
+              className="text-[11px] font-bold text-[#0362D0] bg-transparent outline-none cursor-pointer border-none p-0 focus:ring-0"
+            >
+              <option value="semester">Semester Aktif ({semesterInfo.semesterName})</option>
+              <option value="8weeks">8 Pekan Terakhir</option>
+              <option value="4weeks">4 Pekan Terakhir</option>
+            </select>
+            {rangeLoading && <Loader2 size={11} className="animate-spin text-[#0362D0] ml-0.5" />}
           </div>
         </div>
       </header>
 
       {/* ADMIN-ONLY CURRICULUM & SESSION CONSISTENCY ALERT */}
       <CurriculumSyncAlert />
+
+      {/* BENTO QUICK ACTIONS HUB */}
+      <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <Link 
+          to="/session"
+          className="relative overflow-hidden bg-gradient-to-br from-[#0362D0] to-[#024B9E] p-4 sm:p-5 rounded-2xl text-white hover:shadow-lg hover:-translate-y-1 transition-all group"
+        >
+          <div className="absolute top-0 right-0 p-4 opacity-10 transform group-hover:scale-125 transition-transform duration-500">
+            <UserCheck size={80} />
+          </div>
+          <div className="relative z-10">
+            <div className="w-10 h-10 bg-white/20 backdrop-blur-md rounded-xl flex items-center justify-center mb-3">
+              <UserCheck size={20} className="text-white" />
+            </div>
+            <h3 className="font-extrabold text-sm sm:text-lg mb-1">Mulai Sesi KBM</h3>
+            <p className="text-white/80 text-[10px] sm:text-xs font-medium">Buka form sesi mengajar & presensi</p>
+          </div>
+        </Link>
+
+        <Link 
+          to="/reports"
+          className="relative overflow-hidden bg-white border border-slate-100 p-4 sm:p-5 rounded-2xl hover:border-[#0362D0]/30 hover:shadow-md hover:-translate-y-1 transition-all group"
+        >
+          <div className="relative z-10">
+            <div className="w-10 h-10 bg-[#0362D0]/10 rounded-xl flex items-center justify-center mb-3 text-[#0362D0] group-hover:bg-[#0362D0] group-hover:text-white transition-colors">
+              <Edit3 size={20} />
+            </div>
+            <h3 className="font-extrabold text-[#172033] text-sm sm:text-lg mb-1">Laporan Nilai</h3>
+            <p className="text-slate-500 text-[10px] sm:text-xs font-medium">Unduh progres akademik santri</p>
+          </div>
+        </Link>
+
+        <Link 
+          to="/attendance/mentors"
+          className="relative overflow-hidden bg-white border border-slate-100 p-4 sm:p-5 rounded-2xl hover:border-[#C99A2E]/30 hover:shadow-md hover:-translate-y-1 transition-all group"
+        >
+          <div className="relative z-10">
+            <div className="w-10 h-10 bg-[#C99A2E]/10 rounded-xl flex items-center justify-center mb-3 text-[#C99A2E] group-hover:bg-[#C99A2E] group-hover:text-white transition-colors">
+              <Users size={20} />
+            </div>
+            <h3 className="font-extrabold text-[#172033] text-sm sm:text-lg mb-1">Presensi Mentor</h3>
+            <p className="text-slate-500 text-[10px] sm:text-xs font-medium">Kelola & pantau kehadiran staf</p>
+          </div>
+        </Link>
+
+        <Link 
+          to="/students"
+          className="relative overflow-hidden bg-white border border-slate-100 p-4 sm:p-5 rounded-2xl hover:border-emerald-500/30 hover:shadow-md hover:-translate-y-1 transition-all group"
+        >
+          <div className="relative z-10">
+            <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center mb-3 text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+              <PlusCircle size={20} />
+            </div>
+            <h3 className="font-extrabold text-[#172033] text-sm sm:text-lg mb-1">Data Siswa</h3>
+            <p className="text-slate-500 text-[10px] sm:text-xs font-medium">Manajemen profil & mutasi santri</p>
+          </div>
+        </Link>
+      </section>
 
       {/* 2. SUMMARY STATISTICS INSTITUSI */}
       <StatCardsGrid cards={statCards} />
@@ -1032,52 +1180,8 @@ export function AdminDashboard() {
           <GroupSummaryTable groups={groupDetails} />
         </div>
 
-        {/* RIGHT / SIDEBAR COLUMN (QUICK ACTIONS, ATTENTION, RECENT ACTIVITIES) */}
+        {/* RIGHT / SIDEBAR COLUMN (ATTENTION, RECENT ACTIVITIES) */}
         <div className="lg:col-span-4 flex flex-col gap-6">
-
-          {/* QUICK ACTIONS ADMIN */}
-          <section id="admin-quick-actions" className="bg-white rounded-2xl border border-[#E6E8EC] p-4 shadow-xs">
-            <h3 className="font-extrabold text-[#172033] text-xs uppercase tracking-wider mb-3 pb-2 border-b border-[#F5F6F8]">
-              Aksi Cepat Admin
-            </h3>
-            <div className="grid grid-cols-2 gap-2">
-              <Link 
-                to="/session"
-                id="quick-action-start-session"
-                className="p-3 bg-[#0362D0]/5 hover:bg-[#0362D0]/10 border border-[#0362D0]/15 rounded-xl text-center group transition-colors"
-              >
-                <UserCheck size={18} className="text-[#0362D0] mx-auto mb-1.5 group-hover:scale-105 transition-transform" />
-                <span className="text-[11px] font-bold text-[#172033] block">Mulai Sesi</span>
-              </Link>
-
-              <Link 
-                to="/reports"
-                id="quick-action-reports"
-                className="p-3 bg-[#0362D0]/5 hover:bg-[#0362D0]/10 border border-[#0362D0]/15 rounded-xl text-center group transition-colors"
-              >
-                <Edit3 size={18} className="text-[#0362D0] mx-auto mb-1.5 group-hover:scale-105 transition-transform" />
-                <span className="text-[11px] font-bold text-[#172033] block">Laporan</span>
-              </Link>
-
-              <Link 
-                to="/attendance/mentors"
-                id="quick-action-mentor-attendance"
-                className="p-3 bg-[#0362D0]/5 hover:bg-[#0362D0]/10 border border-[#0362D0]/15 rounded-xl text-center group transition-colors"
-              >
-                <Users size={18} className="text-[#0362D0] mx-auto mb-1.5 group-hover:scale-105 transition-transform" />
-                <span className="text-[11px] font-bold text-[#172033] block">Presensi Mentor</span>
-              </Link>
-
-              <Link 
-                to="/students"
-                id="quick-action-add-students"
-                className="p-3 bg-[#0362D0]/5 hover:bg-[#0362D0]/10 border border-[#0362D0]/15 rounded-xl text-center group transition-colors"
-              >
-                <PlusCircle size={18} className="text-[#0362D0] mx-auto mb-1.5 group-hover:scale-105 transition-transform" />
-                <span className="text-[11px] font-bold text-[#172033] block">Tambah Siswa</span>
-              </Link>
-            </div>
-          </section>
 
           {/* DESKTOP ONLY: PANEL PERLU PERHATIAN */}
           <div className="hidden lg:block">

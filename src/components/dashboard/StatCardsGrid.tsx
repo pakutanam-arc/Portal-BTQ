@@ -17,36 +17,36 @@ interface StatCardsGridProps {
 
 export const StatCardsGrid = React.memo(function StatCardsGrid({ cards }: StatCardsGridProps) {
   return (
-    <section id="dashboard-summary-statistics" className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
+    <section id="dashboard-summary-statistics" className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 sm:gap-5">
       {cards.map((stat, idx) => (
         <div 
           key={idx} 
-          className="bg-white p-4 rounded-2xl border border-[#E6E8EC] flex flex-col justify-between hover:shadow-xs transition-all group relative overflow-hidden"
+          className="bg-white p-5 rounded-2xl border border-transparent flex flex-col justify-between shadow-sm hover:shadow-md transition-all group relative overflow-hidden"
         >
-          {/* Subtle brand border on hover */}
-          <div className="absolute top-0 left-0 w-full h-1 bg-[#0362D0] opacity-0 group-hover:opacity-100 transition-opacity" />
+          {/* Subtle gradient background effect */}
+          <div className={`absolute top-0 right-0 w-32 h-32 rounded-full blur-3xl opacity-10 -translate-y-1/2 translate-x-1/2 transition-opacity group-hover:opacity-20 ${stat.bg.replace('bg-', 'bg-')}`} />
           
-          <div className="flex justify-between items-start">
-            <span className="text-xs text-slate-500 uppercase font-semibold tracking-wide">
+          <div className="flex justify-between items-start relative z-10">
+            <span className="text-[11px] text-slate-500 font-bold uppercase tracking-widest">
               {stat.label}
             </span>
-            <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${stat.bg} ${stat.color} ${stat.border}`}>
-              <stat.icon size={16} strokeWidth={2} />
+            <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${stat.bg} ${stat.color} border border-white/50 shadow-inner`}>
+              <stat.icon size={18} strokeWidth={2.5} />
             </div>
           </div>
 
-          <div className="mt-3">
-            <p className="text-2xl sm:text-3xl font-bold text-[#172033]">
+          <div className="mt-4 relative z-10">
+            <p className="text-3xl font-black tracking-tight text-[#172033]">
               {stat.value}
             </p>
-            <p className="text-xs text-slate-500 mt-1">
+            <p className="text-xs text-slate-500 font-medium mt-1">
               {stat.sub}
             </p>
           </div>
 
           {/* Micro Trend indicator */}
-          <div className="mt-2.5 pt-2 border-t border-[#F5F6F8] flex items-center gap-1 text-xs font-medium">
-            <span className={stat.trend.startsWith('↑') ? 'text-emerald-600' : 'text-slate-500'}>
+          <div className="mt-4 pt-3 border-t border-transparent flex items-center gap-1.5 text-xs font-semibold relative z-10">
+            <span className={stat.trend.startsWith('↑') ? 'text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md' : 'text-slate-500 bg-slate-50 px-2 py-0.5 rounded-md'}>
               {stat.trend}
             </span>
           </div>

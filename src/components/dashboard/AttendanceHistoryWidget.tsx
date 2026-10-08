@@ -111,11 +111,11 @@ export function AttendanceHistoryWidget({
   return (
     <div 
       id="attendance-history-widget"
-      className={`bg-white rounded-2xl border border-[#E6E8EC] p-5 shadow-xs flex flex-col justify-between ${className}`}
+      className={`bg-white rounded-2xl border border-slate-100 p-5 shadow-xs flex flex-col justify-between ${className}`}
     >
       {/* Header */}
       <div>
-        <div className="flex items-center justify-between pb-3 border-b border-[#F5F6F8] mb-3">
+        <div className="flex items-center justify-between pb-3 border-b border-slate-50 mb-3">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-[#0362D0]/10 border border-[#0362D0]/20 flex items-center justify-center text-[#0362D0] shrink-0">
               <QrCode size={16} strokeWidth={2.5} />
@@ -142,7 +142,7 @@ export function AttendanceHistoryWidget({
                 type="button"
                 onClick={handleClear}
                 title="Reset riwayat scan sesi"
-                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-[#F5F6F8] transition-colors"
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-50 transition-colors"
                 id="btn-clear-scan-history"
               >
                 <RotateCcw size={13} />
@@ -166,7 +166,7 @@ export function AttendanceHistoryWidget({
               <div
                 key={scan.id || index}
                 id={`scan-item-${scan.studentId}`}
-                className="p-2.5 rounded-xl bg-[#F8FAFC] hover:bg-[#F1F5F9] border border-[#E6E8EC] transition-all flex items-center justify-between gap-3 group"
+                className="p-2.5 rounded-xl bg-[#F8FAFC] hover:bg-[#F1F5F9] border border-slate-100 transition-all flex items-center justify-between gap-3 group"
               >
                 {/* Student Info */}
                 <div className="flex items-center gap-2.5 min-w-0 flex-1">
@@ -211,7 +211,7 @@ export function AttendanceHistoryWidget({
           </div>
         ) : (
           /* Empty State */
-          <div className="py-7 text-center rounded-xl bg-[#F8FAFC] border border-dashed border-[#E6E8EC] px-4 my-1">
+          <div className="py-7 text-center rounded-xl bg-[#F8FAFC] border border-dashed border-slate-100 px-4 my-1">
             <div className="w-10 h-10 rounded-full bg-[#0362D0]/10 text-[#0362D0] flex items-center justify-center mx-auto mb-2">
               <QrCode size={18} strokeWidth={2.2} />
             </div>
@@ -236,7 +236,7 @@ export function AttendanceHistoryWidget({
       </div>
 
       {/* Widget Footer */}
-      <div className="mt-3.5 pt-3 border-t border-[#F5F6F8] flex items-center justify-between text-[11px]">
+      <div className="mt-3.5 pt-3 border-t border-slate-50 flex items-center justify-between text-[11px]">
         <span className="text-slate-400 font-semibold flex items-center gap-1">
           <CheckCircle2 size={13} className="text-emerald-500" />
           {scans.length} dari 10 rekaman aktif

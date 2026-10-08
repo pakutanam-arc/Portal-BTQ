@@ -147,13 +147,13 @@ export function StudentIdCard({ student, group, mentor }: StudentIdCardProps) {
         {/* Footer Text */}
         <div className="flex flex-col justify-center h-full pt-0.5">
           <span className="text-[7px] font-serif font-medium text-[#e2c174] leading-tight opacity-90">
-            Scan untuk melihat
+            Scan QR Pantau Siswa
           </span>
           <span className="text-[8px] font-serif font-bold text-[#C99A2E] leading-tight mt-[1px]">
-            Rapor Digital BTQ
+            Hafalan & Presensi
           </span>
           <span className="text-[5px] font-sans font-normal text-white/80 leading-tight mt-1.5 tracking-wide">
-            Berlaku selama menjadi siswa SMPN 102
+            SMPN 102 Jakarta • Sah & Terverifikasi
           </span>
         </div>
         

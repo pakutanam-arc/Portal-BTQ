@@ -71,8 +71,8 @@ export const AttendanceChartCard = React.memo(function AttendanceChartCard({
   }, [attendanceFilter, totalStudents, activeStats, thisWeekMeetingLabel]);
 
   return (
-    <div id="dashboard-attendance-chart-card" className="bg-white p-5 rounded-2xl border border-[#E6E8EC] flex flex-col justify-between shadow-xs">
-      <div className="flex justify-between items-center pb-3 border-b border-[#F5F6F8]">
+    <div id="dashboard-attendance-chart-card" className="bg-white p-5 rounded-2xl border border-transparent shadow-sm flex flex-col justify-between shadow-xs">
+      <div className="flex justify-between items-center pb-3 border-b border-slate-50">
         <div>
           <div className="flex items-center gap-1.5">
             <UserCheck size={16} className="text-[#0362D0]" />
@@ -81,7 +81,7 @@ export const AttendanceChartCard = React.memo(function AttendanceChartCard({
           <p className="text-sm text-slate-500 font-medium">Distribusi rekap presensi santri</p>
         </div>
         {/* Filter Dropdown */}
-        <div className="flex items-center gap-1.5 bg-[#F5F6F8] border border-[#E6E8EC] rounded-xl px-3 py-1">
+        <div className="flex items-center gap-1.5 bg-slate-50 border border-transparent shadow-sm rounded-xl px-3 py-1">
           <Filter size={14} className="text-[#0362D0]" />
           <select 
             id="dashboard-attendance-filter-select"
@@ -118,7 +118,7 @@ export const AttendanceChartCard = React.memo(function AttendanceChartCard({
               </Pie>
               <Tooltip 
                 formatter={(value) => [`${value}%`, 'Persentase']}
-                contentStyle={{ borderRadius: '12px', border: '1px solid #E6E8EC', fontSize: '12px', fontWeight: '500' }}
+                contentStyle={{ borderRadius: '12px', border: '1px solid #f1f5f9', fontSize: '12px', fontWeight: '500' }}
               />
             </PieChart>
           </ResponsiveContainer>

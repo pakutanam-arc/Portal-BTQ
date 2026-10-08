@@ -1,15 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { theme } from '../theme';
 import { Card, CardContent } from '../components/ui/Card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/Table';
 import { Button } from '../components/ui/Button';
 import { Select } from '../components/ui/Select';
 import { Input } from '../components/ui/Input';
-import { Search, Loader2, Save, FileText, CheckCircle, Award, BookOpen } from 'lucide-react';
+import { Search, Loader2, Save, FileText, CheckCircle, Award, BookOpen, Sparkles, Zap, CheckCircle2, RotateCcw } from 'lucide-react';
 import { getGroups, getStudentsByGroup, getStudentProgressBySession, saveStudentProgress, getMentors, createNotification, Student, Group, StudentProgress } from '../services/db';
-import { masterGrades, masterSessions, getGradeForGroup, JUZ_30_SURAHS } from '../services/curriculumData';
+import { masterGrades, masterSessions, getGradeForGroup, JUZ_30_SURAHS, CURRICULUM_CONFIG } from '../services/curriculumData';
 import { cn } from '../utils/cn';
 import { useAuth } from '../contexts/AuthContext';
+import { useDebounce } from '../hooks/useDebounce';
 
 export function Progress() {
   const { currentUser, userData, userRole } = useAuth();
@@ -25,6 +26,10 @@ export function Progress() {
   const [sessionProgress, setSessionProgress] = useState<Record<string, Partial<StudentProgress>>>({});
   const [saving, setSaving] = useState(false);
   const [showToast, setShowToast] = useState(false);
+
+  // Search filter
+  const [studentSearch, setStudentSearch] = useState('');
+  const debouncedStudentSearch = useDebounce(studentSearch, 200);
 
   const isMentor = userRole === 'mentor' && currentUser?.email !== 'admin@smpn102.sch.id';
 
@@ -85,8 +90,9 @@ export function Progress() {
   useEffect(() => {
     if (availableSessions.length > 0) {
       if (!availableSessions.find(s => s.id === selectedSessionId)) {
-        // Default to session 2 if available in semester 1, else session 1
-        const defaultSession = availableSessions.find(s => s.sessionNumber === 2) || 
+        // Default to active session if available in current semester, else first available
+        const defaultSession = availableSessions.find(s => s.sessionNumber === CURRICULUM_CONFIG.currentActiveSessionNumber) || 
+                               availableSessions.find(s => s.sessionNumber === 2) || 
                                availableSessions.find(s => s.sessionNumber === 1) || 
                                availableSessions[0];
         setSelectedSessionId(defaultSession.id);
@@ -154,6 +160,45 @@ export function Progress() {
       return { ...prev, [studentId]: updated };
     });
   };
+
+  // Filtered student list
+  const filteredStudents = useMemo(() => {
+    const q = debouncedStudentSearch.trim().toLowerCase();
+    if (!q) return students;
+    return students.filter(s => 
+      s.name.toLowerCase().includes(q) ||
+      (s.nis && s.nis.toLowerCase().includes(q)) ||
+      (s.class && s.class.toLowerCase().includes(q))
+    );
+  }, [students, debouncedStudentSearch]);
+
+  // Quick Preset Score Applicator (Batch Fill)
+  const handleApplyPreset = (score: number) => {
+    setSessionProgress(prev => {
+      const next = { ...prev };
+      filteredStudents.forEach(student => {
+        const cur = next[student.id] || { reading: 0, tajwid: 0, memorizedSurah: '', writing: 0 };
+        // If grade3, fill reading, tajwid, writing. Else fill tajwid and writing
+        const updated: Partial<StudentProgress> = {
+          ...cur,
+          tajwid: cur.tajwid ? cur.tajwid : score,
+          writing: cur.writing ? cur.writing : score,
+          ...(gradeId === 'grade3' ? { reading: cur.reading ? cur.reading : score } : {})
+        };
+        updated.total = calculateProgressAverage(updated);
+        next[student.id] = updated;
+      });
+      return next;
+    });
+  };
+
+  // Total assessed count
+  const assessedCount = useMemo(() => {
+    return students.filter(s => {
+      const p = sessionProgress[s.id];
+      return p && ((p.total || 0) > 0 || !!p.tajwid || !!p.writing || !!p.reading);
+    }).length;
+  }, [students, sessionProgress]);
 
   const handleSave = async () => {
     if (!selectedGroupId || !selectedSessionId) return;
@@ -243,7 +288,7 @@ export function Progress() {
   return (
     <div className="flex flex-col gap-4 sm:gap-6 w-full pb-12">
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-3xl border border-[#E6E8EC] shadow-xs">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-3xl border border-slate-100 shadow-xs">
         <div>
           <div className="flex items-center gap-2">
             <h1 className={theme.typography.h1}>Penilaian Tahap Kurikulum</h1>
@@ -257,8 +302,8 @@ export function Progress() {
         </div>
       </div>
 
-      <Card className="border border-[#E6E8EC] rounded-3xl overflow-hidden shadow-xs bg-white">
-        <div className="p-5 border-b border-[#E6E8EC] bg-[#F5F6F8]/60 grid grid-cols-1 md:grid-cols-3 gap-4">
+      <Card className="border border-slate-100 rounded-3xl overflow-hidden shadow-xs bg-white">
+        <div className="p-5 border-b border-slate-100 bg-slate-50/60 grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="space-y-1.5">
             <label className="text-xs font-black text-[#172033] uppercase tracking-wider">Kelompok</label>
             <Select 
@@ -309,7 +354,7 @@ export function Progress() {
         </div>
 
         {/* Informasi Fokus Penilaian Sesuai Kurikulum Kelompok */}
-        <div className="px-5 py-3 bg-[#0362D0]/5 border-b border-[#E6E8EC] flex flex-wrap items-center justify-between gap-2 text-xs font-semibold">
+        <div className="px-5 py-3 bg-[#0362D0]/5 border-b border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs font-semibold">
           <div className="flex items-center gap-2 text-[#172033]">
             <BookOpen size={16} className="text-[#0362D0] shrink-0" />
             <span>
@@ -330,10 +375,60 @@ export function Progress() {
           ))}
         </datalist>
 
+        {/* Toolbar: Search, Progress Indicator & Quick Preset Fill */}
+        {students.length > 0 && (
+          <div className="p-3.5 bg-white border-b border-slate-100 flex flex-col lg:flex-row items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
+              <div className="relative w-full sm:w-64">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
+                <input
+                  type="text"
+                  placeholder="Cari santri atau kelas..."
+                  value={studentSearch}
+                  onChange={(e) => setStudentSearch(e.target.value)}
+                  className="w-full pl-9 pr-4 py-1.5 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-[#172033] focus:ring-2 focus:ring-[#0362D0] outline-none"
+                />
+              </div>
+
+              <div className="flex items-center gap-1.5 px-3 py-1 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-700">
+                <CheckCircle2 size={14} className={assessedCount === students.length ? "text-emerald-600" : "text-[#0362D0]"} />
+                <span>Dinilai: <strong>{assessedCount}/{students.length}</strong> ({students.length > 0 ? Math.round((assessedCount / students.length) * 100) : 0}%)</span>
+              </div>
+            </div>
+
+            {/* Quick Fill Presets */}
+            <div className="flex items-center gap-1.5 w-full lg:w-auto justify-end overflow-x-auto pb-1 lg:pb-0">
+              <span className="text-[11px] font-black text-slate-500 uppercase tracking-wider mr-1 hidden sm:inline flex items-center gap-1">
+                <Zap size={13} className="text-[#C99A2E]" /> Isi Cepat:
+              </span>
+              {[80, 85, 90, 95].map(preset => (
+                <button
+                  key={preset}
+                  type="button"
+                  onClick={() => handleApplyPreset(preset)}
+                  title={`Isi otomatis nilai kosong dengan ${preset}`}
+                  className="px-2.5 py-1 bg-slate-50 hover:bg-[#0362D0] hover:text-white border border-slate-100 rounded-lg text-xs font-black text-[#172033] transition-all cursor-pointer shadow-2xs"
+                >
+                  {preset}
+                </button>
+              ))}
+              {studentSearch && (
+                <button
+                  type="button"
+                  onClick={() => setStudentSearch('')}
+                  className="px-2 py-1 text-[11px] font-bold text-slate-500 hover:text-rose-600 ml-1 cursor-pointer"
+                >
+                  Reset Cari
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
         <div className="hidden md:block overflow-x-auto w-full scrollbar-thin">
           <Table>
-            <TableHeader className="bg-[#F5F6F8]">
-              <TableRow className="border-b border-[#E6E8EC]">
+            <TableHeader className="bg-slate-50">
+              <TableRow className="border-b border-slate-100">
                 <TableHead className="w-12 text-center font-black text-[#172033] text-xs whitespace-nowrap px-4 py-3.5">No</TableHead>
                 <TableHead className="font-black text-[#172033] text-xs whitespace-nowrap px-4 py-3.5">Nama Santri</TableHead>
                 {gradeId === 'grade3' && (
@@ -348,17 +443,26 @@ export function Progress() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {groupStudents.length === 0 ? (
+              {students.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={gradeId === 'grade3' ? 7 : 5} className="text-center py-12 text-slate-500 font-medium whitespace-nowrap">
                     Belum ada santri di kelompok ini.
                   </TableCell>
                 </TableRow>
+              ) : filteredStudents.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={gradeId === 'grade3' ? 7 : 5} className="text-center py-10 text-slate-500 font-medium whitespace-nowrap">
+                    <p className="font-bold text-[#172033]">Santri tidak ditemukan.</p>
+                    <button onClick={() => setStudentSearch('')} className="mt-1 text-xs text-[#0362D0] hover:underline cursor-pointer">
+                      Hapus pencarian
+                    </button>
+                  </TableCell>
+                </TableRow>
               ) : (
-                groupStudents.map((student, idx) => {
+                filteredStudents.map((student, idx) => {
                   const p = sessionProgress[student.id] || { reading: '', tajwid: '', memorizedSurah: '', writing: '', total: 0 };
                   return (
-                    <TableRow key={student.id} className="hover:bg-[#F5F6F8]/60 transition-colors border-b border-[#E6E8EC]">
+                    <TableRow key={student.id} className="hover:bg-slate-50/60 transition-colors border-b border-slate-100">
                       <TableCell className="text-center text-slate-500 font-bold text-xs whitespace-nowrap px-4 py-3.5">{idx + 1}</TableCell>
                       <TableCell className="whitespace-nowrap px-4 py-3.5">
                         <div className="font-extrabold text-[#172033] text-sm">{student.name}</div>
@@ -369,7 +473,7 @@ export function Progress() {
                           <Input 
                             type="number" 
                             min="0" max="100" 
-                            className="text-center h-9 px-1 font-bold text-xs border-[#E6E8EC]"
+                            className="text-center h-9 px-1 font-bold text-xs border-slate-100"
                             placeholder="0-100"
                             value={p.reading === 0 || p.reading === '' || p.reading === undefined ? '' : p.reading}
                             onChange={(e) => handleScoreChange(student.id, 'reading', e.target.value)}
@@ -380,7 +484,7 @@ export function Progress() {
                         <Input 
                           type="number" 
                           min="0" max="100" 
-                          className="text-center h-9 px-1 font-bold text-xs border-[#E6E8EC]"
+                          className="text-center h-9 px-1 font-bold text-xs border-slate-100"
                           placeholder="0-100"
                           value={p.tajwid === 0 || p.tajwid === '' || p.tajwid === undefined ? '' : p.tajwid}
                           onChange={(e) => handleScoreChange(student.id, 'tajwid', e.target.value)}
@@ -390,7 +494,7 @@ export function Progress() {
                         <Input 
                           type="number" 
                           min="0" max="100" 
-                          className="text-center h-9 px-1 font-bold text-xs border-[#E6E8EC]"
+                          className="text-center h-9 px-1 font-bold text-xs border-slate-100"
                           placeholder="0-100"
                           value={p.writing === 0 || p.writing === '' || p.writing === undefined ? '' : p.writing}
                           onChange={(e) => handleScoreChange(student.id, 'writing', e.target.value)}
@@ -402,7 +506,7 @@ export function Progress() {
                             type="text"
                             list="juz30-surah-list"
                             placeholder="Contoh: QS. An-Naba' 1-20" 
-                            className="h-9 px-2 text-xs font-semibold border-[#E6E8EC] bg-white"
+                            className="h-9 px-2 text-xs font-semibold border-slate-100 bg-white"
                             value={p.memorizedSurah || ''}
                             onChange={(e) => handleScoreChange(student.id, 'memorizedSurah', e.target.value)}
                           />
@@ -426,15 +530,19 @@ export function Progress() {
 
         {/* Mobile View */}
         <div className="md:hidden flex flex-col gap-3 p-1">
-          {groupStudents.length === 0 ? (
-            <div className="text-center py-12 text-slate-500 font-medium bg-[#F5F6F8] rounded-xl border border-[#E6E8EC]">
+          {students.length === 0 ? (
+            <div className="text-center py-12 text-slate-500 font-medium bg-slate-50 rounded-xl border border-slate-100">
               Belum ada santri di kelompok ini.
             </div>
+          ) : filteredStudents.length === 0 ? (
+            <div className="text-center py-8 text-slate-500 font-medium bg-slate-50 rounded-xl border border-slate-100">
+              Santri tidak ditemukan.
+            </div>
           ) : (
-            groupStudents.map((student, idx) => {
+            filteredStudents.map((student, idx) => {
               const p = sessionProgress[student.id] || { reading: '', tajwid: '', memorizedSurah: '', writing: '', total: 0 };
               return (
-                <div key={student.id} className="bg-white border border-[#E6E8EC] rounded-xl p-4 shadow-sm">
+                <div key={student.id} className="bg-white border border-slate-100 rounded-xl p-4 shadow-sm">
                   <div className="flex justify-between items-start mb-4">
                     <div>
                       <div className="font-extrabold text-[#172033] text-sm leading-tight">{student.name}</div>
@@ -456,7 +564,7 @@ export function Progress() {
                           type="number" 
                           min="0" max="100" 
                           placeholder="0-100"
-                          className="text-center h-9 px-1 font-bold text-xs border-[#E6E8EC]"
+                          className="text-center h-9 px-1 font-bold text-xs border-slate-100"
                           value={p.reading === 0 || p.reading === '' || p.reading === undefined ? '' : p.reading}
                           onChange={(e) => handleScoreChange(student.id, 'reading', e.target.value)}
                         />
@@ -468,7 +576,7 @@ export function Progress() {
                         type="number" 
                         min="0" max="100" 
                         placeholder="0-100"
-                        className="text-center h-9 px-1 font-bold text-xs border-[#E6E8EC]"
+                        className="text-center h-9 px-1 font-bold text-xs border-slate-100"
                         value={p.tajwid === 0 || p.tajwid === '' || p.tajwid === undefined ? '' : p.tajwid}
                         onChange={(e) => handleScoreChange(student.id, 'tajwid', e.target.value)}
                       />
@@ -479,7 +587,7 @@ export function Progress() {
                         type="number" 
                         min="0" max="100" 
                         placeholder="0-100"
-                        className="text-center h-9 px-1 font-bold text-xs border-[#E6E8EC]"
+                        className="text-center h-9 px-1 font-bold text-xs border-slate-100"
                         value={p.writing === 0 || p.writing === '' || p.writing === undefined ? '' : p.writing}
                         onChange={(e) => handleScoreChange(student.id, 'writing', e.target.value)}
                       />
@@ -495,7 +603,7 @@ export function Progress() {
                         type="text"
                         list="juz30-surah-list"
                         placeholder="Contoh: QS. An-Naba' 1-20" 
-                        className="h-9 px-2 font-medium text-xs border-[#E6E8EC]"
+                        className="h-9 px-2 font-medium text-xs border-slate-100"
                         value={p.memorizedSurah || ''}
                         onChange={(e) => handleScoreChange(student.id, 'memorizedSurah', e.target.value)}
                       />
@@ -507,7 +615,7 @@ export function Progress() {
           )}
         </div>
 
-        <div className="p-5 border-t border-[#E6E8EC] bg-[#F5F6F8]/70 flex justify-end">
+        <div className="p-5 border-t border-slate-100 bg-slate-50/70 flex justify-end">
           <Button onClick={handleSave} className="w-full sm:w-auto bg-[#0362D0] hover:bg-[#0252b3] text-white font-bold py-2.5 shadow-xs cursor-pointer" disabled={saving || groupStudents.length === 0}>
             {saving ? <Loader2 size={18} className="mr-2 animate-spin" /> : <Save size={18} className="mr-2" />} 
             {saving ? 'Menyimpan Nilai...' : 'Simpan Nilai Sesi'}
@@ -517,7 +625,7 @@ export function Progress() {
 
       {/* Toast Notification */}
       {showToast && (
-        <div className="fixed bottom-8 right-8 bg-[#172033] text-white px-5 py-4 rounded-2xl shadow-2xl flex items-center gap-3 animate-in slide-in-from-bottom-5 fade-in duration-300 z-50 border border-[#E6E8EC]/20">
+        <div className="fixed bottom-8 right-8 bg-[#172033] text-white px-5 py-4 rounded-2xl shadow-2xl flex items-center gap-3 animate-in slide-in-from-bottom-5 fade-in duration-300 z-50 border border-slate-100/20">
           <div className="bg-[#C99A2E]/20 p-2 rounded-xl text-[#C99A2E]">
             <CheckCircle size={20} />
           </div>

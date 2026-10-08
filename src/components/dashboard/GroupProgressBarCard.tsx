@@ -19,8 +19,8 @@ export const GroupProgressBarCard = React.memo(function GroupProgressBarCard({ d
   }, [data]);
 
   return (
-    <div id="dashboard-group-progress-card" className="bg-white p-5 rounded-2xl border border-[#E6E8EC] flex flex-col justify-between shadow-xs">
-      <div className="flex justify-between items-center pb-3 border-b border-[#F5F6F8]">
+    <div id="dashboard-group-progress-card" className="bg-white p-5 rounded-2xl border border-transparent shadow-sm flex flex-col justify-between shadow-xs">
+      <div className="flex justify-between items-center pb-3 border-b border-slate-50">
         <div>
           <div className="flex items-center gap-1.5">
             <BarChart3 size={16} className="text-[#0362D0]" />
@@ -51,7 +51,7 @@ export const GroupProgressBarCard = React.memo(function GroupProgressBarCard({ d
             />
             <Tooltip 
               formatter={(value) => [`${value}%`, 'Progress']}
-              contentStyle={{ borderRadius: '12px', border: '1px solid #E6E8EC', fontSize: '12px', fontWeight: '500' }}
+              contentStyle={{ borderRadius: '12px', border: '1px solid #f1f5f9', fontSize: '12px', fontWeight: '500' }}
             />
             <Bar dataKey="progress" radius={[0, 4, 4, 0]}>
               {data.map((entry, index) => {
@@ -63,7 +63,7 @@ export const GroupProgressBarCard = React.memo(function GroupProgressBarCard({ d
         </ResponsiveContainer>
       </div>
 
-      <div className="pt-3 border-t border-[#F5F6F8] flex justify-between items-center">
+      <div className="pt-3 border-t border-slate-50 flex justify-between items-center">
         <span className="text-[10px] text-slate-400 font-semibold">
           Menampilkan seluruh {data.length} halaqah aktif
         </span>

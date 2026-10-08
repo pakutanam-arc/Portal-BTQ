@@ -1,15 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Layers, Users, Calendar, MapPin, Search, BookOpen, UserCheck, X, Edit2, Check, Sparkles, Building2 } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Badge } from '../components/ui/Badge';
-import { getGroups, getMentors, getGroupStudentsCount, getStudentsByGroup, getGroupNumber, Group, Mentor, Student } from '../services/db';
+import { getGroups, getMentors, getStudents, getStudentsByGroup, getGroupNumber, invalidateDbCache, Group, Mentor, Student } from '../services/db';
 import { useAuth } from '../contexts/AuthContext';
 import { masterGrades, getGradeForGroup } from '../services/curriculumData';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { theme } from '../theme';
+import { useDebounce } from '../hooks/useDebounce';
 
 export function Groups() {
   const { currentUser, userData, userRole } = useAuth();
@@ -20,6 +21,7 @@ export function Groups() {
   const [loadingStudents, setLoadingStudents] = useState(false);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const debouncedSearchTerm = useDebounce(searchTerm, 250);
   const [selectedLocationFilter, setSelectedLocationFilter] = useState<string>('all');
   
   // Modal state
@@ -33,9 +35,10 @@ export function Groups() {
   useEffect(() => {
     async function loadData() {
       try {
-        const [groupsData, mentorsData] = await Promise.all([
+        const [groupsData, mentorsData, studentsData] = await Promise.all([
           getGroups(),
-          getMentors()
+          getMentors(),
+          getStudents()
         ]);
         
         const sortedGroups = [...groupsData].sort((a, b) => getGroupNumber(a) - getGroupNumber(b));
@@ -65,11 +68,13 @@ export function Groups() {
         setGroups(filteredGroups);
         setMentors(mentorsData);
         
-        // Load group counts
+        // Load group counts in-memory (Eliminates 20+ N+1 queries)
         const counts: Record<string, number> = {};
-        await Promise.all(filteredGroups.map(async g => {
-          counts[g.id] = await getGroupStudentsCount(g.id);
-        }));
+        filteredGroups.forEach(g => {
+          counts[g.id] = studentsData.filter(
+            s => s.groupId === g.id || (g.id === 'g1' && s.groupId === 'group_1') || (g.id === 'g2' && s.groupId === 'group_2') || (g.id === 'g3' && s.groupId === 'group_3') || (g.id === 'g4' && s.groupId === 'group_4') || (g.id === 'g5' && s.groupId === 'group_5') || (g.id === 'g6' && s.groupId === 'group_6') || (g.id === 'g7' && s.groupId === 'group_7') || (g.id === 'g8' && s.groupId === 'group_8') || (g.id === 'g9' && s.groupId === 'group_9') || (g.id === 'g10' && s.groupId === 'group_10')
+          ).length;
+        });
         setGroupCounts(counts);
       } catch (error) {
         console.error("Error fetching groups data:", error);
@@ -84,6 +89,7 @@ export function Groups() {
     if (!selectedGroup || !editedRoom.trim()) return;
     setSavingRoom(true);
     try {
+      invalidateDbCache('groups');
       await updateDoc(doc(db, 'groups', selectedGroup.id), {
         room: editedRoom.trim()
       });
@@ -99,25 +105,34 @@ export function Groups() {
     }
   };
 
-  const filteredGroups = groups.filter(group => {
-    const mentor = mentors.find(m => m.id === group.mentorId);
-    const matchesSearch = 
-      group.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      mentor?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (group.room && group.room.toLowerCase().includes(searchTerm.toLowerCase()));
+  const mentorMap = useMemo(() => {
+    const map = new Map<string, Mentor>();
+    mentors.forEach(m => map.set(m.id, m));
+    return map;
+  }, [mentors]);
 
-    if (!matchesSearch) return false;
+  const filteredGroups = useMemo(() => {
+    const cleanSearch = debouncedSearchTerm.trim().toLowerCase();
+    return groups.filter(group => {
+      const mentor = group.mentorId ? mentorMap.get(group.mentorId) : undefined;
+      const matchesSearch = !cleanSearch || 
+        group.name.toLowerCase().includes(cleanSearch) || 
+        (mentor?.name && mentor.name.toLowerCase().includes(cleanSearch)) ||
+        (group.room && group.room.toLowerCase().includes(cleanSearch));
 
-    if (selectedLocationFilter === 'all') return true;
-    if (selectedLocationFilter === 'mushola') return group.room?.toLowerCase().includes('mushola');
-    if (selectedLocationFilter === 'perpus') return group.room?.toLowerCase().includes('perpus');
-    if (selectedLocationFilter === 'kelas') return !group.room?.toLowerCase().includes('mushola') && !group.room?.toLowerCase().includes('perpus');
-    
-    return true;
-  });
+      if (!matchesSearch) return false;
+
+      if (selectedLocationFilter === 'all') return true;
+      if (selectedLocationFilter === 'mushola') return group.room?.toLowerCase().includes('mushola');
+      if (selectedLocationFilter === 'perpus') return group.room?.toLowerCase().includes('perpus');
+      if (selectedLocationFilter === 'kelas') return !group.room?.toLowerCase().includes('mushola') && !group.room?.toLowerCase().includes('perpus');
+      
+      return true;
+    });
+  }, [groups, mentorMap, debouncedSearchTerm, selectedLocationFilter]);
 
   const getLocationBadgeStyle = (room?: string) => {
-    if (!room) return 'bg-[#F5F6F8] text-[#172033] border-[#E6E8EC]';
+    if (!room) return 'bg-slate-50 text-[#172033] border-slate-100';
     const lower = room.toLowerCase();
     if (lower.includes('mushola')) {
       return 'bg-[#0362D0]/10 text-[#0362D0] border-[#0362D0]/30';
@@ -131,7 +146,7 @@ export function Groups() {
   return (
     <div className="flex flex-col gap-4 sm:gap-6 w-full">
       {/* Header Banner */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-[#E6E8EC] shadow-xs">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-slate-100 shadow-xs">
         <div>
           <div className="flex items-center gap-2">
             <h1 className={theme.typography.h1}>10 Kelompok Bimbingan BTQ</h1>
@@ -163,7 +178,7 @@ export function Groups() {
             className={`px-3.5 py-2 rounded-xl transition-all cursor-pointer ${
               selectedLocationFilter === 'all' 
                 ? 'bg-[#0362D0] text-white shadow-xs' 
-                : 'bg-white text-[#172033] border border-[#E6E8EC] hover:bg-[#F5F6F8]'
+                : 'bg-white text-[#172033] border border-slate-100 hover:bg-slate-50'
             }`}
           >
             Semua Lokasi
@@ -211,12 +226,12 @@ export function Groups() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {filteredGroups.map(group => {
-            const mentor = mentors.find(m => m.id === group.mentorId);
+            const mentor = group.mentorId ? mentorMap.get(group.mentorId) : undefined;
             const studentsCount = groupCounts[group.id] || 0;
             const gradeInfo = getGradeForGroup(group);
             
             return (
-              <Card key={group.id} className="hover:shadow-md transition-all duration-200 border border-[#E6E8EC] rounded-2xl overflow-hidden flex flex-col bg-white group">
+              <Card key={group.id} className="hover:shadow-md transition-all duration-200 border border-slate-100 rounded-2xl overflow-hidden flex flex-col bg-white group">
                 <CardContent className="p-0 flex flex-col h-full">
                   <div className="p-5 flex-1 flex flex-col">
                     {/* Header Card */}
@@ -240,14 +255,14 @@ export function Groups() {
                     </div>
 
                     {/* Mentor Info */}
-                    <div className="text-xs text-slate-600 bg-[#F5F6F8] p-2.5 rounded-xl mb-3.5 border border-[#E6E8EC] flex items-center justify-between">
+                    <div className="text-xs text-slate-600 bg-slate-50 p-2.5 rounded-xl mb-3.5 border border-slate-100 flex items-center justify-between">
                       <span className="text-slate-500 font-bold">Mentor Pembimbing:</span>
                       <span className="font-extrabold text-[#172033]">{mentor?.name || 'Belum ditugaskan'}</span>
                     </div>
                     
                     {/* Stats Box */}
                     <div className="grid grid-cols-2 gap-2.5 mb-3.5">
-                      <div className="flex flex-col gap-0.5 p-2.5 bg-[#F5F6F8] rounded-xl border border-[#E6E8EC]">
+                      <div className="flex flex-col gap-0.5 p-2.5 bg-slate-50 rounded-xl border border-slate-100">
                         <div className="flex items-center gap-1.5 text-slate-500 text-[10px] font-extrabold uppercase tracking-wider">
                           <Users size={12} className="text-[#0362D0]" /> Total Siswa
                         </div>
@@ -255,7 +270,7 @@ export function Groups() {
                           {studentsCount} <span className="text-[11px] font-medium text-slate-500">santri</span>
                         </span>
                       </div>
-                      <div className="flex flex-col gap-0.5 p-2.5 bg-[#F5F6F8] rounded-xl border border-[#E6E8EC]">
+                      <div className="flex flex-col gap-0.5 p-2.5 bg-slate-50 rounded-xl border border-slate-100">
                         <div className="flex items-center gap-1.5 text-slate-500 text-[10px] font-extrabold uppercase tracking-wider">
                           <Calendar size={12} className="text-[#C99A2E]" /> Sesi Belajar
                         </div>
@@ -278,7 +293,7 @@ export function Groups() {
                   </div>
                   
                   {/* Action Footer */}
-                  <div className="px-5 py-3 border-t border-[#E6E8EC] bg-[#F5F6F8] flex justify-end">
+                  <div className="px-5 py-3 border-t border-slate-100 bg-slate-50 flex justify-end">
                     <Button 
                       variant="outline" 
                       size="sm" 
@@ -307,7 +322,7 @@ export function Groups() {
           })}
           
           {filteredGroups.length === 0 && (
-            <div className="col-span-full py-16 text-center text-slate-500 bg-white rounded-3xl border border-dashed border-[#E6E8EC]">
+            <div className="col-span-full py-16 text-center text-slate-500 bg-white rounded-3xl border border-dashed border-slate-100">
               <Layers size={32} className="mx-auto mb-2 text-slate-400 opacity-60" />
               <p className="font-bold text-[#172033]">Tidak ada kelompok yang sesuai</p>
               <p className="text-xs text-slate-500 mt-1">Coba sesuaikan kata kunci pencarian atau filter lokasi.</p>
@@ -319,9 +334,9 @@ export function Groups() {
       {/* Group Detail & Room Editor Modal */}
       {selectedGroup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#172033]/60 backdrop-blur-xs p-4 animate-in fade-in">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-[#E6E8EC] animate-in zoom-in-95 max-h-[90vh] flex flex-col">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 animate-in zoom-in-95 max-h-[90vh] flex flex-col">
             {/* Modal Header */}
-            <div className="flex justify-between items-start pb-4 border-b border-[#E6E8EC]">
+            <div className="flex justify-between items-start pb-4 border-b border-slate-100">
               <div>
                 <div className="flex items-center gap-2">
                   <h3 className="text-lg font-black text-[#172033]">{selectedGroup.name}</h3>
@@ -335,7 +350,7 @@ export function Groups() {
               </div>
               <button 
                 onClick={() => setSelectedGroup(null)}
-                className="text-slate-400 hover:text-[#172033] p-1.5 rounded-xl hover:bg-[#F5F6F8] transition-colors"
+                className="text-slate-400 hover:text-[#172033] p-1.5 rounded-xl hover:bg-slate-50 transition-colors"
               >
                 <X size={18} />
               </button>
@@ -381,7 +396,7 @@ export function Groups() {
                         setIsEditingRoom(false);
                         setEditedRoom(selectedGroup.room || '');
                       }}
-                      className="px-2.5 py-1.5 bg-[#E6E8EC] text-[#172033] rounded-xl text-xs font-bold"
+                      className="px-2.5 py-1.5 bg-[#f1f5f9] text-[#172033] rounded-xl text-xs font-bold"
                     >
                       Batal
                     </button>
@@ -395,13 +410,13 @@ export function Groups() {
 
               {/* Mentor & Schedule Details */}
               <div className="grid grid-cols-2 gap-3 text-xs">
-                <div className="p-3 bg-[#F5F6F8] rounded-xl border border-[#E6E8EC]">
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
                   <span className="text-[10px] text-slate-500 font-bold uppercase block mb-0.5">Mentor Pembimbing</span>
                   <span className="font-extrabold text-[#172033]">
                     {mentors.find(m => m.id === selectedGroup.mentorId)?.name || 'Belum ditentukan'}
                   </span>
                 </div>
-                <div className="p-3 bg-[#F5F6F8] rounded-xl border border-[#E6E8EC]">
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
                   <span className="text-[10px] text-slate-500 font-bold uppercase block mb-0.5">Jadwal Belajar</span>
                   <span className="font-extrabold text-[#172033]">
                     {selectedGroup.schedule}
@@ -418,7 +433,7 @@ export function Groups() {
                   </h4>
                 </div>
 
-                <div className="divide-y divide-[#E6E8EC] border border-[#E6E8EC] rounded-2xl overflow-hidden max-h-48 overflow-y-auto bg-[#F5F6F8]">
+                <div className="divide-y divide-slate-100 border border-slate-100 rounded-2xl overflow-hidden max-h-48 overflow-y-auto bg-slate-50">
                   {loadingStudents ? (
                     <div className="py-8 flex justify-center items-center">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0362D0]"></div>
@@ -432,7 +447,7 @@ export function Groups() {
                             <span className="text-[10px] text-slate-400 ml-1.5 font-medium">NIS: {st.nis}</span>
                           </div>
                         </div>
-                        <span className="px-2 py-0.5 bg-white border border-[#E6E8EC] rounded-md font-bold text-[10px] text-[#172033]">
+                        <span className="px-2 py-0.5 bg-white border border-slate-100 rounded-md font-bold text-[10px] text-[#172033]">
                           Kelas {st.class}
                         </span>
                       </div>
@@ -447,7 +462,7 @@ export function Groups() {
             </div>
 
             {/* Modal Footer */}
-            <div className="pt-3 border-t border-[#E6E8EC] flex justify-end">
+            <div className="pt-3 border-t border-slate-100 flex justify-end">
               <Button 
                 onClick={() => setSelectedGroup(null)}
                 className="w-full bg-[#0362D0] hover:bg-[#0252b3] text-white text-xs font-bold py-2.5 rounded-xl cursor-pointer"

@@ -28,6 +28,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { getAuditLogs, addAuditLog, AuditLogEntry } from '../services/db';
 import { validateCurriculumConsistency } from '../utils/curriculumValidator';
+import { forceSyncGroupProgress } from '../services/dataHealthCheck';
 import { cn } from '../utils/cn';
 
 export function AuditLogs() {
@@ -37,6 +38,7 @@ export function AuditLogs() {
   const [logs, setLogs] = useState<AuditLogEntry[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
+  const [syncing, setSyncing] = useState<boolean>(false);
   
   // Filters & Search
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -97,6 +99,22 @@ export function AuditLogs() {
       showToast('Gagal menjalankan diagnostik sistem.');
     } finally {
       setRefreshing(false);
+    }
+  };
+
+  const handleForceSync = async (groupId: string) => {
+    if (!groupId) return;
+    setSyncing(true);
+    try {
+      await forceSyncGroupProgress(groupId);
+      showToast('Sinkronisasi data (Force Sync) berhasil dilakukan!');
+      setSelectedLog(null);
+      fetchLogs();
+    } catch (err) {
+      console.error(err);
+      showToast('Gagal melakukan sinkronisasi data.');
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -277,7 +295,7 @@ export function AuditLogs() {
       )}
 
       {/* Header Banner */}
-      <div className="bg-white rounded-3xl p-6 sm:p-8 border border-[#E6E8EC] shadow-xs relative overflow-hidden">
+      <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-100 shadow-xs relative overflow-hidden">
         <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-[#950415] via-[#C99A2E] to-[#0362D0]" />
         
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
@@ -329,7 +347,7 @@ export function AuditLogs() {
 
       {/* Stats Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-white p-5 rounded-3xl border border-[#E6E8EC] shadow-xs space-y-1">
+        <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-xs space-y-1">
           <div className="flex items-center justify-between text-slate-500">
             <span className="text-xs font-extrabold uppercase tracking-wider">Total Log Audit</span>
             <Database size={18} className="text-[#0362D0]" />
@@ -338,7 +356,7 @@ export function AuditLogs() {
           <p className="text-[11px] text-slate-600 font-medium">Rekam aktivitas tersimpan</p>
         </div>
 
-        <div className="bg-white p-5 rounded-3xl border border-[#E6E8EC] shadow-xs space-y-1">
+        <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-xs space-y-1">
           <div className="flex items-center justify-between text-slate-500">
             <span className="text-xs font-extrabold uppercase tracking-wider">Peringatan / Warning</span>
             <AlertTriangle size={18} className="text-amber-600" />
@@ -347,7 +365,7 @@ export function AuditLogs() {
           <p className="text-[11px] text-slate-600 font-medium">Isu terdeteksi sistem</p>
         </div>
 
-        <div className="bg-white p-5 rounded-3xl border border-[#E6E8EC] shadow-xs space-y-1">
+        <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-xs space-y-1">
           <div className="flex items-center justify-between text-slate-500">
             <span className="text-xs font-extrabold uppercase tracking-wider">Event Sync & Koreksi</span>
             <RefreshCw size={18} className="text-indigo-600" />
@@ -356,7 +374,7 @@ export function AuditLogs() {
           <p className="text-[11px] text-slate-600 font-medium">Otomatisasi & Kurikulum</p>
         </div>
 
-        <div className="bg-white p-5 rounded-3xl border border-[#E6E8EC] shadow-xs space-y-1">
+        <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-xs space-y-1">
           <div className="flex items-center justify-between text-slate-500">
             <span className="text-xs font-extrabold uppercase tracking-wider">Aktivitas Keamanan</span>
             <ShieldCheck size={18} className="text-[#950415]" />
@@ -367,7 +385,7 @@ export function AuditLogs() {
       </div>
 
       {/* Search & Multi-Filters Toolbar */}
-      <div className="bg-white rounded-3xl p-5 border border-[#E6E8EC] shadow-xs space-y-4">
+      <div className="bg-white rounded-3xl p-5 border border-slate-100 shadow-xs space-y-4">
         <div className="flex flex-col lg:flex-row gap-3">
           
           {/* Search Bar */}
@@ -474,7 +492,7 @@ export function AuditLogs() {
       </div>
 
       {/* Main Audit Log Table */}
-      <div className="bg-white rounded-3xl border border-[#E6E8EC] shadow-xs overflow-hidden">
+      <div className="bg-white rounded-3xl border border-slate-100 shadow-xs overflow-hidden">
         
         {loading ? (
           <div className="p-12 text-center space-y-3">
@@ -677,7 +695,7 @@ export function AuditLogs() {
 
               {/* Troubleshooting Recommendation if error */}
               {(selectedLog.severity === 'error' || selectedLog.severity === 'warning') && (
-                <div className="p-4 bg-amber-50 rounded-2xl border border-amber-200 text-xs text-amber-900 space-y-1">
+                <div className="p-4 bg-amber-50 rounded-2xl border border-amber-200 text-xs text-amber-900 space-y-3">
                   <div className="flex items-center gap-2 font-bold text-amber-800">
                     <AlertTriangle size={15} />
                     <span>Panduan Troubleshooting Administrator:</span>
@@ -685,6 +703,17 @@ export function AuditLogs() {
                   <p className="text-[11px] text-amber-800 leading-relaxed">
                     Event ini menandakan adanya ketidaksesuaian atau peringatan sistem. Anda dapat memicu re-sync otomatis melalui tombol <strong>Diagnostik System Sync</strong> atau memeriksa menu <strong>Sesi Mengajar</strong> / <strong>Kurikulum</strong> untuk penyesuaian.
                   </p>
+                  
+                  {selectedLog.metadata?.requiresSync && selectedLog.metadata?.groupId && (
+                    <button
+                      onClick={() => handleForceSync(selectedLog.metadata!.groupId)}
+                      disabled={syncing}
+                      className="mt-2 flex items-center justify-center gap-2 w-full px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white font-bold rounded-xl transition-colors cursor-pointer"
+                    >
+                      <RefreshCw size={14} className={syncing ? "animate-spin" : ""} />
+                      {syncing ? 'Menyinkronkan...' : 'Force Sync Data Capaian (Progress)'}
+                    </button>
+                  )}
                 </div>
               )}
             </div>

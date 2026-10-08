@@ -93,7 +93,7 @@ export function Login() {
         initial={{ opacity: 0, y: 15, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.4, ease: 'easeOut' }}
-        className="relative z-10 w-full max-w-4xl bg-white rounded-3xl shadow-2xl overflow-hidden border border-[#E6E8EC] grid lg:grid-cols-12 min-h-[580px]"
+        className="relative z-10 w-full max-w-4xl bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-100 grid lg:grid-cols-12 min-h-[580px]"
       >
         {/* LEFT COLUMN: Brand Identity Panel (Royal Blue) */}
         <div className="lg:col-span-5 bg-[#0362D0] p-8 lg:p-10 text-white flex flex-col justify-between relative overflow-hidden">
@@ -204,7 +204,7 @@ export function Login() {
                     placeholder="Masukkan username (contoh: alumni1, alumni2)"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 bg-[#F5F6F8] border border-[#E6E8EC] rounded-2xl text-xs sm:text-sm font-medium text-[#172033] placeholder:text-slate-400 focus:bg-white focus:border-[#0362D0] focus:ring-4 focus:ring-[#0362D0]/15 outline-none transition-all"
+                    className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-100 rounded-2xl text-xs sm:text-sm font-medium text-[#172033] placeholder:text-slate-400 focus:bg-white focus:border-[#0362D0] focus:ring-4 focus:ring-[#0362D0]/15 outline-none transition-all"
                   />
                 </div>
               </div>
@@ -233,7 +233,7 @@ export function Login() {
                     placeholder="Masukkan kata sandi..."
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full pl-10 pr-11 py-2.5 bg-[#F5F6F8] border border-[#E6E8EC] rounded-2xl text-xs sm:text-sm font-medium text-[#172033] placeholder:text-slate-400 focus:bg-white focus:border-[#0362D0] focus:ring-4 focus:ring-[#0362D0]/15 outline-none transition-all"
+                    className="w-full pl-10 pr-11 py-2.5 bg-slate-50 border border-slate-100 rounded-2xl text-xs sm:text-sm font-medium text-[#172033] placeholder:text-slate-400 focus:bg-white focus:border-[#0362D0] focus:ring-4 focus:ring-[#0362D0]/15 outline-none transition-all"
                   />
                   <button
                     type="button"
@@ -270,7 +270,7 @@ export function Login() {
           </div>
 
           {/* Footer Branding Text */}
-          <div className="mt-8 pt-4 border-t border-[#E6E8EC] text-center">
+          <div className="mt-8 pt-4 border-t border-slate-100 text-center">
             <div className="flex items-center justify-center gap-1.5 text-xs font-bold text-[#172033]">
               <span>Portal BTQ</span>
               <span className="w-1.5 h-1.5 rounded-full bg-[#C99A2E]" />
@@ -286,8 +286,8 @@ export function Login() {
       {/* Help / Password Guide Modal */}
       {showHelpModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#172033]/60 backdrop-blur-xs p-4 animate-in fade-in">
-          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-[#E6E8EC] animate-in zoom-in-95">
-            <div className="flex justify-between items-center mb-4 pb-2 border-b border-[#E6E8EC]">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 animate-in zoom-in-95">
+            <div className="flex justify-between items-center mb-4 pb-2 border-b border-slate-100">
               <div className="flex items-center gap-2 text-[#0362D0] font-extrabold text-sm">
                 <KeyRound size={18} /> Panduan Akses Akun
               </div>
@@ -303,7 +303,7 @@ export function Login() {
               <p>
                 Akses Portal BTQ diperuntukkan bagi <strong>Koordinator BTQ</strong>, <strong>Administrator</strong>, dan <strong>Mentor Pembimbing</strong> resmi SMP Negeri 102 Jakarta.
               </p>
-              <div className="bg-[#F5F6F8] p-3.5 rounded-2xl border border-[#E6E8EC] space-y-2">
+              <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-100 space-y-2">
                 <div className="font-extrabold text-[#172033]">
                   Daftar Kredensial Login:
                 </div>

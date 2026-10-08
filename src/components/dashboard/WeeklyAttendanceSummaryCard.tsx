@@ -62,15 +62,15 @@ const CustomWeeklyTooltip = ({ active, payload, mode = 'trend' }: CustomTooltipP
     const isAboveTarget = item.rate >= item.target;
 
     return (
-      <div className="bg-white p-3.5 rounded-xl border border-[#E6E8EC] shadow-xl text-xs min-w-[220px] pointer-events-none">
+      <div className="bg-white p-3.5 rounded-xl border border-transparent shadow-sm shadow-xl text-xs min-w-[220px] pointer-events-none">
         {/* Tooltip Header */}
-        <div className="flex items-center justify-between gap-2 pb-2 mb-2 border-b border-[#F5F6F8]">
+        <div className="flex items-center justify-between gap-2 pb-2 mb-2 border-b border-slate-50">
           <div className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-[#0362D0]" />
             <span className="font-extrabold text-[#172033] text-sm">{item.label}</span>
           </div>
           {item.dateLabel && (
-            <span className="text-[11px] text-slate-500 font-semibold bg-[#F5F6F8] px-1.5 py-0.5 rounded">
+            <span className="text-[11px] text-slate-500 font-semibold bg-slate-50 px-1.5 py-0.5 rounded">
               {item.dateLabel}
             </span>
           )}
@@ -110,7 +110,7 @@ const CustomWeeklyTooltip = ({ active, payload, mode = 'trend' }: CustomTooltipP
         </div>
 
         {/* Total students */}
-        <div className="mt-2.5 pt-2 border-t border-[#F5F6F8] flex items-center justify-between text-[11px] font-medium text-slate-500">
+        <div className="mt-2.5 pt-2 border-t border-slate-50 flex items-center justify-between text-[11px] font-medium text-slate-500">
           <span>Total Peserta:</span>
           <span className="font-bold text-[#172033]">{item.total} Santri</span>
         </div>
@@ -174,11 +174,11 @@ export const WeeklyAttendanceSummaryCard = React.memo(function WeeklyAttendanceS
   return (
     <div 
       id="dashboard-weekly-attendance-summary-card" 
-      className="bg-white p-5 rounded-2xl border border-[#E6E8EC] shadow-xs flex flex-col justify-between"
+      className="bg-white p-5 rounded-2xl border border-transparent shadow-sm shadow-xs flex flex-col justify-between"
     >
       {/* 1. Header & Quick View Switcher */}
       <div>
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-[#F5F6F8] gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-50 gap-3">
           <div>
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-lg bg-[#0362D0]/10 border border-[#0362D0]/20 flex items-center justify-center text-[#0362D0] shrink-0">
@@ -201,7 +201,7 @@ export const WeeklyAttendanceSummaryCard = React.memo(function WeeklyAttendanceS
           </div>
 
           {/* View Mode Controls */}
-          <div className="flex items-center gap-1 bg-[#F5F6F8] p-1 rounded-xl border border-[#E6E8EC]/90 shrink-0">
+          <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-xl border border-transparent shadow-sm/90 shrink-0">
             <button
               type="button"
               onClick={() => setChartMode('trend')}
@@ -247,7 +247,7 @@ export const WeeklyAttendanceSummaryCard = React.memo(function WeeklyAttendanceS
         {/* 2. Fast Pattern Insights Ribbon */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-3">
           {/* Latest Week & Trend Direction */}
-          <div className="bg-[#F8FAFC] border border-[#E6E8EC] p-2.5 rounded-xl">
+          <div className="bg-[#F8FAFC] border border-transparent shadow-sm p-2.5 rounded-xl">
             <span className="text-[11px] text-slate-500 font-semibold block">Pekan Terbaru</span>
             <div className="flex items-baseline gap-1.5 mt-0.5">
               <span className="text-base font-black text-[#172033]">{stats.latest}%</span>
@@ -267,7 +267,7 @@ export const WeeklyAttendanceSummaryCard = React.memo(function WeeklyAttendanceS
           </div>
 
           {/* Semester Average */}
-          <div className="bg-[#F8FAFC] border border-[#E6E8EC] p-2.5 rounded-xl">
+          <div className="bg-[#F8FAFC] border border-transparent shadow-sm p-2.5 rounded-xl">
             <span className="text-[11px] text-slate-500 font-semibold block">Rata-rata Semester</span>
             <div className="flex items-baseline gap-1.5 mt-0.5">
               <span className="text-base font-black text-[#0362D0]">{stats.average}%</span>
@@ -276,7 +276,7 @@ export const WeeklyAttendanceSummaryCard = React.memo(function WeeklyAttendanceS
           </div>
 
           {/* Peak Attendance Week */}
-          <div className="bg-[#F8FAFC] border border-[#E6E8EC] p-2.5 rounded-xl">
+          <div className="bg-[#F8FAFC] border border-transparent shadow-sm p-2.5 rounded-xl">
             <span className="text-[11px] text-slate-500 font-semibold block">Puncak Kehadiran</span>
             <div className="flex items-baseline gap-1.5 mt-0.5">
               <span className="text-base font-black text-emerald-700">
@@ -442,7 +442,7 @@ export const WeeklyAttendanceSummaryCard = React.memo(function WeeklyAttendanceS
       </div>
 
       {/* 4. Footer Legend & Diagnostic Summary */}
-      <div className="pt-3 border-t border-[#F5F6F8] flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+      <div className="pt-3 border-t border-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
         <div className="flex items-center gap-3 text-slate-500 font-semibold text-[11px]">
           <span className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-[#0362D0]" />

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { theme } from '../theme';
 import { 
   BookOpen, 
@@ -32,6 +32,8 @@ import {
 import { masterSessions } from '../services/curriculumData';
 import { useAuth } from '../contexts/AuthContext';
 import { cn } from '../utils/cn';
+import { Toast } from '../components/Toast';
+import { useDebounce } from '../hooks/useDebounce';
 
 export function Journals() {
   const { userData, userRole, currentUser } = useAuth();
@@ -49,6 +51,7 @@ export function Journals() {
   // Filters & State
   const [selectedGroupFilter, setSelectedGroupFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const debouncedSearchQuery = useDebounce(searchQuery, 250);
   
   // Modal / Form state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -78,11 +81,10 @@ export function Journals() {
     attendanceNote: 'Seluruh santri hadir aktif.'
   });
 
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ show: boolean, type: 'success' | 'error' | 'warning' | 'info', message: string, description?: string }>({ show: false, type: 'success', message: '' });
 
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3000);
+  const showToast = (msg: string, type: 'success' | 'error' | 'warning' | 'info' = 'success') => {
+    setToast({ show: true, message: msg, type });
   };
 
   useEffect(() => {
@@ -205,14 +207,14 @@ export function Journals() {
       showToast("Catatan jurnal berhasil dihapus");
     } catch (e) {
       console.error(e);
-      alert("Gagal menghapus jurnal");
+      showToast("Gagal menghapus jurnal", "error");
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.groupId || !formData.materialTaught || !formData.date) {
-      alert("Mohon lengkapi kelompok, tanggal, dan materi yang dibahas.");
+      showToast("Mohon lengkapi kelompok, tanggal, dan materi yang dibahas.", "warning");
       return;
     }
 
@@ -266,41 +268,46 @@ export function Journals() {
       await handleFilterChange(selectedGroupFilter);
     } catch (e) {
       console.error(e);
-      alert("Gagal menyimpan jurnal mengajar");
+      showToast("Gagal menyimpan jurnal mengajar", "error");
     } finally {
       setIsSaving(false);
     }
   };
 
   // Filtered List
-  const filteredJournals = journals.filter(j => {
-    const matchGroup = selectedGroupFilter === 'all' || j.groupId === selectedGroupFilter;
-    const matchSearch = searchQuery === '' || 
-      j.materialTaught.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (j.groupName && j.groupName.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (j.mentorName && j.mentorName.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (j.studentObstacles && j.studentObstacles.toLowerCase().includes(searchQuery.toLowerCase()));
+  const filteredJournals = useMemo(() => {
+    const cleanSearch = debouncedSearchQuery.trim().toLowerCase();
+    return journals.filter(j => {
+      const matchGroup = selectedGroupFilter === 'all' || j.groupId === selectedGroupFilter;
+      const matchSearch = !cleanSearch || 
+        j.materialTaught.toLowerCase().includes(cleanSearch) ||
+        (j.groupName && j.groupName.toLowerCase().includes(cleanSearch)) ||
+        (j.mentorName && j.mentorName.toLowerCase().includes(cleanSearch)) ||
+        (j.studentObstacles && j.studentObstacles.toLowerCase().includes(cleanSearch));
 
-    return matchGroup && matchSearch;
-  });
+      return matchGroup && matchSearch;
+    });
+  }, [journals, selectedGroupFilter, debouncedSearchQuery]);
 
   return (
     <div className="flex flex-col gap-4 sm:gap-6 w-full pb-12">
       {/* Toast Notification */}
-      {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-[#172033] text-white px-5 py-4 rounded-2xl shadow-2xl border border-[#E6E8EC]/20 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-3">
-          <CheckCircle2 size={20} className="text-[#C99A2E]" />
-          <span className="text-sm font-black">{toastMessage}</span>
-        </div>
+      {toast.show && (
+        <Toast
+          message={toast.message}
+          description={toast.description}
+          type={toast.type}
+          onClose={() => setToast(prev => ({ ...prev, show: false }))}
+        />
       )}
 
       {/* Header Banner */}
-      <div className="bg-gradient-to-r from-[#172033] via-[#0362D0] to-[#172033] rounded-3xl p-6 lg:p-8 text-white shadow-md border border-[#E6E8EC] flex flex-col md:flex-row md:items-center justify-between gap-6 relative overflow-hidden">
+      <div className="bg-gradient-to-r from-[#172033] via-[#0362D0] to-[#172033] rounded-3xl p-6 lg:p-8 text-white shadow-md border border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-6 relative overflow-hidden">
         <div className="relative z-10 max-w-2xl">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md text-[#C99A2E] text-xs font-black mb-3 border border-white/10">
             <BookOpen size={14} /> Jurnal Pembelajaran Sesi Sabtu
           </div>
-          <h1 className={theme.typography.h1.replace('text-[#172033]', '')}>
+          <h1 className={theme.typography.h1.replace('text-[#172033]', 'text-white')}>
             Jurnal Mengajar & Catatan Tahap
           </h1>
           <p className="text-slate-200 text-xs sm:text-sm mt-1.5 leading-relaxed font-medium">
@@ -319,7 +326,7 @@ export function Journals() {
       </div>
 
       {/* Filter Bar */}
-      <div className="bg-white p-4 rounded-3xl border border-[#E6E8EC] shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
           <div className="relative flex-1 sm:w-72">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
@@ -328,7 +335,7 @@ export function Journals() {
               placeholder="Cari materi, kendala, atau mentor..." 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 bg-[#F5F6F8] border border-[#E6E8EC] rounded-xl text-xs font-medium focus:ring-2 focus:ring-[#0362D0] focus:bg-white outline-none text-[#172033]"
+              className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-100 rounded-xl text-xs font-medium focus:ring-2 focus:ring-[#0362D0] focus:bg-white outline-none text-[#172033]"
             />
           </div>
 
@@ -337,7 +344,7 @@ export function Journals() {
             <select
               value={selectedGroupFilter}
               onChange={(e) => handleFilterChange(e.target.value)}
-              className="px-3 py-2 bg-[#F5F6F8] border border-[#E6E8EC] rounded-xl text-xs font-bold text-[#172033] outline-none focus:ring-2 focus:ring-[#0362D0]"
+              className="px-3 py-2 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-[#172033] outline-none focus:ring-2 focus:ring-[#0362D0]"
             >
               <option value="all">Semua Kelompok ({groups.length})</option>
               {groups.map(g => (
@@ -354,7 +361,7 @@ export function Journals() {
 
       {/* Journals Timeline / Grid */}
       {loading ? (
-        <div className="p-16 text-center text-slate-500 font-medium text-sm bg-white rounded-3xl border border-[#E6E8EC]">
+        <div className="p-16 text-center text-slate-500 font-medium text-sm bg-white rounded-3xl border border-slate-100">
           Memuat catatan jurnal mengajar...
         </div>
       ) : filteredJournals.length > 0 ? (
@@ -364,7 +371,7 @@ export function Journals() {
             return (
               <div 
                 key={journal.id} 
-                className="bg-white rounded-3xl border border-[#E6E8EC] p-6 shadow-xs hover:shadow-md transition-all flex flex-col justify-between group relative"
+                className="bg-white rounded-3xl border border-slate-100 p-6 shadow-xs hover:shadow-md transition-all flex flex-col justify-between group relative"
               >
                 <div>
                   {/* Top Badges */}
@@ -378,7 +385,7 @@ export function Journals() {
                           Pertemuan Ke-{journal.meetingNumber}
                         </span>
                       )}
-                      <span className="px-2.5 py-1 bg-[#F5F6F8] text-slate-600 rounded-xl text-[11px] font-bold border border-[#E6E8EC] flex items-center gap-1">
+                      <span className="px-2.5 py-1 bg-slate-50 text-slate-600 rounded-xl text-[11px] font-bold border border-slate-100 flex items-center gap-1">
                         <Calendar size={11} /> {journal.date}
                       </span>
                     </div>
@@ -386,7 +393,7 @@ export function Journals() {
                     <div className="flex items-center gap-1">
                       <button 
                         onClick={() => handleEdit(journal)}
-                        className="p-1.5 text-slate-400 hover:text-[#0362D0] hover:bg-[#F5F6F8] rounded-xl transition-colors cursor-pointer"
+                        className="p-1.5 text-slate-400 hover:text-[#0362D0] hover:bg-slate-50 rounded-xl transition-colors cursor-pointer"
                         title="Edit Jurnal"
                       >
                         <Edit3 size={15} />
@@ -421,7 +428,7 @@ export function Journals() {
                   </div>
 
                   {/* Content Cards */}
-                  <div className="space-y-2 text-xs bg-[#F5F6F8] p-4 rounded-2xl border border-[#E6E8EC] mb-4">
+                  <div className="space-y-2 text-xs bg-slate-50 p-4 rounded-2xl border border-slate-100 mb-4">
                     <div>
                       <span className="font-extrabold text-[#172033] block mb-0.5 flex items-center gap-1 text-[11px]">
                         <AlertCircle size={12} className="text-amber-500" /> Kendala / Catatan Santri:
@@ -431,7 +438,7 @@ export function Journals() {
                       </p>
                     </div>
 
-                    <div className="pt-2 border-t border-[#E6E8EC]">
+                    <div className="pt-2 border-t border-slate-100">
                       <span className="font-extrabold text-[#172033] block mb-0.5 flex items-center gap-1 text-[11px]">
                         <ChevronRight size={12} className="text-[#0362D0]" /> Rencana Target Tahap Berikutnya:
                       </span>
@@ -443,7 +450,7 @@ export function Journals() {
                 </div>
 
                 {/* Footer Info */}
-                <div className="pt-3 border-t border-[#E6E8EC] flex items-center justify-between text-xs text-slate-500 font-medium">
+                <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 font-medium">
                   <span className="flex items-center gap-1">
                     Mentor: <strong className="text-[#172033]">{journal.mentorName}</strong>
                   </span>
@@ -463,7 +470,7 @@ export function Journals() {
             <button
               onClick={handleLoadMore}
               disabled={loadingMore}
-              className="inline-flex items-center gap-2 px-6 py-3 bg-white border border-[#E6E8EC] rounded-2xl text-sm font-black text-[#172033] hover:bg-[#F5F6F8] transition-colors disabled:opacity-50 cursor-pointer"
+              className="inline-flex items-center gap-2 px-6 py-3 bg-white border border-slate-100 rounded-2xl text-sm font-black text-[#172033] hover:bg-slate-50 transition-colors disabled:opacity-50 cursor-pointer"
             >
               {loadingMore ? (
                 <>
@@ -479,7 +486,7 @@ export function Journals() {
         
       </>
       ) : (
-        <div className="bg-white rounded-3xl border border-[#E6E8EC] p-12 text-center max-w-md mx-auto">
+        <div className="bg-white rounded-3xl border border-slate-100 p-12 text-center max-w-md mx-auto">
           <div className="w-12 h-12 rounded-2xl bg-[#0362D0]/10 text-[#0362D0] flex items-center justify-center mx-auto mb-3">
             <BookOpen size={24} />
           </div>
@@ -499,8 +506,8 @@ export function Journals() {
       {/* Modal Form Jurnal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#172033]/60 backdrop-blur-xs p-4 animate-in fade-in">
-          <div className="bg-white rounded-3xl max-w-xl w-full p-6 sm:p-7 shadow-2xl border border-[#E6E8EC] max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200">
-            <div className="flex justify-between items-center mb-5 border-b border-[#E6E8EC] pb-3.5">
+          <div className="bg-white rounded-3xl max-w-xl w-full p-6 sm:p-7 shadow-2xl border border-slate-100 max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center mb-5 border-b border-slate-100 pb-3.5">
               <div>
                 <h3 className="font-black text-base sm:text-lg text-[#172033]">
                   {editingJournalId ? 'Edit Jurnal Mengajar' : 'Catatan Jurnal Mengajar Sabtu'}
@@ -511,7 +518,7 @@ export function Journals() {
               </div>
               <button 
                 onClick={() => setIsModalOpen(false)} 
-                className="text-slate-400 hover:text-[#172033] p-1.5 rounded-xl hover:bg-[#F5F6F8] transition-colors cursor-pointer"
+                className="text-slate-400 hover:text-[#172033] p-1.5 rounded-xl hover:bg-slate-50 transition-colors cursor-pointer"
               >
                 <X size={18} />
               </button>
@@ -527,7 +534,7 @@ export function Journals() {
                     value={formData.groupId}
                     onChange={(e) => setFormData({ ...formData, groupId: e.target.value })}
                     required
-                    className="w-full px-3 py-2 bg-[#F5F6F8] border border-[#E6E8EC] rounded-xl text-xs font-bold focus:ring-2 focus:ring-[#0362D0] outline-none text-[#172033]"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold focus:ring-2 focus:ring-[#0362D0] outline-none text-[#172033]"
                   >
                     {groups.map(g => (
                       <option key={g.id} value={g.id}>{g.name}</option>
@@ -544,7 +551,7 @@ export function Journals() {
                     value={formData.date}
                     onChange={(e) => setFormData({ ...formData, date: e.target.value })}
                     required
-                    className="w-full px-3 py-2 bg-[#F5F6F8] border border-[#E6E8EC] rounded-xl text-xs font-bold focus:ring-2 focus:ring-[#0362D0] outline-none text-[#172033]"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold focus:ring-2 focus:ring-[#0362D0] outline-none text-[#172033]"
                   />
                 </div>
               </div>
@@ -560,7 +567,7 @@ export function Journals() {
                     max="50"
                     value={formData.meetingNumber}
                     onChange={(e) => setFormData({ ...formData, meetingNumber: parseInt(e.target.value) || 1 })}
-                    className="w-full px-3 py-2 bg-[#F5F6F8] border border-[#E6E8EC] rounded-xl text-xs font-black focus:ring-2 focus:ring-[#0362D0] outline-none text-[#0362D0]"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-100 rounded-xl text-xs font-black focus:ring-2 focus:ring-[#0362D0] outline-none text-[#0362D0]"
                   />
                 </div>
 
@@ -571,7 +578,7 @@ export function Journals() {
                   <select 
                     value={formData.sessionId}
                     onChange={(e) => setFormData({ ...formData, sessionId: e.target.value })}
-                    className="w-full px-3 py-2 bg-[#F5F6F8] border border-[#E6E8EC] rounded-xl text-xs font-medium focus:ring-2 focus:ring-[#0362D0] outline-none text-[#172033]"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-100 rounded-xl text-xs font-medium focus:ring-2 focus:ring-[#0362D0] outline-none text-[#172033]"
                   >
                     <option value="">-- Pilih Tahap Kurikulum --</option>
                     {masterSessions.map(s => (
@@ -593,7 +600,7 @@ export function Journals() {
                   placeholder="Contoh: Tilawati Jilid 4 Hal 10-15 & Tahsin Surah Al-Humazah"
                   value={formData.materialTaught}
                   onChange={(e) => setFormData({ ...formData, materialTaught: e.target.value })}
-                  className="w-full px-3.5 py-2.5 bg-[#F5F6F8] border border-[#E6E8EC] rounded-xl text-xs focus:ring-2 focus:ring-[#0362D0] focus:bg-white outline-none font-medium text-[#172033]"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-100 rounded-xl text-xs focus:ring-2 focus:ring-[#0362D0] focus:bg-white outline-none font-medium text-[#172033]"
                 />
               </div>
 
@@ -606,7 +613,7 @@ export function Journals() {
                   placeholder="Contoh: Halaman 12-14 / Ayat 1-9"
                   value={formData.pagesCovered}
                   onChange={(e) => setFormData({ ...formData, pagesCovered: e.target.value })}
-                  className="w-full px-3.5 py-2 bg-[#F5F6F8] border border-[#E6E8EC] rounded-xl text-xs focus:ring-2 focus:ring-[#0362D0] focus:bg-white outline-none font-medium text-[#172033]"
+                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-100 rounded-xl text-xs focus:ring-2 focus:ring-[#0362D0] focus:bg-white outline-none font-medium text-[#172033]"
                 />
               </div>
 
@@ -619,7 +626,7 @@ export function Journals() {
                   placeholder="Contoh: Ananda Fulan masih ragu hukum Ikhfa Haqiqi, sebagian besar sudah tartil..."
                   value={formData.studentObstacles}
                   onChange={(e) => setFormData({ ...formData, studentObstacles: e.target.value })}
-                  className="w-full px-3.5 py-2.5 bg-[#F5F6F8] border border-[#E6E8EC] rounded-xl text-xs focus:ring-2 focus:ring-[#0362D0] focus:bg-white outline-none resize-none font-medium text-[#172033]"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-100 rounded-xl text-xs focus:ring-2 focus:ring-[#0362D0] focus:bg-white outline-none resize-none font-medium text-[#172033]"
                 />
               </div>
 
@@ -632,7 +639,7 @@ export function Journals() {
                   placeholder="Contoh: Lanjut Tilawati Jilid 4 Hal 16-20 dan setoran hafalan Surah Al-Ashr..."
                   value={formData.nextPlan}
                   onChange={(e) => setFormData({ ...formData, nextPlan: e.target.value })}
-                  className="w-full px-3.5 py-2.5 bg-[#F5F6F8] border border-[#E6E8EC] rounded-xl text-xs focus:ring-2 focus:ring-[#0362D0] focus:bg-white outline-none resize-none font-medium text-[#172033]"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-100 rounded-xl text-xs focus:ring-2 focus:ring-[#0362D0] focus:bg-white outline-none resize-none font-medium text-[#172033]"
                 />
               </div>
 
@@ -645,15 +652,15 @@ export function Journals() {
                   placeholder="Contoh: Hadir 5 santri lengkap, tertib."
                   value={formData.attendanceNote}
                   onChange={(e) => setFormData({ ...formData, attendanceNote: e.target.value })}
-                  className="w-full px-3.5 py-2 bg-[#F5F6F8] border border-[#E6E8EC] rounded-xl text-xs focus:ring-2 focus:ring-[#0362D0] outline-none font-medium text-[#172033]"
+                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-100 rounded-xl text-xs focus:ring-2 focus:ring-[#0362D0] outline-none font-medium text-[#172033]"
                 />
               </div>
 
-              <div className="flex justify-end gap-2.5 pt-3 border-t border-[#E6E8EC]">
+              <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-[#F5F6F8] rounded-xl transition-colors cursor-pointer"
+                  className="px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-50 rounded-xl transition-colors cursor-pointer"
                 >
                   Batal
                 </button>

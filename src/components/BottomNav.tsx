@@ -36,7 +36,7 @@ export function BottomNav() {
 
   if (!isAdmin) {
     return (
-      <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-[#E6E8EC] z-50 px-2 pb-safe shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-100 z-50 px-2 pb-safe shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
         <div className="flex items-center justify-around h-14">
           {mentorItems.map((item) => (
             <NavLink
@@ -61,7 +61,7 @@ export function BottomNav() {
   return (
     <>
       {/* Bottom Navigation Bar for Admin */}
-      <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-[#E6E8EC] z-50 px-2 pb-safe shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-100 z-50 px-2 pb-safe shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
         <div className="flex items-center justify-between h-14">
           {adminMainItems.map((item) => (
             <NavLink
@@ -130,7 +130,7 @@ export function BottomNav() {
                   <>
                     <div className={cn(
                       "w-10 h-10 rounded-full flex items-center justify-center shrink-0",
-                      isActive ? "bg-[#0362D0] text-white shadow-md" : "bg-[#F5F6F8] text-slate-500"
+                      isActive ? "bg-[#0362D0] text-white shadow-md" : "bg-slate-50 text-slate-500"
                     )}>
                       <item.icon className="icon-nav" />
                     </div>

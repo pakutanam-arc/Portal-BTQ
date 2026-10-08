@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { theme } from '../theme';
-import { Search, Plus, Download, Upload, Users, Edit3, Trash2, X, Check, AlertCircle, Printer, QrCode } from 'lucide-react';
+import { Search, Plus, Download, Upload, Users, Edit3, Trash2, X, Check, AlertCircle, Printer, QrCode, FileText, Layers } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -12,6 +12,11 @@ import { getPublicStudentUrl } from '../utils/studentUtils';
 import { useAuth } from '../contexts/AuthContext';
 import { StudentIdCard } from '../components/cards/StudentIdCard';
 import { StudentTableSkeleton } from '../components/students/StudentTableSkeleton';
+import { useDebounce } from '../hooks/useDebounce';
+import { Toast } from '../components/Toast';
+import { OfficialReportModal } from '../components/reports/OfficialReportModal';
+import { BatchOfficialReportModal } from '../components/reports/BatchOfficialReportModal';
+import { BatchImportStudentModal } from '../components/students/BatchImportStudentModal';
 
 export function Students() {
   const { currentUser, userData, userRole } = useAuth();
@@ -19,18 +24,26 @@ export function Students() {
   const [groups, setGroups] = useState<Group[]>([]);
   const [mentors, setMentors] = useState<Mentor[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  const debouncedSearchTerm = useDebounce(searchInput, 250);
   const [classFilter, setClassFilter] = useState('');
   const [groupFilter, setGroupFilter] = useState('');
+  const [toast, setToast] = useState<{ show: boolean, type: 'success' | 'error' | 'warning' | 'info', message: string, description?: string }>({ show: false, type: 'success', message: '' });
 
   // Printing state
   const [printStudents, setPrintStudents] = useState<Student[]>([]);
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
   const [isShowBarcodeOpen, setIsShowBarcodeOpen] = useState(false);
 
+  // Official Raport Modal state
+  const [reportStudent, setReportStudent] = useState<Student | null>(null);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [isBatchRaportModalOpen, setIsBatchRaportModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 20;
+  const [itemsPerPage, setItemsPerPage] = useState(20);
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -91,7 +104,7 @@ export function Students() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, classFilter, groupFilter]);
+  }, [debouncedSearchTerm, classFilter, groupFilter, itemsPerPage]);
 
   const handleOpenAdd = () => {
     setEditingStudent(null);
@@ -163,18 +176,32 @@ export function Students() {
     }
   };
 
-  const filteredStudents = students.filter(student => {
-    const matchesSearch = student.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          (student.class && student.class.toLowerCase().includes(searchTerm.toLowerCase())) ||
-                          (student.nis && student.nis.includes(searchTerm));
-    const matchesClass = classFilter ? student.class?.includes(classFilter) : true;
-    const matchesGroup = groupFilter ? student.groupId === groupFilter : true;
-    
-    return matchesSearch && matchesClass && matchesGroup;
-  });
+  const groupMap = useMemo(() => {
+    const map = new Map<string, Group>();
+    groups.forEach(g => map.set(g.id, g));
+    return map;
+  }, [groups]);
 
-  const totalPages = Math.ceil(filteredStudents.length / itemsPerPage);
-  const paginatedStudents = filteredStudents.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const filteredStudents = useMemo(() => {
+    const cleanSearch = debouncedSearchTerm.trim().toLowerCase();
+    return students.filter(student => {
+      const matchesSearch = !cleanSearch ||
+        student.name.toLowerCase().includes(cleanSearch) || 
+        (student.class && student.class.toLowerCase().includes(cleanSearch)) ||
+        (student.nis && student.nis.includes(cleanSearch));
+      const matchesClass = classFilter ? student.class?.includes(classFilter) : true;
+      const matchesGroup = groupFilter ? student.groupId === groupFilter : true;
+      
+      return matchesSearch && matchesClass && matchesGroup;
+    });
+  }, [students, debouncedSearchTerm, classFilter, groupFilter]);
+
+  const totalPages = useMemo(() => Math.ceil(filteredStudents.length / itemsPerPage) || 1, [filteredStudents.length, itemsPerPage]);
+
+  const paginatedStudents = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return filteredStudents.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredStudents, currentPage, itemsPerPage]);
 
   const handlePrintSingle = (student: Student) => {
     setPrintStudents([student]);
@@ -186,7 +213,7 @@ export function Students() {
       setPrintStudents(filteredStudents);
       setIsPreviewModalOpen(true);
     } else {
-      alert("Tidak ada santri yang sesuai filter untuk dicetak.");
+      setToast({ show: true, type: 'warning', message: 'Tidak Ada Data', description: 'Tidak ada santri yang sesuai filter untuk dicetak.' });
     }
   };
 
@@ -282,7 +309,7 @@ export function Students() {
     <>
       <div className="flex flex-col gap-4 sm:gap-6 w-full pb-12 print:hidden">
         {/* Page Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-3xl border border-[#E6E8EC] shadow-xs">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-3xl border border-slate-100 shadow-xs">
           <div>
             <div className="flex items-center gap-2">
               <h1 className={theme.typography.h1}>Data Santri BTQ</h1>
@@ -291,11 +318,19 @@ export function Students() {
               Direktori peserta bimbingan Baca Tulis Al-Qur'an dan alokasi kelompok
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" onClick={() => setIsBatchRaportModalOpen(true)} className="bg-[#172033] hover:bg-slate-800 text-white font-bold shadow-xs">
+              <Layers size={16} className="mr-1.5 text-[#C99A2E]" /> Cetak Rapor Massal
+            </Button>
             {!isMentor && (
-              <Button size="sm" onClick={handlePrintGroup} className="bg-[#172033] hover:bg-slate-800 text-white font-bold shadow-xs">
-                <Printer size={16} className="mr-1.5" /> Cetak Kartu
-              </Button>
+              <>
+                <Button size="sm" onClick={() => setIsImportModalOpen(true)} className="bg-slate-50 hover:bg-slate-200 text-[#172033] border border-slate-100 font-bold shadow-xs" title="Impor santri massal via berkas Excel atau CSV">
+                  <Upload size={16} className="mr-1.5 text-[#0362D0]" /> Impor CSV/Excel
+                </Button>
+                <Button size="sm" onClick={handlePrintGroup} className="bg-slate-50 hover:bg-slate-200 text-[#172033] border border-slate-100 font-bold shadow-xs">
+                  <Printer size={16} className="mr-1.5" /> Cetak Kartu
+                </Button>
+              </>
             )}
             <Button size="sm" onClick={handleOpenAdd} className="bg-[#0362D0] hover:bg-[#0252b3] text-white font-bold shadow-xs">
               <Plus size={16} className="mr-1.5" /> Tambah Santri
@@ -303,14 +338,14 @@ export function Students() {
           </div>
         </div>
 
-      <Card className="border border-[#E6E8EC] rounded-3xl overflow-hidden shadow-xs bg-white">
-        <div className="p-4 border-b border-[#E6E8EC] bg-[#F5F6F8]/50 flex flex-col sm:flex-row gap-4 justify-between items-center">
+      <Card className="border border-slate-100 rounded-3xl overflow-hidden shadow-xs bg-white">
+        <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row gap-4 justify-between items-center">
           <div className="w-full sm:max-w-xs">
             <Input 
               placeholder="Cari nama, NIS, atau kelas santri..." 
               icon={<Search size={16} className="text-[#0362D0]" />}
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
             />
           </div>
           <div className="grid grid-cols-2 sm:flex sm:flex-row gap-2 w-full sm:w-auto">
@@ -344,8 +379,8 @@ export function Students() {
             {/* Desktop Table View */}
             <div className="hidden md:block">
               <Table>
-                <TableHeader className="bg-[#F5F6F8]">
-                  <TableRow className="border-b border-[#E6E8EC]">
+                <TableHeader className="bg-slate-50">
+                  <TableRow className="border-b border-slate-100">
                     <TableHead className="w-16 text-center font-black text-[#172033] text-xs whitespace-nowrap px-4 py-3.5">No</TableHead>
                     <TableHead className="font-black text-[#172033] text-xs whitespace-nowrap px-4 py-3.5">Nama Santri</TableHead>
                     <TableHead className="text-center font-black text-[#172033] text-xs whitespace-nowrap px-4 py-3.5">Kelas</TableHead>
@@ -356,11 +391,11 @@ export function Students() {
                 </TableHeader>
                 <TableBody>
                   {paginatedStudents.map((student, idx) => {
-                    const group = groups.find(g => g.id === student.groupId);
+                    const group = student.groupId ? groupMap.get(student.groupId) : undefined;
                     const isDeleting = deleteConfirmId === student.id;
                     const realIdx = (currentPage - 1) * itemsPerPage + idx + 1;
                     return (
-                      <TableRow key={student.id} className="group hover:bg-[#F5F6F8]/60 transition-colors border-b border-[#E6E8EC]/80">
+                      <TableRow key={student.id} className="group hover:bg-slate-50/60 transition-colors border-b border-slate-100/80">
                         <TableCell className="text-center text-slate-500 font-bold text-xs whitespace-nowrap px-4 py-3.5">{realIdx}</TableCell>
                         <TableCell className="whitespace-nowrap px-4 py-3.5">
                           <div className="font-extrabold text-[#172033] text-sm">{student.name}</div>
@@ -374,7 +409,7 @@ export function Students() {
                           </span>
                         </TableCell>
                         <TableCell className="whitespace-nowrap px-4 py-3.5">
-                          <span className="px-2.5 py-1 bg-[#F5F6F8] text-[#172033] border border-[#E6E8EC] rounded-md text-xs font-bold inline-block whitespace-nowrap">
+                          <span className="px-2.5 py-1 bg-slate-50 text-[#172033] border border-slate-100 rounded-md text-xs font-bold inline-block whitespace-nowrap">
                             {group?.name || 'Belum Ada Kelompok'}
                           </span>
                         </TableCell>
@@ -413,6 +448,18 @@ export function Students() {
                               <Button 
                                 variant="ghost" 
                                 size="sm" 
+                                onClick={() => {
+                                  setReportStudent(student);
+                                  setIsReportModalOpen(true);
+                                }}
+                                className="text-[#C99A2E] hover:bg-[#C99A2E]/10 font-bold text-xs"
+                                title="Cetak Raport Resmi A4 SMPN 102"
+                              >
+                                <FileText size={14} className="mr-1" /> Rapor
+                              </Button>
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
                                 onClick={() => handleOpenEdit(student)}
                                 className="text-[#0362D0] hover:bg-[#0362D0]/10 font-bold text-xs"
                               >
@@ -446,11 +493,11 @@ export function Students() {
             {/* Mobile Card View */}
             <div className="md:hidden flex flex-col gap-3 p-1">
               {paginatedStudents.map((student, idx) => {
-                const group = groups.find(g => g.id === student.groupId);
+                const group = student.groupId ? groupMap.get(student.groupId) : undefined;
                 const isDeleting = deleteConfirmId === student.id;
                 
                 return (
-                  <div key={student.id} className="bg-white border border-[#E6E8EC] rounded-xl p-4 shadow-sm">
+                  <div key={student.id} className="bg-white border border-slate-100 rounded-xl p-4 shadow-sm">
                     <div className="flex justify-between items-start mb-3">
                       <div>
                         <div className="font-extrabold text-[#172033] text-sm leading-tight">{student.name}</div>
@@ -471,12 +518,12 @@ export function Students() {
                       <span className="px-2.5 py-1 bg-[#0362D0]/10 text-[#0362D0] border border-[#0362D0]/20 rounded-md text-[10px] font-black inline-block">
                         Kelas {student.class || '-'}
                       </span>
-                      <span className="px-2.5 py-1 bg-[#F5F6F8] text-[#172033] border border-[#E6E8EC] rounded-md text-[10px] font-bold inline-block">
+                      <span className="px-2.5 py-1 bg-slate-50 text-[#172033] border border-slate-100 rounded-md text-[10px] font-bold inline-block">
                         {group?.name || 'Belum Ada Kelompok'}
                       </span>
                     </div>
 
-                    <div className="flex items-center justify-end gap-2 pt-3 border-t border-[#E6E8EC]">
+                    <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
                       {isDeleting ? (
                         <div className="flex items-center gap-2">
                           <span className="text-[10px] font-bold text-rose-600">Yakin hapus?</span>
@@ -502,6 +549,17 @@ export function Students() {
                           <Button 
                             variant="outline" 
                             size="sm" 
+                            onClick={() => {
+                              setReportStudent(student);
+                              setIsReportModalOpen(true);
+                            }}
+                            className="flex-1 h-8 text-[#C99A2E] border-[#C99A2E]/40 hover:bg-[#C99A2E]/10 font-bold text-xs"
+                          >
+                            <FileText size={14} className="mr-1.5" /> Rapor
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
                             onClick={() => handleOpenEdit(student)}
                             className="flex-1 h-8 text-[#0362D0] border-[#0362D0]/30 hover:bg-[#0362D0]/5 font-bold text-xs"
                           >
@@ -523,7 +581,7 @@ export function Students() {
               })}
               
               {paginatedStudents.length === 0 && (
-                <div className="text-center py-12 text-slate-500 font-medium bg-[#F5F6F8] rounded-xl border border-[#E6E8EC]">
+                <div className="text-center py-12 text-slate-500 font-medium bg-slate-50 rounded-xl border border-slate-100">
                   Tidak ada data santri yang ditemukan.
                 </div>
               )}
@@ -532,9 +590,24 @@ export function Students() {
         )}
         
         {!loading && (
-          <div className="p-4 border-t border-[#E6E8EC] bg-[#F5F6F8]/50 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs font-bold text-slate-600">
-            <div>
-              Menampilkan {paginatedStudents.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0} - {Math.min(currentPage * itemsPerPage, filteredStudents.length)} dari {filteredStudents.length} santri
+          <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs font-bold text-slate-600">
+            <div className="flex items-center gap-3">
+              <span>
+                Menampilkan {paginatedStudents.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0} - {Math.min(currentPage * itemsPerPage, filteredStudents.length)} dari {filteredStudents.length} santri
+              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-slate-400 font-medium text-[11px]">Baris:</span>
+                <select 
+                  value={itemsPerPage} 
+                  onChange={(e) => setItemsPerPage(Number(e.target.value))}
+                  className="bg-white border border-slate-100 rounded-md px-1.5 py-0.5 text-xs font-bold text-[#172033] focus:outline-hidden"
+                >
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+              </div>
             </div>
             <div className="flex gap-1">
               <Button 
@@ -542,7 +615,7 @@ export function Students() {
                 size="sm" 
                 onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                 disabled={currentPage === 1} 
-                className="text-xs font-bold border-[#E6E8EC]"
+                className="text-xs font-bold border-slate-100"
               >
                 Prev
               </Button>
@@ -554,7 +627,7 @@ export function Students() {
                 size="sm" 
                 onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                 disabled={currentPage >= totalPages || totalPages === 0} 
-                className="text-xs font-bold border-[#E6E8EC]"
+                className="text-xs font-bold border-slate-100"
               >
                 Next
               </Button>
@@ -566,8 +639,8 @@ export function Students() {
       {/* Modal Tambah / Edit Santri */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white rounded-3xl max-w-md w-full border border-[#E6E8EC] shadow-2xl p-6 space-y-5 animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex justify-between items-center border-b border-[#E6E8EC] pb-4">
+          <div className="bg-white rounded-3xl max-w-md w-full border border-slate-100 shadow-2xl p-6 space-y-5 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-4">
               <h3 className="text-lg font-black text-[#172033]">
                 {editingStudent ? 'Edit Data Santri' : 'Tambah Santri Baru'}
               </h3>
@@ -577,7 +650,7 @@ export function Students() {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="bg-[#F5F6F8] p-4 rounded-xl border border-[#E6E8EC] space-y-4">
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-4">
                 <div>
                   <label className="block text-xs font-extrabold text-[#172033] mb-1">Nama Lengkap Santri</label>
                   <Input 
@@ -613,7 +686,7 @@ export function Students() {
                 </div>
               </div>
 
-              <div className="bg-[#F5F6F8] p-4 rounded-xl border border-[#E6E8EC] space-y-4">
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-4">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-extrabold text-[#172033] mb-1">Kelas</label>
@@ -651,8 +724,8 @@ export function Students() {
                 </div>
               </div>
 
-              <div className="pt-2 flex justify-end gap-2 border-t border-[#E6E8EC] mt-4 pt-4">
-                <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)} className="font-bold border-[#E6E8EC]">
+              <div className="pt-2 flex justify-end gap-2 border-t border-slate-100 mt-4 pt-4">
+                <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)} className="font-bold border-slate-100">
                   Batal
                 </Button>
                 <Button type="submit" disabled={isSubmitting} className="btn-primary font-bold">
@@ -668,7 +741,7 @@ export function Students() {
       {isPreviewModalOpen && (
         <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 print:hidden">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden">
-            <div className="p-5 border-b border-[#E6E8EC] flex justify-between items-center bg-[#F5F6F8]">
+            <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
               <h2 className="font-black text-lg text-[#172033] flex items-center gap-2">
                 <Printer size={20} className="text-[#0362D0]" /> Pratinjau Cetak Kartu ({printStudents.length} Kartu)
               </h2>
@@ -697,8 +770,8 @@ export function Students() {
               </div>
             </div>
             
-            <div className="p-5 border-t border-[#E6E8EC] bg-white flex flex-wrap justify-end gap-3">
-              <Button variant="outline" onClick={() => setIsPreviewModalOpen(false)} className="font-bold border-[#E6E8EC]">
+            <div className="p-5 border-t border-slate-100 bg-white flex flex-wrap justify-end gap-3">
+              <Button variant="outline" onClick={() => setIsPreviewModalOpen(false)} className="font-bold border-slate-100">
                 Batal
               </Button>
               <Button onClick={() => setIsShowBarcodeOpen(true)} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-md px-6">
@@ -716,7 +789,7 @@ export function Students() {
       {isShowBarcodeOpen && (
         <div className="fixed inset-0 z-[110] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden">
-            <div className="p-5 border-b border-[#E6E8EC] flex justify-between items-center bg-[#F5F6F8]">
+            <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
               <h2 className="font-black text-lg text-[#172033] flex items-center gap-2">
                 <QrCode size={20} className="text-[#0362D0]" /> Barcode Siswa ({printStudents.length} Siswa)
               </h2>
@@ -745,8 +818,8 @@ export function Students() {
               </div>
             </div>
             
-            <div className="p-5 border-t border-[#E6E8EC] bg-white flex justify-end gap-3">
-              <Button variant="outline" onClick={() => setIsShowBarcodeOpen(false)} className="font-bold border-[#E6E8EC]">
+            <div className="p-5 border-t border-slate-100 bg-white flex justify-end gap-3">
+              <Button variant="outline" onClick={() => setIsShowBarcodeOpen(false)} className="font-bold border-slate-100">
                 Tutup
               </Button>
             </div>
@@ -791,6 +864,61 @@ export function Students() {
           );
         })}
       </div>
+
+      {/* Official A4 Raport Modal */}
+      {isReportModalOpen && reportStudent && (
+        <OfficialReportModal
+          isOpen={isReportModalOpen}
+          onClose={() => {
+            setIsReportModalOpen(false);
+            setReportStudent(null);
+          }}
+          student={reportStudent}
+          group={groups.find(g => g.id === reportStudent.groupId)}
+          mentor={mentors.find(m => m.id === groups.find(g => g.id === reportStudent.groupId)?.mentorId)}
+        />
+      )}
+
+      {/* Batch A4 Raport Modal for Group / Class */}
+      {isBatchRaportModalOpen && (
+        <BatchOfficialReportModal
+          isOpen={isBatchRaportModalOpen}
+          onClose={() => setIsBatchRaportModalOpen(false)}
+          students={students}
+          groups={groups}
+          mentors={mentors}
+          defaultClass={classFilter || 'all'}
+          defaultGroupId={groupFilter || 'all'}
+        />
+      )}
+
+      {/* Batch Import Excel/CSV Modal */}
+      {isImportModalOpen && (
+        <BatchImportStudentModal
+          isOpen={isImportModalOpen}
+          onClose={() => setIsImportModalOpen(false)}
+          existingStudents={students}
+          groups={groups}
+          onSuccess={async () => {
+            await loadData();
+            setToast({
+              show: true,
+              type: 'success',
+              message: 'Impor Santri Berhasil',
+              description: 'Data santri massal telah berhasil ditambahkan ke database BTQ SMPN 102.'
+            });
+          }}
+        />
+      )}
+
+      {toast.show && (
+        <Toast
+          message={toast.message}
+          description={toast.description}
+          type={toast.type}
+          onClose={() => setToast(prev => ({ ...prev, show: false }))}
+        />
+      )}
     </>
   );
 }

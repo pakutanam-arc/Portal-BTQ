@@ -83,12 +83,12 @@ const WeeklyProgressTooltip = ({ active, payload }: any) => {
 
   return (
     <div className="bg-white p-3.5 rounded-xl border border-[#0362D0]/25 shadow-lg min-w-[210px] text-xs">
-      <div className="flex items-center justify-between pb-2 mb-2 border-b border-[#E6E8EC]">
+      <div className="flex items-center justify-between pb-2 mb-2 border-b border-transparent shadow-sm">
         <div className="flex items-center gap-1.5">
           <Calendar size={13} className="text-[#0362D0]" />
           <span className="font-extrabold text-[#172033]">{data.name}</span>
         </div>
-        <span className="text-[10px] text-slate-500 font-semibold bg-[#F5F6F8] px-2 py-0.5 rounded">
+        <span className="text-[10px] text-slate-500 font-semibold bg-slate-50 px-2 py-0.5 rounded">
           {data.date}
         </span>
       </div>
@@ -112,7 +112,7 @@ const WeeklyProgressTooltip = ({ active, payload }: any) => {
           <span className="font-bold text-slate-700">75% (Konstan)</span>
         </div>
 
-        <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1.5 border-t border-[#F5F6F8]">
+        <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1.5 border-t border-slate-50">
           <span>Rentang ({data.totalGroups} Halaqah):</span>
           <span className="font-bold text-slate-700">{data.minProgress}% – {data.maxProgress}%</span>
         </div>
@@ -268,10 +268,10 @@ export const GroupSummaryTable = React.memo(function GroupSummaryTable({ groups 
   }, [averageWeeklyProgressData, groups.length]);
 
   return (
-    <div id="dashboard-group-summary-card" className="bg-white rounded-2xl border border-[#E6E8EC] overflow-hidden shadow-xs">
+    <div id="dashboard-group-summary-card" className="bg-white rounded-2xl border border-transparent shadow-sm overflow-hidden shadow-xs">
       
       {/* 1. INSTITUTIONAL HEADER */}
-      <div className="p-4 sm:p-5 border-b border-[#E6E8EC] bg-[#F5F6F8] flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+      <div className="p-4 sm:p-5 border-b border-transparent shadow-sm bg-slate-50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <div>
           <div className="flex items-center gap-2">
             <h3 className="font-bold text-[#172033] text-base">
@@ -292,7 +292,7 @@ export const GroupSummaryTable = React.memo(function GroupSummaryTable({ groups 
           <button
             type="button"
             onClick={() => setIsChartExpanded(!isChartExpanded)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[#E6E8EC] bg-white text-xs font-bold text-[#172033] hover:bg-[#F5F6F8] transition-colors shadow-2xs"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-transparent shadow-sm bg-white text-xs font-bold text-[#172033] hover:bg-slate-50 transition-colors shadow-2xs"
             title={isChartExpanded ? "Sembunyikan Grafik Weekly Progress" : "Tampilkan Grafik Weekly Progress"}
           >
             <BarChart2 size={13} className="text-[#0362D0]" />
@@ -307,12 +307,12 @@ export const GroupSummaryTable = React.memo(function GroupSummaryTable({ groups 
               placeholder="Cari kelompok / mentor..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-8 pr-3 h-9 bg-white border border-[#E6E8EC] rounded-xl text-xs text-[#172033] focus:border-[#0362D0] focus:ring-1 focus:ring-[#0362D0] outline-none w-full sm:w-44 placeholder:text-slate-400 font-medium"
+              className="pl-8 pr-3 h-9 bg-white border border-transparent shadow-sm rounded-xl text-xs text-[#172033] focus:border-[#0362D0] focus:ring-1 focus:ring-[#0362D0] outline-none w-full sm:w-44 placeholder:text-slate-400 font-medium"
             />
             <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
           </div>
 
-          <div className="flex items-center gap-1.5 bg-white border border-[#E6E8EC] rounded-xl h-9 px-2">
+          <div className="flex items-center gap-1.5 bg-white border border-transparent shadow-sm rounded-xl h-9 px-2">
             <select 
               id="group-status-filter-select"
               value={statusFilter}
@@ -331,7 +331,7 @@ export const GroupSummaryTable = React.memo(function GroupSummaryTable({ groups 
 
       {/* 2. RECHARTS 'WEEKLY PROGRESS' CHART (MONOCHROMATIC BLUE THEME) */}
       {isChartExpanded && (
-        <div id="dashboard-weekly-progress-chart-section" className="p-4 sm:p-5 border-b border-[#E6E8EC] bg-[#FFFFFF]">
+        <div id="dashboard-weekly-progress-chart-section" className="p-4 sm:p-5 border-b border-transparent shadow-sm bg-[#FFFFFF]">
           {/* Chart Section Header with Clean Institutional Info */}
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-3.5 border-b border-[#F1F5F9]">
             <div>
@@ -350,7 +350,7 @@ export const GroupSummaryTable = React.memo(function GroupSummaryTable({ groups 
             </div>
 
             {/* Status Sesi Saat Ini */}
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-[#F5F6F8] rounded-xl border border-[#E6E8EC] text-xs font-bold text-[#172033] self-stretch sm:self-auto justify-center">
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 rounded-xl border border-transparent shadow-sm text-xs font-bold text-[#172033] self-stretch sm:self-auto justify-center">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
               <span>Data Saat ini</span>
             </div>
@@ -422,14 +422,14 @@ export const GroupSummaryTable = React.memo(function GroupSummaryTable({ groups 
                   </linearGradient>
                 </defs>
 
-                <CartesianGrid strokeDasharray="3 3" stroke="#E6E8EC" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                 
                 <XAxis 
                   dataKey="name" 
                   tick={{ fontSize: 11, fill: '#172033', fontWeight: 600 }}
                   stroke="#CBD5E1"
                   tickLine={false}
-                  axisLine={{ stroke: '#E6E8EC' }}
+                  axisLine={{ stroke: '#f1f5f9' }}
                 />
                 
                 <YAxis 
@@ -507,7 +507,7 @@ export const GroupSummaryTable = React.memo(function GroupSummaryTable({ groups 
                 <span className="text-slate-500 font-medium">Standar KKM (75% Konstan)</span>
               </div>
             </div>
-            <div className="text-[10px] text-slate-500 font-semibold bg-[#F5F6F8] px-2 py-0.5 rounded border border-[#E6E8EC]">
+            <div className="text-[10px] text-slate-500 font-semibold bg-slate-50 px-2 py-0.5 rounded border border-transparent shadow-sm">
               Terakhir diperbarui: Sesi Pekan {chartMetrics?.latestWeekNumber || 2} Berjalan (Sinkron Data Riil)
             </div>
           </div>
@@ -515,7 +515,7 @@ export const GroupSummaryTable = React.memo(function GroupSummaryTable({ groups 
       )}
 
       {/* 3. GROUP DETAIL LIST / TABLE SECTION */}
-      <div className="p-3 sm:p-4 bg-[#F8FAFC] border-b border-[#E6E8EC] flex justify-between items-center text-xs font-bold text-slate-600">
+      <div className="p-3 sm:p-4 bg-[#F8FAFC] border-b border-transparent shadow-sm flex justify-between items-center text-xs font-bold text-slate-600">
         <span>Daftar Rincian Kelompok ({filteredGroups.length} dari {groups.length} Halaqah)</span>
         <span className="text-[11px] text-slate-400 font-normal">
           Klik bar pekan pada kartu untuk melihat capaian spesifik
@@ -531,7 +531,7 @@ export const GroupSummaryTable = React.memo(function GroupSummaryTable({ groups 
         ) : (
           <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[760px]">
             <thead>
-              <tr className="text-slate-400 border-b border-[#E6E8EC] text-[10px] uppercase tracking-wider font-extrabold bg-[#F5F6F8]/50 whitespace-nowrap">
+              <tr className="text-slate-400 border-b border-transparent shadow-sm text-[10px] uppercase tracking-wider font-extrabold bg-slate-50/50 whitespace-nowrap">
                 <th className="py-3.5 px-5">Kelompok</th>
                 <th className="py-3.5 px-3">Mentor</th>
                 <th className="py-3.5 px-3 text-center">Siswa</th>
@@ -540,7 +540,7 @@ export const GroupSummaryTable = React.memo(function GroupSummaryTable({ groups 
                 <th className="py-3.5 px-5 text-right">Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#E6E8EC]">
+            <tbody className="divide-y divide-slate-100">
               {groupsWithWeekly.map((item) => {
                 let statusBadge = '';
                 if (item.status === 'Baik') {
@@ -554,7 +554,7 @@ export const GroupSummaryTable = React.memo(function GroupSummaryTable({ groups 
                 const latestDelta = item.weekly[item.weekly.length - 1]?.delta || 5;
 
                 return (
-                  <tr key={item.id} className="hover:bg-[#F5F6F8]/60 transition-colors">
+                  <tr key={item.id} className="hover:bg-slate-50/60 transition-colors">
                     <td className="py-3.5 px-5 whitespace-nowrap">
                       <div className="font-semibold text-[#172033]">{item.name}</div>
                       <div className="text-xs font-medium text-[#0362D0] bg-[#0362D0]/10 px-2 py-0.5 rounded w-fit mt-1 whitespace-nowrap">
@@ -570,7 +570,7 @@ export const GroupSummaryTable = React.memo(function GroupSummaryTable({ groups 
                       <div className="flex items-center gap-3">
                         {/* Mini Sparkline Bar Chart for P1 & P2 */}
                         <div 
-                          className="flex items-end gap-1.5 h-9 w-24 bg-[#F5F6F8] p-1.5 rounded-lg border border-[#E6E8EC] relative"
+                          className="flex items-end gap-1.5 h-9 w-24 bg-slate-50 p-1.5 rounded-lg border border-transparent shadow-sm relative"
                           title="Grafik tren progres riil P1 & P2"
                         >
                           <div 
@@ -632,7 +632,7 @@ export const GroupSummaryTable = React.memo(function GroupSummaryTable({ groups 
       {/* Mobile Card View (Enhanced with Weekly Progress Graphic) */}
       <div className="md:hidden flex flex-col gap-3.5 p-3">
         {groupsWithWeekly.length === 0 ? (
-          <div className="text-center py-12 text-slate-400 text-xs font-semibold bg-[#F5F6F8] rounded-xl border border-[#E6E8EC]">
+          <div className="text-center py-12 text-slate-400 text-xs font-semibold bg-slate-50 rounded-xl border border-transparent shadow-sm">
             Tidak ada kelompok yang cocok.
           </div>
         ) : (
@@ -650,7 +650,7 @@ export const GroupSummaryTable = React.memo(function GroupSummaryTable({ groups 
             const isMeetingTarget = item.progress >= 75;
             
             return (
-              <div key={item.id} className="bg-white border border-[#E6E8EC] rounded-2xl p-4 shadow-sm relative overflow-hidden">
+              <div key={item.id} className="bg-white border border-transparent shadow-sm rounded-2xl p-4 shadow-sm relative overflow-hidden">
                 {/* Header Card */}
                 <div className="flex justify-between items-start mb-3">
                   <div>
@@ -667,7 +667,7 @@ export const GroupSummaryTable = React.memo(function GroupSummaryTable({ groups 
                 
                 {/* Students & Attendance Metrics */}
                 <div className="grid grid-cols-2 gap-2.5 mb-3.5">
-                  <div className="bg-[#F5F6F8] p-2.5 rounded-xl text-center border border-[#E6E8EC]/80">
+                  <div className="bg-slate-50 p-2.5 rounded-xl text-center border border-transparent shadow-sm/80">
                     <p className="text-[10px] text-slate-500 font-bold uppercase mb-0.5">Siswa</p>
                     <p className="text-sm font-black text-[#172033]">{item.studentsCount}</p>
                   </div>
@@ -678,7 +678,7 @@ export const GroupSummaryTable = React.memo(function GroupSummaryTable({ groups 
                 </div>
                 
                 {/* GRAFIK PROGRESS PEKANAN */}
-                <div className="bg-[#F5F6F8] border border-[#E6E8EC] rounded-xl p-3">
+                <div className="bg-slate-50 border border-transparent shadow-sm rounded-xl p-3">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-1.5">
                       <BarChart2 size={14} className="text-[#0362D0]" />
@@ -696,7 +696,7 @@ export const GroupSummaryTable = React.memo(function GroupSummaryTable({ groups 
                   </div>
 
                   {/* 2-Week Real Bar Graphic */}
-                  <div className="bg-white rounded-lg p-2.5 border border-[#E6E8EC] relative">
+                  <div className="bg-white rounded-lg p-2.5 border border-transparent shadow-sm relative">
                     <div 
                       className="absolute left-2 right-2 border-b border-dashed border-[#93C5FD] z-10 pointer-events-none" 
                       style={{ bottom: 'calc(75% + 14px)' }} 
@@ -725,7 +725,7 @@ export const GroupSummaryTable = React.memo(function GroupSummaryTable({ groups 
                               </div>
                             )}
 
-                            <div className="w-full bg-[#F5F6F8] rounded-t-sm h-full flex flex-col justify-end overflow-hidden">
+                            <div className="w-full bg-slate-50 rounded-t-sm h-full flex flex-col justify-end overflow-hidden">
                               <div 
                                 className={`w-full rounded-t-sm transition-all duration-300 ${
                                   isCurrent 
@@ -748,7 +748,7 @@ export const GroupSummaryTable = React.memo(function GroupSummaryTable({ groups 
                   </div>
 
                   {/* Footer Legend & Indicator */}
-                  <div className="flex items-center justify-between text-[9px] text-slate-500 font-medium mt-2 pt-1.5 border-t border-[#E6E8EC]">
+                  <div className="flex items-center justify-between text-[9px] text-slate-500 font-medium mt-2 pt-1.5 border-t border-transparent shadow-sm">
                     <div className="flex items-center gap-1.5">
                       <span className="w-1.5 h-1.5 rounded-full bg-[#0362D0]" />
                       <span>{item.weekly.length} Pekan Terlaksana</span>

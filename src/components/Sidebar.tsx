@@ -17,6 +17,7 @@ import {
 import { cn } from '../utils/cn';
 import { useAuth } from '../contexts/AuthContext';
 import { APP_LOGO, APP_NAME, APP_SUBTITLE } from '../assets/logo';
+import { PWAInstallButton } from './pwa/PWAInstallButton';
 
 const navItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/', roles: ['admin', 'mentor'] },
@@ -101,9 +102,12 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
         ))}
       </nav>
 
-      {/* Footer Settings Link */}
-      {userRole === 'admin' && (
-        <div className="p-4 border-t border-slate-800 bg-[#121929]">
+      {/* Footer PWA Install & Settings Link */}
+      <div className="p-4 border-t border-slate-800 bg-[#121929] space-y-2">
+        <div className="w-full flex justify-center">
+          <PWAInstallButton className="w-full justify-center !py-2" />
+        </div>
+        {userRole === 'admin' && (
           <NavLink
             to="/settings"
             onClick={onClose}
@@ -119,8 +123,8 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
             <Settings className="icon-nav text-[#C99A2E]" />
             <span className="truncate">Pengaturan</span>
           </NavLink>
-        </div>
-      )}
+        )}
+      </div>
     </aside>
   );
 }
