@@ -154,6 +154,20 @@
         "role": { "type": "string" }
       },
       "required": ["name", "email", "role"]
+    },
+    "AcademicHoliday": {
+      "title": "Academic Holiday",
+      "description": "Configured holiday or school event cancelling a BTQ session",
+      "type": "object",
+      "properties": {
+        "date": { "type": "string", "format": "date" },
+        "reason": { "type": "string", "maxLength": 200 },
+        "semester": { "type": "number" },
+        "academicYear": { "type": "string" },
+        "createdBy": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["date", "reason"]
     }
   },
   "firestore": {
@@ -208,6 +222,10 @@
     "mentors/{mentorId}": {
       "schema": { "$ref": "#/entities/Mentor" },
       "description": "Mentor directory records"
+    },
+    "academic_holidays/{holidayId}": {
+      "schema": { "$ref": "#/entities/AcademicHoliday" },
+      "description": "Calendar holidays cancelling a session"
     }
   }
 }

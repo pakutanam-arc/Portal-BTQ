@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { theme } from '../theme';
-import { Calendar, Save, Loader2, BookOpen, Users, UserCheck, AlertCircle, MessageSquare, MessageCircle, CheckCircle, ChevronRight, Award, ChevronDown, Hash, CheckSquare, Edit3, PlusCircle, Camera, Sliders, Search, CheckCircle2, Sparkles, Check } from 'lucide-react';
+import { Calendar, Save, Loader2, BookOpen, Users, UserCheck, AlertCircle, MessageSquare, MessageCircle, CheckCircle, ChevronRight, Award, ChevronDown, Hash, CheckSquare, Edit3, PlusCircle, Camera, Sliders, Search, CheckCircle2, Sparkles, Check, X, CalendarOff } from 'lucide-react';
 import { Select } from '../components/ui/Select';
 import { Input } from '../components/ui/Input';
 import { cn } from '../utils/cn';
@@ -32,6 +32,8 @@ import {
 } from '../services/db';
 import { masterGrades, masterSessions, getGradeForGroup, JUZ_30_SURAHS } from '../services/curriculumData';
 import { recordSuccessfulScan } from '../services/scanHistory';
+import { getMeetingRealDate, formatShortDateID } from '../services/academicCalendar';
+import { getAcademicHolidays, subscribeAcademicHolidays, AcademicHoliday } from '../services/db/calendar';
 
 export function LiveSession() {
   const { currentUser, userData, userRole } = useAuth();
@@ -51,6 +53,26 @@ export function LiveSession() {
   // Editing existing meeting state
   const [editingJournalId, setEditingJournalId] = useState<string | null>(null);
   const [groupJournals, setGroupJournals] = useState<TeachingJournal[]>([]);
+  const [holidays, setHolidays] = useState<AcademicHoliday[]>([]);
+
+  useEffect(() => {
+    let isMounted = true;
+    getAcademicHolidays().then(h => {
+      if (isMounted) setHolidays(h);
+    });
+    const unsub = subscribeAcademicHolidays(h => {
+      if (isMounted) setHolidays(h);
+    });
+    return () => {
+      isMounted = false;
+      unsub();
+    };
+  }, []);
+
+  const activeHoliday = useMemo(() => {
+    const cleanDate = selectedDate.split('T')[0];
+    return holidays.find(h => h.date === cleanDate);
+  }, [selectedDate, holidays]);
 
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
@@ -186,7 +208,8 @@ export function LiveSession() {
     } else {
       // New meeting number
       setEditingJournalId(null);
-      setSelectedDate(new Date().toISOString().split('T')[0]);
+      const fallbackRealDate = getMeetingRealDate(targetMeetingNum);
+      setSelectedDate(fallbackRealDate || new Date().toISOString().split('T')[0]);
 
       const targetSess = availableSessions.find(s => s.sessionNumber === targetMeetingNum);
       if (targetSess) {
@@ -258,12 +281,12 @@ export function LiveSession() {
         const stds = await getStudentsByGroup(selectedGroup);
         setStudents(stds);
         
-        // 1. Load Attendance for Meeting Number & Date
+        // 1. Load Attendance for Meeting Number & Date (Default 'Alpa' for new unrecorded meetings)
         const attendanceRecords = await getStudentAttendance(selectedGroup, selectedDate, meetingNumber);
         const newAtt: Record<string, { status: string, notes: string }> = {};
         stds.forEach(s => {
           const rec = attendanceRecords.find(r => r.studentId === s.id);
-          newAtt[s.id] = rec ? { status: rec.status, notes: rec.notes || '' } : { status: 'Hadir', notes: '' };
+          newAtt[s.id] = rec ? { status: rec.status, notes: rec.notes || '' } : { status: 'Alpa', notes: '' };
         });
         setAttendance(newAtt);
         
@@ -273,27 +296,41 @@ export function LiveSession() {
         const newProg: Record<string, Partial<StudentProgress>> = {};
         stds.forEach(s => {
           const pr = progRecords.find(p => p.studentId === s.id);
-          const attStatus = newAtt[s.id]?.status || 'Hadir';
+          const attStatus = newAtt[s.id]?.status || 'Alpa';
+
+          // Preserve any saved or baseline values for restoration when student is marked Hadir
+          const savedR = (pr?.reading && pr.reading > 0) ? pr.reading : 80;
+          const savedT = (pr?.tajwid && pr.tajwid > 0) ? pr.tajwid : 80;
+          const savedW = (pr?.writing && pr.writing > 0) ? pr.writing : 80;
+          const savedM = currentGradeId === 'grade3' ? ((pr?.memorization && pr.memorization > 0) ? pr.memorization : 80) : 0;
 
           if (attStatus !== 'Hadir') {
-            // Absent students automatically receive 0 progress scores for this meeting
+            // Absent students (default Alpa/Izin/Sakit) automatically receive 0 progress scores for this meeting
             newProg[s.id] = {
               ...(pr || {}),
               reading: 0,
               tajwid: 0,
               memorization: 0,
               writing: 0,
-              total: 0
-            };
+              total: 0,
+              _savedReading: savedR,
+              _savedTajwid: savedT,
+              _savedWriting: savedW,
+              _savedMemorization: savedM,
+            } as any;
           } else {
             // Present students load saved progress or default base score 80
             newProg[s.id] = pr || { 
-              reading: 80, 
-              tajwid: 80, 
-              memorization: currentGradeId === 'grade3' ? 80 : 0, 
-              writing: 80,
-              total: 80
-            };
+              reading: savedR, 
+              tajwid: savedT, 
+              memorization: savedM, 
+              writing: savedW,
+              total: 80,
+              _savedReading: savedR,
+              _savedTajwid: savedT,
+              _savedWriting: savedW,
+              _savedMemorization: savedM,
+            } as any;
           }
         });
         setProgress(newProg);
@@ -312,8 +349,14 @@ export function LiveSession() {
     setAttendance(prev => ({ ...prev, [studentId]: { ...prev[studentId], status } }));
 
     setProgress(prev => {
-      const current = prev[studentId] || {};
+      const current = (prev[studentId] || {}) as any;
       if (status !== 'Hadir') {
+        // Cache current non-zero scores before zeroing out
+        const savedR = (current.reading && current.reading > 0) ? current.reading : (current._savedReading || 80);
+        const savedT = (current.tajwid && current.tajwid > 0) ? current.tajwid : (current._savedTajwid || 80);
+        const savedW = (current.writing && current.writing > 0) ? current.writing : (current._savedWriting || 80);
+        const savedM = (current.memorization && current.memorization > 0) ? current.memorization : (current._savedMemorization || (currentGradeId === 'grade3' ? 80 : 0));
+
         // Automatically zero out progress for absent students in this meeting
         return {
           ...prev,
@@ -323,15 +366,21 @@ export function LiveSession() {
             tajwid: 0,
             writing: 0,
             memorization: 0,
-            total: 0
+            total: 0,
+            _savedReading: savedR,
+            _savedTajwid: savedT,
+            _savedWriting: savedW,
+            _savedMemorization: savedM,
           }
         };
       } else {
-        // Restore standard base score (80) if returning to Hadir from 0
-        const r = (current.reading && current.reading > 0) ? current.reading : 80;
-        const t = (current.tajwid && current.tajwid > 0) ? current.tajwid : 80;
-        const w = (current.writing && current.writing > 0) ? current.writing : 80;
-        const m = currentGradeId === 'grade3' ? ((current.memorization && current.memorization > 0) ? current.memorization : 80) : 0;
+        // Restore previous scores or standard base score (80) if returning to Hadir
+        const r = (current.reading && current.reading > 0) ? current.reading : (current._savedReading || 80);
+        const t = (current.tajwid && current.tajwid > 0) ? current.tajwid : (current._savedTajwid || 80);
+        const w = (current.writing && current.writing > 0) ? current.writing : (current._savedWriting || 80);
+        const m = currentGradeId === 'grade3' 
+          ? ((current.memorization && current.memorization > 0) ? current.memorization : (current._savedMemorization || 80)) 
+          : 0;
         
         const scores: number[] = [];
         if (currentGradeId === 'grade3' && r > 0) scores.push(r);
@@ -395,21 +444,32 @@ export function LiveSession() {
     setProgress(prev => {
       const nextProg = { ...prev };
       students.forEach(s => {
-        const current = nextProg[s.id] || {};
+        const current = (nextProg[s.id] || {}) as any;
         if (status !== 'Hadir') {
+          const savedR = (current.reading && current.reading > 0) ? current.reading : (current._savedReading || 80);
+          const savedT = (current.tajwid && current.tajwid > 0) ? current.tajwid : (current._savedTajwid || 80);
+          const savedW = (current.writing && current.writing > 0) ? current.writing : (current._savedWriting || 80);
+          const savedM = (current.memorization && current.memorization > 0) ? current.memorization : (current._savedMemorization || (currentGradeId === 'grade3' ? 80 : 0));
+
           nextProg[s.id] = {
             ...current,
             reading: 0,
             tajwid: 0,
             writing: 0,
             memorization: 0,
-            total: 0
+            total: 0,
+            _savedReading: savedR,
+            _savedTajwid: savedT,
+            _savedWriting: savedW,
+            _savedMemorization: savedM,
           };
         } else {
-          const r = (current.reading && current.reading > 0) ? current.reading : 80;
-          const t = (current.tajwid && current.tajwid > 0) ? current.tajwid : 80;
-          const w = (current.writing && current.writing > 0) ? current.writing : 80;
-          const m = currentGradeId === 'grade3' ? ((current.memorization && current.memorization > 0) ? current.memorization : 80) : 0;
+          const r = (current.reading && current.reading > 0) ? current.reading : (current._savedReading || 80);
+          const t = (current.tajwid && current.tajwid > 0) ? current.tajwid : (current._savedTajwid || 80);
+          const w = (current.writing && current.writing > 0) ? current.writing : (current._savedWriting || 80);
+          const m = currentGradeId === 'grade3' 
+            ? ((current.memorization && current.memorization > 0) ? current.memorization : (current._savedMemorization || 80)) 
+            : 0;
           
           const scores: number[] = [];
           if (currentGradeId === 'grade3' && r > 0) scores.push(r);
@@ -486,11 +546,13 @@ export function LiveSession() {
         // Ensure progress is also restored/set for Hadir
         setProgress(prev => {
           const nextProg = { ...prev };
-          const current = nextProg[scannedId] || {};
-          const r = (current.reading && current.reading > 0) ? current.reading : 80;
-          const t = (current.tajwid && current.tajwid > 0) ? current.tajwid : 80;
-          const w = (current.writing && current.writing > 0) ? current.writing : 80;
-          const m = currentGradeId === 'grade3' ? ((current.memorization && current.memorization > 0) ? current.memorization : 80) : 0;
+          const current = (nextProg[scannedId] || {}) as any;
+          const r = (current.reading && current.reading > 0) ? current.reading : (current._savedReading || 80);
+          const t = (current.tajwid && current.tajwid > 0) ? current.tajwid : (current._savedTajwid || 80);
+          const w = (current.writing && current.writing > 0) ? current.writing : (current._savedWriting || 80);
+          const m = currentGradeId === 'grade3' 
+            ? ((current.memorization && current.memorization > 0) ? current.memorization : (current._savedMemorization || 80)) 
+            : 0;
           
           const scores: number[] = [];
           if (currentGradeId === 'grade3' && r > 0) scores.push(r);
@@ -573,7 +635,7 @@ export function LiveSession() {
         groupId: selectedGroup,
         date: selectedDate,
         meetingNumber: meetingNumber,
-        status: attendance[s.id]?.status || 'Hadir',
+        status: attendance[s.id]?.status || 'Alpa',
         notes: attendance[s.id]?.notes || ''
       }));
       await saveStudentAttendance(attToSave);
@@ -766,9 +828,11 @@ export function LiveSession() {
             >
               {Array.from({ length: 32 }, (_, i) => i + 1).map((num) => {
                 const isCompleted = num <= completedMeetingCount || groupJournals.some(j => j.meetingNumber === num || (num === 1 && j.id === 'journal_seed_1') || (num === 2 && j.id === 'journal_seed_2'));
+                const mDate = getMeetingRealDate(num, groupJournals, holidays);
+                const dateLabel = mDate ? `(${formatShortDateID(mDate)}) ` : '';
                 return (
                   <option key={num} value={num}>
-                    Pertemuan Ke-{num} {isCompleted ? `(Selesai - Edit)` : num === completedMeetingCount + 1 ? `(Pertemuan Baru)` : ''}
+                    Pertemuan Ke-{num} {dateLabel}{isCompleted ? `(Selesai - Edit)` : num === completedMeetingCount + 1 ? `(Pertemuan Baru)` : ''}
                   </option>
                 );
               })}
@@ -890,6 +954,28 @@ export function LiveSession() {
         </AnimatePresence>
       </div>
 
+      {/* Banner Peringatan Hari Libur Terkonfirmasi */}
+      {activeHoliday && (
+        <div className="p-4 bg-amber-50 border border-amber-300 rounded-3xl flex items-start gap-3.5 text-amber-950 shadow-xs animate-in fade-in">
+          <div className="w-8 h-8 rounded-xl bg-amber-100 border border-amber-200 flex items-center justify-center shrink-0 text-amber-800">
+            <CalendarOff size={18} />
+          </div>
+          <div className="flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-black text-[11px] uppercase tracking-wider bg-amber-200/90 text-amber-950 px-2 py-0.5 rounded-md border border-amber-300">
+                Sesi Diliburkan Admin
+              </span>
+              <span className="font-bold text-xs text-amber-900">
+                &ldquo;{activeHoliday.reason}&rdquo;
+              </span>
+            </div>
+            <p className="text-xs text-slate-600 mt-1.5 leading-relaxed">
+              Tanggal ini telah ditandai sebagai hari libur resmi oleh Admin. Pembelajaran KBM dan presensi ditiadakan dan tidak diperhitungkan dalam evaluasi kehadiran santri. Sesi pertemuan telah otomatis digeser ke Sabtu berikutnya di Kalender Akademik.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Main Student List with Smooth Transition */}
       <AnimatePresence mode="wait">
         <motion.div 
@@ -935,8 +1021,16 @@ export function LiveSession() {
               <button 
                 onClick={() => setAllAttendance('Hadir')} 
                 className="px-3.5 py-2 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-bold hover:bg-emerald-100 transition-colors cursor-pointer flex items-center justify-center gap-1"
+                title="Tandai semua santri hadir"
               >
                 <Check size={14} /> Semua Hadir
+              </button>
+              <button 
+                onClick={() => setAllAttendance('Alpa')} 
+                className="px-3.5 py-2 bg-rose-50 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold hover:bg-rose-100 transition-colors cursor-pointer flex items-center justify-center gap-1"
+                title="Tandai semua santri Alpa (default tidak hadir)"
+              >
+                <X size={14} /> Semua Alpa
               </button>
             </div>
           </div>
@@ -962,7 +1056,7 @@ export function LiveSession() {
                   return st.name.toLowerCase().includes(query) || (st.nis && st.nis.toLowerCase().includes(query));
                 })
                 .map((student, idx) => {
-                  const currentStatus = attendance[student.id]?.status || 'Hadir';
+                  const currentStatus = attendance[student.id]?.status || 'Alpa';
                   const p = progress[student.id] || {};
                   const isHadir = currentStatus === 'Hadir';
                   const scoreTotal = p.total ?? (isHadir ? 80 : 0);
@@ -1104,7 +1198,7 @@ export function LiveSession() {
         onClose={() => setSelectedStudentForDrawer(null)}
         student={selectedStudentForDrawer}
         progress={selectedStudentForDrawer ? (progress[selectedStudentForDrawer.id] || {}) : {}}
-        status={selectedStudentForDrawer ? (attendance[selectedStudentForDrawer.id]?.status || 'Hadir') : 'Hadir'}
+        status={selectedStudentForDrawer ? (attendance[selectedStudentForDrawer.id]?.status || 'Alpa') : 'Alpa'}
         onProgressChange={handleProgressChange}
         onStatusChange={handleAttendanceChange}
         currentGrade={currentGradeObj}
@@ -1198,14 +1292,16 @@ export function LiveSession() {
         </div>
         <button
           onClick={handleSave}
-          disabled={saving || students.length === 0}
+          disabled={saving || students.length === 0 || !!activeHoliday}
           className={cn(
             "w-full sm:w-auto px-8 py-3.5 text-white rounded-2xl text-sm font-black transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-md cursor-pointer",
-            editingJournalId ? "bg-orange-500 hover:bg-orange-600 shadow-orange-500/25" : "bg-[#0362D0] hover:bg-[#024a9e] shadow-[#0362D0]/20"
+            activeHoliday ? "bg-amber-600 hover:bg-amber-600 opacity-60 cursor-not-allowed" : editingJournalId ? "bg-orange-500 hover:bg-orange-600 shadow-orange-500/25" : "bg-[#0362D0] hover:bg-[#024a9e] shadow-[#0362D0]/20"
           )}
         >
           {saving ? (
             <><Loader2 size={18} className="animate-spin" /> Menyimpan Data...</>
+          ) : activeHoliday ? (
+            <><CalendarOff size={18} /> Sesi Pertemuan Diliburkan</>
           ) : (
             <><Save size={18} /> {editingJournalId ? 'Update Sesi Mengajar' : 'Simpan Sesi Mengajar'}</>
           )}

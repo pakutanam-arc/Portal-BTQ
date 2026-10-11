@@ -129,7 +129,7 @@ export function Curriculum() {
               Data kurikulum diperbarui secara otomatis dari input <strong>Sesi Mengajar</strong>. Saat ini telah terlaksana <strong>{completedMeetings.length} Tahap</strong> untuk kelompok binaan aktif:
               <span className="block mt-1 text-[#C99A2E] font-bold">
                 • <strong>Terlaksana:</strong> Pertemuan Ke-{completedMeetings.join(', ') || '1, 2'} | 
-                • <strong>Tahap Aktif Pekan Ini:</strong> Pertemuan Ke-{activeMeetingNumber}
+                • <strong>Tahap Aktif Pertemuan Ini:</strong> Pertemuan Ke-{activeMeetingNumber}
               </span>
             </p>
           </div>
@@ -288,7 +288,7 @@ export function Curriculum() {
                           )}
                           {isActive && (
                             <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-[#C99A2E]/20 text-[#172033] text-xs font-black border border-[#C99A2E]/40 animate-pulse">
-                              <Clock size={13} /> Sesi Aktif Pekan Ini
+                              <Clock size={13} /> Sesi Pertemuan Aktif
                             </span>
                           )}
                           {isUpcoming && (

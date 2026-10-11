@@ -160,7 +160,7 @@ export function PublicStudentProfile() {
 
   // Prepare Chart Data
   const chartData = progress.map((p, index) => ({
-    name: `Pekan ${p.meetingNumber || index + 1}`,
+    name: `Pertemuan ${p.meetingNumber || index + 1}`,
     nilai: p.total,
     kkm: 75
   })).slice(-8);
@@ -473,7 +473,7 @@ export function PublicStudentProfile() {
                         <h4 className="text-xs font-black text-[#172033]">{rec.memorizedSurah}</h4>
                       </div>
                       <p className="text-[11px] text-slate-500 font-medium pl-8">
-                        Pekan Ke-{rec.meetingNumber || idx + 1} • Tajwid: {rec.tajwid || '-'} • Kelancaran: {rec.reading || '-'}
+                        Pertemuan Ke-{rec.meetingNumber || idx + 1} • Tajwid: {rec.tajwid || '-'} • Kelancaran: {rec.reading || '-'}
                       </p>
                     </div>
 

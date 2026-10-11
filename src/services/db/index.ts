@@ -10,6 +10,7 @@ export * from './certifications';
 export * from './notifications';
 export * from './auditLogs';
 export * from './mentors';
+export * from './calendar';
 export {
   invalidateDbCache,
   getCached,

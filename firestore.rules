@@ -110,6 +110,12 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow write: if isSignedIn() && isValidId(logId);
     }
+
+    // Academic Holidays: Readable for all, writable only by authenticated users
+    match /academic_holidays/{holidayId} {
+      allow read: if true;
+      allow write: if isSignedIn() && isValidId(holidayId);
+    }
   }
 }
 

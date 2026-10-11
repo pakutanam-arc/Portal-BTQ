@@ -89,8 +89,11 @@ export const GroupWeeklyAttendanceCard = React.memo(function GroupWeeklyAttendan
   // Available periods for dropdown
   const periodOptions = useMemo(() => {
     const opts = [
-      { id: 'latest', label: 'Pekan Terbaru' },
-      ...weeklyData.map(w => ({ id: `week_${w.week}`, label: `${w.label} ${w.dateLabel ? `(${w.dateLabel})` : ''}` })),
+      { id: 'latest', label: 'Pertemuan Terbaru' },
+      ...weeklyData.map(w => {
+        const text = w.label.includes('(') ? w.label : (w.dateLabel ? `${w.label} (${w.dateLabel})` : w.label);
+        return { id: `week_${w.week}`, label: text };
+      }),
       { id: 'cumulative', label: 'Rata-rata Kumulatif' }
     ];
     return opts;
@@ -159,26 +162,29 @@ export const GroupWeeklyAttendanceCard = React.memo(function GroupWeeklyAttendan
             <Users size={16} className="text-[#0362D0]" />
             <h3 className="font-bold text-[#172033] text-base">Rincian Kelompok</h3>
           </div>
-          <p className="text-xs text-slate-500 font-medium">Kehadiran tiap kelompok / pekan</p>
+          <p className="text-xs text-slate-500 font-medium">Kehadiran tiap kelompok per pertemuan pembelajaran</p>
         </div>
 
         {/* Filter Controls: Quick Pills & Dropdown */}
         <div className="flex flex-wrap items-center gap-1.5 self-start sm:self-auto">
           <div className="flex items-center bg-slate-50 p-0.5 rounded-xl border border-slate-100">
-            {weeklyData.map(w => (
-              <button
-                key={`pill-week-${w.week}`}
-                type="button"
-                onClick={() => setSelectedPeriod(`week_${w.week}`)}
-                className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all ${
-                  selectedPeriod === `week_${w.week}`
-                    ? 'bg-[#0362D0] text-white shadow-xs'
-                    : 'text-slate-600 hover:text-[#172033]'
-                }`}
-              >
-                {w.label} {w.dateLabel ? `(${w.dateLabel})` : ''}
-              </button>
-            ))}
+            {weeklyData.map(w => {
+              const pillText = w.label.includes('(') ? w.label : (w.dateLabel ? `${w.label} (${w.dateLabel})` : w.label);
+              return (
+                <button
+                  key={`pill-week-${w.week}`}
+                  type="button"
+                  onClick={() => setSelectedPeriod(`week_${w.week}`)}
+                  className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all ${
+                    selectedPeriod === `week_${w.week}`
+                      ? 'bg-[#0362D0] text-white shadow-xs'
+                      : 'text-slate-600 hover:text-[#172033]'
+                  }`}
+                >
+                  {pillText}
+                </button>
+              );
+            })}
             <button
               type="button"
               onClick={() => setSelectedPeriod('cumulative')}

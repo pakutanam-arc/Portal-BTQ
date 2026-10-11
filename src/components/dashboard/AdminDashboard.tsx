@@ -48,6 +48,9 @@ import { AttendanceHistoryWidget } from './AttendanceHistoryWidget';
 import { CurriculumSyncAlert } from '../CurriculumSyncAlert';
 import { WeeklyAttendanceSummaryCard, WeeklyOverallAttendancePoint } from './WeeklyAttendanceSummaryCard';
 import { GroupWeeklyAttendanceCard, WeeklyGroupDataPoint, GroupAttendanceDetail } from './GroupWeeklyAttendanceCard';
+import { AcademicCalendarCard } from './AcademicCalendarCard';
+import { getMeetingRealDate, formatShortDateID } from '../../services/academicCalendar';
+import { getAcademicHolidays, subscribeAcademicHolidays, AcademicHoliday } from '../../services/db/calendar';
 
 export type DashboardTimeRange = 'semester' | '8weeks' | '4weeks';
 
@@ -64,9 +67,10 @@ export function AdminDashboard() {
   const [students, setStudents] = useState<Student[]>([]);
   const [journals, setJournals] = useState<TeachingJournal[]>([]);
   const [allAttendance, setAllAttendance] = useState<StudentAttendance[]>([]);
+  const [holidays, setHolidays] = useState<AcademicHoliday[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Perhitungan rentang waktu rekap (Semester Aktif / 4-8 Pekan Terakhir)
+  // Perhitungan rentang waktu rekap (Semester Aktif / 4-8 Pertemuan Terakhir)
   const semesterInfo: SemesterInfo = useMemo(() => getActiveSemesterInfo(), []);
 
   const activeRangeConfig = useMemo(() => {
@@ -74,8 +78,8 @@ export function AdminDashboard() {
       const startDate = getRecentWeeksStartDate(4);
       return {
         key: '4weeks' as const,
-        label: '4 Pekan Terakhir',
-        shortLabel: '4 Pekan',
+        label: '4 Pertemuan Terakhir',
+        shortLabel: '4 Pertemuan',
         startDate,
         description: `Sejak ${startDate}`
       };
@@ -84,8 +88,8 @@ export function AdminDashboard() {
       const startDate = getRecentWeeksStartDate(8);
       return {
         key: '8weeks' as const,
-        label: '8 Pekan Terakhir',
-        shortLabel: '8 Pekan',
+        label: '8 Pertemuan Terakhir',
+        shortLabel: '8 Pertemuan',
         startDate,
         description: `Sejak ${startDate}`
       };
@@ -111,7 +115,8 @@ export function AdminDashboard() {
           progressData,
           studentsData,
           journalsRes,
-          attendanceData
+          attendanceData,
+          holidaysData
         ] = await Promise.all([
           getGroups(),
           getMentors(),
@@ -119,7 +124,8 @@ export function AdminDashboard() {
           getAllStudentProgress(),
           getStudents(),
           getTeachingJournals(undefined, 80, undefined, activeRangeConfig.startDate),
-          getAllStudentAttendance(activeRangeConfig.startDate, 2000)
+          getAllStudentAttendance(activeRangeConfig.startDate, 2000),
+          getAcademicHolidays()
         ]);
         
         if (!isMounted) return;
@@ -133,6 +139,7 @@ export function AdminDashboard() {
         setStudents(studentsData);
         setJournals(journalsRes?.data || []);
         setAllAttendance(attendanceData || []);
+        setHolidays(holidaysData || []);
 
         // Pre-calculate group counts directly in memory (Eliminates 20+ N+1 queries)
         const counts: Record<string, number> = {};
@@ -156,7 +163,7 @@ export function AdminDashboard() {
 
     loadData();
 
-    // Dengarkan event 'attendance-updated' dan 'storage' agar dashboard otomatis tersinkronisasi saat pekan 3 diisi
+    // Dengarkan event 'attendance-updated', 'calendar-updated' dan 'storage'
     const handleAttendanceUpdated = async () => {
       try {
         const freshAttendance = await getAllStudentAttendance(activeRangeConfig.startDate, 2000);
@@ -168,12 +175,30 @@ export function AdminDashboard() {
       }
     };
 
+    const handleCalendarUpdated = async () => {
+      try {
+        const freshHolidays = await getAcademicHolidays(true);
+        if (isMounted) {
+          setHolidays(freshHolidays);
+        }
+      } catch (err) {
+        console.warn("Gagal memperbarui kalender:", err);
+      }
+    };
+
+    const unsubHolidays = subscribeAcademicHolidays((fresh) => {
+      if (isMounted) setHolidays(fresh);
+    });
+
     window.addEventListener('attendance-updated', handleAttendanceUpdated);
+    window.addEventListener('calendar-updated', handleCalendarUpdated);
     window.addEventListener('storage', handleAttendanceUpdated);
 
     return () => {
       isMounted = false;
+      unsubHolidays();
       window.removeEventListener('attendance-updated', handleAttendanceUpdated);
+      window.removeEventListener('calendar-updated', handleCalendarUpdated);
       window.removeEventListener('storage', handleAttendanceUpdated);
     };
   }, []);
@@ -440,9 +465,15 @@ export function AdminDashboard() {
     if (maxMeetingNumber > 0) {
       const latestMeetingRecords = allAttendance.filter(a => a.meetingNumber === maxMeetingNumber);
       if (latestMeetingRecords.length > 0) {
+        const matchedRecord = latestMeetingRecords.find(r => r.date);
+        const realDateLabel = matchedRecord?.date 
+          ? formatShortDateID(matchedRecord.date) 
+          : (getMeetingRealDate(maxMeetingNumber) ? formatShortDateID(getMeetingRealDate(maxMeetingNumber)!) : '');
+        const labelSuffix = realDateLabel ? ` (${realDateLabel})` : '';
+
         return {
           thisWeekRecords: latestMeetingRecords,
-          thisWeekLabel: isSaturdayToday ? 'pertemuan Sabtu hari ini' : `pertemuan Pekan ${maxMeetingNumber}`
+          thisWeekLabel: isSaturdayToday ? 'pertemuan Sabtu hari ini' : `Pertemuan Ke-${maxMeetingNumber}${labelSuffix}`
         };
       }
     }
@@ -684,26 +715,34 @@ export function AdminDashboard() {
       }
     };
 
-    // Helper cari tanggal representatif untuk pekan
+    // Helper cari tanggal representatif untuk pertemuan
     const getWeekDateLabel = (weekNum: number): string | undefined => {
+      // 1. Cek dari rekaman presensi langsung
+      const matchedRecord = allAttendance.find(a => a.meetingNumber === weekNum && a.date);
+      if (matchedRecord && matchedRecord.date) return formatShortDate(matchedRecord.date);
+
+      // 2. Cek dari jurnal pembelajaran
+      const matchedJournal = journals.find(j => j.meetingNumber === weekNum && j.date);
+      if (matchedJournal && matchedJournal.date) return formatShortDate(matchedJournal.date);
+
+      // 3. Cek dari mapping tanggal unik
+      for (const [dStr, wNum] of dateToWeekMap.entries()) {
+        if (wNum === weekNum) return formatShortDate(dStr);
+      }
+
+      // 4. Fallback ke jadwal kalender akademik fleksibel
+      const fallbackDate = getMeetingRealDate(weekNum, [], holidays);
+      if (fallbackDate) return formatShortDate(fallbackDate);
+
       if (weekNum === 1) return '15 Agu';
       if (weekNum === 2) return '22 Agu';
       if (weekNum === 3) return '29 Agu';
       if (weekNum === 4) return '05 Sep';
 
-      // 1. Cek dari rekaman presensi langsung
-      const matchedRecord = allAttendance.find(a => a.meetingNumber === weekNum && a.date);
-      if (matchedRecord && matchedRecord.date) return formatShortDate(matchedRecord.date);
-
-      // 2. Cek dari mapping tanggal unik
-      for (const [dStr, wNum] of dateToWeekMap.entries()) {
-        if (wNum === weekNum) return formatShortDate(dStr);
-      }
-
       return undefined;
     };
 
-    // 2. Hitung Ringkasan Pekanan Keseluruhan Siswa
+    // 2. Hitung Ringkasan Tiap Pertemuan Keseluruhan Siswa
     const weeklyOverall: WeeklyOverallAttendancePoint[] = sortedWeeks.map((weekNum, idx) => {
       const weekRecords = allAttendance.filter(a => {
         if (a.meetingNumber && a.meetingNumber === weekNum) return true;
@@ -740,10 +779,13 @@ export function AdminDashboard() {
         absent = Math.max(0, (totalStudents || 126) - present - permission - sick);
       }
 
+      const dLabel = getWeekDateLabel(weekNum);
+      const displayLabel = dLabel ? `Pertemuan ${weekNum} (${dLabel})` : `Pertemuan ${weekNum}`;
+
       return {
         week: weekNum,
-        label: `Pekan ${weekNum}`,
-        dateLabel: getWeekDateLabel(weekNum),
+        label: displayLabel,
+        dateLabel: dLabel,
         rate,
         present: present || Math.round((totalStudents || 126) * (rate / 100)),
         permission: permission || Math.round((totalStudents || 126) * 0.08),
@@ -810,10 +852,13 @@ export function AdminDashboard() {
         };
       });
 
+      const dLabel = getWeekDateLabel(weekNum);
+      const displayLabel = dLabel ? `Pertemuan ${weekNum} (${dLabel})` : `Pertemuan ${weekNum}`;
+
       return {
         week: weekNum,
-        label: `Pekan ${weekNum}`,
-        dateLabel: getWeekDateLabel(weekNum),
+        label: displayLabel,
+        dateLabel: dLabel,
         groups: groupDataList
       };
     });
@@ -876,7 +921,7 @@ export function AdminDashboard() {
       overallAverageRate: avgRate,
       overallLatestRate: latRate
     };
-  }, [allAttendance, journals, groups, mentorMap, totalStudents, groupDetails, groupCounts]);
+  }, [allAttendance, journals, groups, mentorMap, totalStudents, groupDetails, groupCounts, holidays]);
 
   // Dynamically compute real attention alerts based on actual database data
   const attentionAlerts: AttentionAlert[] = useMemo(() => {
@@ -993,9 +1038,9 @@ export function AdminDashboard() {
           id: 'mentor-checkin-missing',
           type: 'warning',
           title: `${unrecordedGroups.length} mentor belum check-in`,
-          description: `${unrecordedGroups.slice(0, 2).map((g) => g.name).join(', ')}${unrecordedGroups.length > 2 ? ' dll.' : ''} belum rekap jurnal pekan ${activeWeek}.`,
+          description: `${unrecordedGroups.slice(0, 2).map((g) => g.name).join(', ')}${unrecordedGroups.length > 2 ? ' dll.' : ''} belum rekap jurnal pertemuan ${activeWeek}.`,
           link: '/attendance/mentors',
-          badge: `Pekan ${activeWeek}`
+          badge: `Pertemuan ${activeWeek}`
         });
       }
     }
@@ -1072,8 +1117,8 @@ export function AdminDashboard() {
               className="text-[11px] font-bold text-[#0362D0] bg-transparent outline-none cursor-pointer border-none p-0 focus:ring-0"
             >
               <option value="semester">Semester Aktif ({semesterInfo.semesterName})</option>
-              <option value="8weeks">8 Pekan Terakhir</option>
-              <option value="4weeks">4 Pekan Terakhir</option>
+              <option value="8weeks">8 Pertemuan Terakhir</option>
+              <option value="4weeks">4 Pertemuan Terakhir</option>
             </select>
             {rangeLoading && <Loader2 size={11} className="animate-spin text-[#0362D0] ml-0.5" />}
           </div>
@@ -1144,6 +1189,12 @@ export function AdminDashboard() {
       {/* 2. SUMMARY STATISTICS INSTITUSI */}
       <StatCardsGrid cards={statCards} />
 
+      {/* KALENDER AKADEMIK FLEKSIBEL (SINKRONISASI PERTEMUAN KE- & TANGGAL RIIL) */}
+      <AcademicCalendarCard 
+        allAttendance={allAttendance}
+        journals={journals}
+      />
+
       {/* MOBILE ONLY: PANEL PERLU PERHATIAN */}
       <div className="block lg:hidden">
         <AttentionPanel alerts={attentionAlerts} isLoading={loading} />
@@ -1159,7 +1210,7 @@ export function AdminDashboard() {
         <GroupProgressBarCard data={groupProgressBarData} />
       </section>
 
-      {/* ANALISIS PEKANAN KEHADIRAN (RINGKASAN KESELURUHAN & RINCIAN KELOMPOK) */}
+      {/* ANALISIS KEHADIRAN PER PERTEMUAN (RINGKASAN KESELURUHAN & RINCIAN KELOMPOK) */}
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <WeeklyAttendanceSummaryCard 
           data={weeklyOverallAttendanceData}

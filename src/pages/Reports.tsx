@@ -144,7 +144,7 @@ export function Reports() {
   const handleExportProgress = async () => {
     try {
       const progData = await getAllStudentProgress();
-      const headers = ['ID Progress', 'ID Santri', 'Nama Santri', 'Kelas', 'Kelompok', 'Pekan Ke', 'Surah/Hafalan', 'Membaca', 'Tajwid', 'Menulis', 'Total Nilai'];
+      const headers = ['ID Progress', 'ID Santri', 'Nama Santri', 'Kelas', 'Kelompok', 'Pertemuan Ke', 'Surah/Hafalan', 'Membaca', 'Tajwid', 'Menulis', 'Total Nilai'];
       const rows = progData.map((p) => {
         const st = students.find((s) => s.id === p.studentId);
         const gr = groups.find((g) => g.id === p.groupId);

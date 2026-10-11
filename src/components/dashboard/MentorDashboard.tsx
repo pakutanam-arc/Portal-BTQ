@@ -851,7 +851,7 @@ export function MentorDashboard() {
               {journals.length > 0 ? 'Tercatat' : 'Belum Ada'}
             </p>
             <p className="text-[10px] text-slate-400 font-semibold mt-1">
-              {journals.length > 0 ? `${journals.length} catatan sesi tersimpan` : 'Siap diisi pekan ini'}
+              {journals.length > 0 ? `${journals.length} catatan sesi tersimpan` : 'Siap diisi pertemuan ini'}
             </p>
           </div>
           <div className="mt-2.5 pt-2 border-t border-slate-50 text-[9px] font-bold text-[#0362D0]">
@@ -999,7 +999,7 @@ export function MentorDashboard() {
           <div className="flex justify-between items-center pb-3 border-b border-slate-50">
             <div>
               <h3 className="font-extrabold text-[#172033] text-sm">
-                Target Silabus Pekan Ini
+                Target Silabus Pertemuan Ini
               </h3>
               <p className="text-[11px] text-slate-400 font-medium">
                 Materi seragam halaqah {groupTitle}
@@ -1306,7 +1306,7 @@ export function MentorDashboard() {
                   )}
                   {journals[0].nextPlan && (
                     <p className="text-[11px] text-[#0362D0] font-semibold mt-1">
-                      <strong>Rencana pekan depan:</strong> {journals[0].nextPlan}
+                      <strong>Rencana pertemuan berikutnya:</strong> {journals[0].nextPlan}
                     </p>
                   )}
                 </div>
@@ -1340,7 +1340,7 @@ export function MentorDashboard() {
             <div className="flex items-center gap-2 pb-3 mb-3 border-b border-[#C99A2E]/20 text-[#C99A2E]">
               <Bookmark size={16} strokeWidth={2.5} />
               <h3 className="font-black text-xs uppercase tracking-wider text-[#172033]">
-                Panduan Halaqah Pekanan
+                Panduan Halaqah Pertemuan
               </h3>
             </div>
 

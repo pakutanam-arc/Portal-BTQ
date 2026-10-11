@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Calendar, Save, CheckCircle, RotateCcw, MessageSquare, MessageCircle, Loader2, BookOpen, Users, UserCheck, AlertCircle, Sparkles, Clock, Check, ShieldCheck, Search, Filter } from 'lucide-react';
+import { Calendar, Save, CheckCircle, RotateCcw, MessageSquare, MessageCircle, Loader2, BookOpen, Users, UserCheck, AlertCircle, Sparkles, Clock, Check, X, ShieldCheck, Search, Filter, CalendarOff } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Select } from '../components/ui/Select';
@@ -13,6 +13,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { theme } from '../theme';
 import { StudentTableSkeleton } from '../components/students/StudentTableSkeleton';
 import { useDebounce } from '../hooks/useDebounce';
+import { getMeetingRealDate, formatShortDateID } from '../services/academicCalendar';
+import { getAcademicHolidays, subscribeAcademicHolidays, AcademicHoliday } from '../services/db/calendar';
 
 export function StudentAttendance() {
   const { currentUser, userData, userRole } = useAuth();
@@ -37,6 +39,26 @@ export function StudentAttendance() {
   // State for attendance
   const [attendance, setAttendance] = useState<Record<string, { status: string, notes: string }>>({});
   const [initialAttendance, setInitialAttendance] = useState<Record<string, { status: string, notes: string }>>({});
+  const [holidays, setHolidays] = useState<AcademicHoliday[]>([]);
+
+  useEffect(() => {
+    let isMounted = true;
+    getAcademicHolidays().then(h => {
+      if (isMounted) setHolidays(h);
+    });
+    const unsub = subscribeAcademicHolidays(h => {
+      if (isMounted) setHolidays(h);
+    });
+    return () => {
+      isMounted = false;
+      unsub();
+    };
+  }, []);
+
+  const activeHoliday = useMemo(() => {
+    const cleanDate = selectedDate.split('T')[0];
+    return holidays.find(h => h.date === cleanDate);
+  }, [selectedDate, holidays]);
 
   const isMentor = userRole === 'mentor' && currentUser?.email !== 'admin@smpn102.sch.id';
 
@@ -108,13 +130,12 @@ export function StudentAttendance() {
     if (availableSessions.length > 0) {
       const match = availableSessions.find(s => s.id === selectedSessionId);
       if (!match) {
-        // Default to session 2 (Pekan 2, 22 Agustus) in semester 1, else first
+        // Default to session 2 (Pertemuan 2, 22 Agustus) in semester 1, else first
         const defaultSession = availableSessions.find(s => s.sessionNumber === 2) || availableSessions[0];
         setSelectedSessionId(defaultSession.id);
         if (selectedSemester === 1) {
-          if (defaultSession.sessionNumber === 1) setSelectedDate('2026-08-15');
-          else if (defaultSession.sessionNumber === 2) setSelectedDate('2026-08-22');
-          else if (defaultSession.sessionNumber === 3) setSelectedDate('2026-08-29');
+          const realDate = getMeetingRealDate(defaultSession.sessionNumber);
+          if (realDate) setSelectedDate(realDate);
         }
       }
     }
@@ -124,9 +145,8 @@ export function StudentAttendance() {
     setSelectedSessionId(sessId);
     const session = availableSessions.find(s => s.id === sessId);
     if (session && selectedSemester === 1) {
-      if (session.sessionNumber === 1) setSelectedDate('2026-08-15');
-      else if (session.sessionNumber === 2) setSelectedDate('2026-08-22');
-      else if (session.sessionNumber === 3) setSelectedDate('2026-08-29');
+      const realDate = getMeetingRealDate(session.sessionNumber);
+      if (realDate) setSelectedDate(realDate);
     }
   };
 
@@ -149,7 +169,7 @@ export function StudentAttendance() {
         students.forEach(s => {
           const existingRecord = attendanceRecords.find(r => r.studentId === s.id);
           newAttendanceState[s.id] = { 
-            status: existingRecord ? existingRecord.status : 'Hadir', 
+            status: existingRecord ? existingRecord.status : 'Alpa', 
             notes: existingRecord?.notes || '' 
           };
         });
@@ -209,7 +229,7 @@ export function StudentAttendance() {
         groupId: selectedGroup,
         date: selectedDate,
         meetingNumber: meetingNum,
-        status: attendance[student.id]?.status || 'Hadir',
+        status: attendance[student.id]?.status || 'Alpa',
         notes: attendance[student.id]?.notes || ''
       }));
       
@@ -266,7 +286,7 @@ export function StudentAttendance() {
       if (!matchQuery) return false;
 
       if (statusFilter === 'ALL') return true;
-      const currentStatus = attendance[student.id]?.status || 'Hadir';
+      const currentStatus = attendance[student.id]?.status || 'Alpa';
       return currentStatus === statusFilter;
     });
   }, [groupStudents, debouncedSearchQuery, statusFilter, attendance]);
@@ -397,10 +417,12 @@ export function StudentAttendance() {
                 {availableSessions.map(s => {
                   const isDone = selectedSemester === 1 && s.sessionNumber <= 2;
                   const isActive = selectedSemester === 1 && s.sessionNumber === 3;
-                  const tag = isDone ? ' [Selesai]' : isActive ? ' [Tahap Aktif]' : '';
+                  const tag = isDone ? ' [Selesai]' : isActive ? ' [Pertemuan Aktif]' : '';
+                  const mDate = getMeetingRealDate(s.sessionNumber);
+                  const dateInfo = mDate ? ` (${formatShortDateID(mDate)})` : '';
                   return (
                     <option key={s.id} value={s.id}>
-                      Tahap {s.sessionNumber}: {s.topic}{tag}
+                      Pertemuan {s.sessionNumber}{dateInfo}: {s.topic}{tag}
                     </option>
                   );
                 })}
@@ -434,6 +456,28 @@ export function StudentAttendance() {
               </div>
             </div>
           )}
+
+          {/* Banner Peringatan Hari Libur Terkonfirmasi */}
+          {activeHoliday && (
+            <div className="mt-4 p-4 bg-amber-50 border border-amber-300 rounded-2xl flex items-start gap-3.5 text-amber-950 shadow-xs animate-in fade-in">
+              <div className="w-8 h-8 rounded-xl bg-amber-100 border border-amber-200 flex items-center justify-center shrink-0 text-amber-800">
+                <CalendarOff size={18} />
+              </div>
+              <div className="flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-black text-[11px] uppercase tracking-wider bg-amber-200/90 text-amber-950 px-2 py-0.5 rounded-md border border-amber-300">
+                    Sesi Diliburkan Admin
+                  </span>
+                  <span className="font-bold text-xs text-amber-900">
+                    &ldquo;{activeHoliday.reason}&rdquo;
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 mt-1.5 leading-relaxed">
+                  Pada tanggal ini, sesi bimbingan BTQ ditiadakan dan <strong>tidak diperhitungkan</strong> dalam persentase kehadiran santri (santri tidak dianggap alpa). Sesi pertemuan efektif dialihkan ke Sabtu berikutnya di Kalender Akademik.
+                </p>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Attendance Summary Counters Bar */}
@@ -460,6 +504,9 @@ export function StudentAttendance() {
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={() => setAllStatus('Hadir')} className="border-slate-100 text-[#172033] hover:bg-slate-50 font-bold text-xs">
               <Check size={14} className="mr-1 text-emerald-600" /> Hadir Semua
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setAllStatus('Alpa')} className="border-slate-100 text-rose-700 hover:bg-rose-50 font-bold text-xs">
+              <X size={14} className="mr-1 text-rose-600" /> Alpa Semua
             </Button>
             <Button variant="outline" size="sm" onClick={handleReset} className="border-slate-100 text-slate-600 hover:bg-slate-50 font-bold text-xs">
               <RotateCcw size={14} className="mr-1 text-slate-500" /> Reset
@@ -553,7 +600,7 @@ export function StudentAttendance() {
                 </TableHeader>
                 <TableBody>
                   {filteredGroupStudents.map((student, idx) => {
-                    const currentStatus = attendance[student.id]?.status || 'Hadir';
+                    const currentStatus = attendance[student.id]?.status || 'Alpa';
                     const currentNotes = attendance[student.id]?.notes || '';
                     
                     return (
@@ -625,7 +672,7 @@ export function StudentAttendance() {
             {/* Mobile Card View */}
             <div className="md:hidden p-4 space-y-3 bg-slate-50/50">
               {filteredGroupStudents.map((student, idx) => {
-                const currentStatus = attendance[student.id]?.status || 'Hadir';
+                const currentStatus = attendance[student.id]?.status || 'Alpa';
                 const currentNotes = attendance[student.id]?.notes || '';
                 const isHadir = currentStatus === 'Hadir';
                 
@@ -703,17 +750,27 @@ export function StudentAttendance() {
         {/* Bottom Save Bar */}
         <div className="p-5 border-t border-slate-100 bg-slate-50/70 flex flex-col sm:flex-row items-center justify-between gap-3">
           <p className="text-xs text-slate-500 font-medium text-center sm:text-left">
-            Pastikan data presensi sudah sesuai sebelum menyimpan ke basis data portal.
+            {activeHoliday 
+              ? 'Tanggal ini berstatus libur resmi. Presensi kehadiran tidak perlu diisi.' 
+              : 'Pastikan data presensi sudah sesuai sebelum menyimpan ke basis data portal.'}
           </p>
           <Button 
             onClick={handleSave} 
-            disabled={saving || groupStudents.length === 0} 
-            className="w-full sm:w-auto bg-[#0362D0] hover:bg-[#0252b3] text-white font-bold shadow-xs cursor-pointer py-2.5"
+            disabled={saving || groupStudents.length === 0 || !!activeHoliday} 
+            className={`w-full sm:w-auto font-bold shadow-xs py-2.5 ${
+              activeHoliday 
+                ? 'bg-amber-600 hover:bg-amber-600 opacity-60 text-white cursor-not-allowed' 
+                : 'bg-[#0362D0] hover:bg-[#0252b3] text-white cursor-pointer'
+            }`}
           >
             {saving ? (
               <>
                 <Loader2 size={16} className="mr-2 animate-spin" />
                 Menyimpan Presensi...
+              </>
+            ) : activeHoliday ? (
+              <>
+                <CalendarOff size={18} className="mr-2" /> Sesi Pertemuan Diliburkan
               </>
             ) : (
               <>

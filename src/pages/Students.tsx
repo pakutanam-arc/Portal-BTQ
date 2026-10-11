@@ -1,13 +1,47 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { theme } from '../theme';
-import { Search, Plus, Download, Upload, Users, Edit3, Trash2, X, Check, AlertCircle, Printer, QrCode, FileText, Layers } from 'lucide-react';
+import { 
+  Search, 
+  Plus, 
+  Download, 
+  Upload, 
+  Users, 
+  Edit3, 
+  Trash2, 
+  X, 
+  Check, 
+  AlertCircle, 
+  AlertTriangle,
+  UserX,
+  UserCheck,
+  ShieldAlert,
+  Printer, 
+  QrCode, 
+  FileText, 
+  Layers 
+} from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/Table';
-import { getStudents, addStudent, updateStudent, deleteStudent, getGroups, getMentors, Student, Group, Mentor } from '../services/db';
+import { 
+  getStudents, 
+  addStudent, 
+  updateStudent, 
+  deleteStudent, 
+  deactivateStudent,
+  activateStudent,
+  calculateStudentAbsenceAlerts,
+  getAllStudentAttendance,
+  getGroups, 
+  getMentors, 
+  Student, 
+  Group, 
+  Mentor,
+  StudentAbsenceAlert
+} from '../services/db';
 import { getPublicStudentUrl } from '../utils/studentUtils';
 import { useAuth } from '../contexts/AuthContext';
 import { StudentIdCard } from '../components/cards/StudentIdCard';
@@ -17,6 +51,7 @@ import { Toast } from '../components/Toast';
 import { OfficialReportModal } from '../components/reports/OfficialReportModal';
 import { BatchOfficialReportModal } from '../components/reports/BatchOfficialReportModal';
 import { BatchImportStudentModal } from '../components/students/BatchImportStudentModal';
+import { StudentActionModal } from '../components/students/StudentActionModal';
 
 export function Students() {
   const { currentUser, userData, userRole } = useAuth();
@@ -28,6 +63,14 @@ export function Students() {
   const debouncedSearchTerm = useDebounce(searchInput, 250);
   const [classFilter, setClassFilter] = useState('');
   const [groupFilter, setGroupFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'Aktif' | 'Nonaktif' | 'Semua'>('Aktif');
+  const [onlyAlertFilter, setOnlyAlertFilter] = useState(false);
+  const [attendanceList, setAttendanceList] = useState<any[]>([]);
+
+  // Action & Deletion State
+  const [actionStudent, setActionStudent] = useState<Student | null>(null);
+  const [isActionLoading, setIsActionLoading] = useState(false);
+
   const [toast, setToast] = useState<{ show: boolean, type: 'success' | 'error' | 'warning' | 'info', message: string, description?: string }>({ show: false, type: 'success', message: '' });
 
   // Printing state
@@ -57,18 +100,19 @@ export function Students() {
     status: 'Aktif'
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   const isMentor = userRole === 'mentor' && currentUser?.email !== 'admin@smpn102.sch.id';
 
-  const loadData = async () => {
+  const loadData = async (forceFresh = false) => {
     try {
-      const [groupsData, mentorsData, allStudents] = await Promise.all([
+      const [groupsData, mentorsData, allStudents, allAttendance] = await Promise.all([
         getGroups(),
         getMentors(),
-        getStudents()
+        getStudents(forceFresh),
+        getAllStudentAttendance('all', 2000, forceFresh)
       ]);
 
+      setAttendanceList(allAttendance || []);
       setMentors(mentorsData);
       
       let finalGroups = groupsData;
@@ -104,7 +148,21 @@ export function Students() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [debouncedSearchTerm, classFilter, groupFilter, itemsPerPage]);
+  }, [debouncedSearchTerm, classFilter, groupFilter, statusFilter, onlyAlertFilter, itemsPerPage]);
+
+  // Absence Alert calculation for all students
+  const absenceAlerts = useMemo(() => {
+    return calculateStudentAbsenceAlerts(attendanceList);
+  }, [attendanceList]);
+
+  const alertStudentsCount = useMemo(() => {
+    let count = 0;
+    students.forEach(s => {
+      const alert = absenceAlerts.get(s.id);
+      if (alert?.hasAlert) count++;
+    });
+    return count;
+  }, [students, absenceAlerts]);
 
   const handleOpenAdd = () => {
     setEditingStudent(null);
@@ -137,42 +195,127 @@ export function Students() {
     if (!formData.name.trim()) return;
 
     setIsSubmitting(true);
+    const studentName = formData.name.trim().toUpperCase();
+
     try {
       if (editingStudent) {
         await updateStudent(editingStudent.id, {
-          name: formData.name.trim().toUpperCase(),
+          name: studentName,
           nis: formData.nis.trim(),
           class: formData.class,
           gender: formData.gender,
           groupId: formData.groupId,
           status: formData.status
         });
+        setToast({
+          show: true,
+          type: 'success',
+          message: 'Data Santri Berhasil Diperbarui',
+          description: `Perubahan data untuk "${studentName}" telah berhasil disimpan ke database cloud Firestore.`
+        });
       } else {
         await addStudent({
-          name: formData.name.trim().toUpperCase(),
+          name: studentName,
           nis: formData.nis.trim() || `102${String(Math.floor(1000 + Math.random() * 9000))}`,
           class: formData.class,
           gender: formData.gender,
           groupId: formData.groupId,
           status: formData.status
         });
+        setToast({
+          show: true,
+          type: 'success',
+          message: 'Santri Baru Berhasil Ditambahkan',
+          description: `Data santri "${studentName}" telah berhasil didaftarkan dan tersimpan ke database cloud Firestore.`
+        });
       }
       setIsModalOpen(false);
-      await loadData();
-    } catch (err) {
+      await loadData(true);
+    } catch (err: any) {
       console.error("Error saving student:", err);
+      setToast({
+        show: true,
+        type: 'error',
+        message: 'Gagal Menyimpan Data Santri',
+        description: err?.message || 'Terjadi kendala saat menyimpan data ke database cloud Firestore. Silakan coba lagi.'
+      });
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleDelete = async (studentId: string) => {
+  const handleDeactivate = async (student: Student) => {
+    setIsActionLoading(true);
     try {
-      await deleteStudent(studentId);
-      setDeleteConfirmId(null);
-      await loadData();
-    } catch (err) {
+      await deactivateStudent(student.id);
+      setActionStudent(null);
+      setToast({
+        show: true,
+        type: 'success',
+        message: 'Santri Berhasil Dinonaktifkan',
+        description: `Santri "${student.name}" telah dinonaktifkan dan disembunyikan dari sesi mengajar. Riwayat nilai tetap aman tersimpan.`
+      });
+      await loadData(true);
+    } catch (err: any) {
+      console.error("Error deactivating student:", err);
+      setToast({
+        show: true,
+        type: 'error',
+        message: 'Gagal Menonaktifkan Santri',
+        description: err?.message || 'Terjadi kendala saat menonaktifkan santri.'
+      });
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
+  const handleActivate = async (student: Student) => {
+    setIsActionLoading(true);
+    try {
+      await activateStudent(student.id);
+      setActionStudent(null);
+      setToast({
+        show: true,
+        type: 'success',
+        message: 'Santri Berhasil Diaktifkan Kembali',
+        description: `Santri "${student.name}" kini kembali berstatus aktif dan akan muncul di sesi mengajar.`
+      });
+      await loadData(true);
+    } catch (err: any) {
+      console.error("Error activating student:", err);
+      setToast({
+        show: true,
+        type: 'error',
+        message: 'Gagal Mengaktifkan Santri',
+        description: err?.message || 'Terjadi kendala saat mengaktifkan kembali santri.'
+      });
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
+  const handlePermanentDelete = async (student: Student) => {
+    setIsActionLoading(true);
+    try {
+      await deleteStudent(student.id);
+      setActionStudent(null);
+      setToast({
+        show: true,
+        type: 'success',
+        message: 'Data Santri Berhasil Dihapus Permanen',
+        description: `Data santri "${student.name}" telah dihapus sepenuhnya dari database cloud Firestore.`
+      });
+      await loadData(true);
+    } catch (err: any) {
       console.error("Error deleting student:", err);
+      setToast({
+        show: true,
+        type: 'error',
+        message: 'Gagal Menghapus Data Santri',
+        description: err?.message || 'Terjadi kesalahan saat menghapus data santri dari database.'
+      });
+    } finally {
+      setIsActionLoading(false);
     }
   };
 
@@ -192,9 +335,23 @@ export function Students() {
       const matchesClass = classFilter ? student.class?.includes(classFilter) : true;
       const matchesGroup = groupFilter ? student.groupId === groupFilter : true;
       
-      return matchesSearch && matchesClass && matchesGroup;
+      const isInactive = student.status === 'Nonaktif' || student.status === 'Non-Aktif';
+      let matchesStatus = true;
+      if (statusFilter === 'Aktif') {
+        matchesStatus = !isInactive;
+      } else if (statusFilter === 'Nonaktif') {
+        matchesStatus = isInactive;
+      }
+
+      let matchesAlert = true;
+      if (onlyAlertFilter) {
+        const alert = absenceAlerts.get(student.id);
+        matchesAlert = Boolean(alert?.hasAlert);
+      }
+      
+      return matchesSearch && matchesClass && matchesGroup && matchesStatus && matchesAlert;
     });
-  }, [students, debouncedSearchTerm, classFilter, groupFilter]);
+  }, [students, debouncedSearchTerm, classFilter, groupFilter, statusFilter, onlyAlertFilter, absenceAlerts]);
 
   const totalPages = useMemo(() => Math.ceil(filteredStudents.length / itemsPerPage) || 1, [filteredStudents.length, itemsPerPage]);
 
@@ -348,11 +505,35 @@ export function Students() {
               onChange={(e) => setSearchInput(e.target.value)}
             />
           </div>
-          <div className="grid grid-cols-2 sm:flex sm:flex-row gap-2 w-full sm:w-auto">
+          <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 w-full sm:w-auto">
+            {alertStudentsCount > 0 && (
+              <button
+                type="button"
+                onClick={() => setOnlyAlertFilter(prev => !prev)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 border shrink-0 ${
+                  onlyAlertFilter
+                    ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                    : 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100'
+                }`}
+                title="Tampilkan hanya santri dengan peringatan ketidakhadiran (3x alpa)"
+              >
+                <AlertTriangle size={14} className={onlyAlertFilter ? 'text-white' : 'text-amber-600'} />
+                <span>3x Alpa ({alertStudentsCount})</span>
+              </button>
+            )}
+            <Select 
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as any)}
+              className="w-full sm:w-[130px] font-medium text-xs"
+            >
+              <option value="Aktif">Santri Aktif</option>
+              <option value="Nonaktif">Santri Nonaktif</option>
+              <option value="Semua">Semua Status</option>
+            </Select>
             <Select 
               value={classFilter}
               onChange={(e) => setClassFilter(e.target.value)}
-              className="w-full sm:w-[130px] font-medium text-xs"
+              className="w-full sm:w-[110px] font-medium text-xs"
             >
               <option value="">Semua Kelas</option>
               <option value="7">Kelas 7</option>
@@ -362,7 +543,7 @@ export function Students() {
             <Select 
               value={groupFilter}
               onChange={(e) => setGroupFilter(e.target.value)}
-              className="w-full sm:w-[170px] font-medium text-xs"
+              className="w-full sm:w-[160px] font-medium text-xs"
             >
               <option value="">Semua Kelompok</option>
               {groups.map(g => (
@@ -392,13 +573,24 @@ export function Students() {
                 <TableBody>
                   {paginatedStudents.map((student, idx) => {
                     const group = student.groupId ? groupMap.get(student.groupId) : undefined;
-                    const isDeleting = deleteConfirmId === student.id;
+                    const alertInfo = absenceAlerts.get(student.id);
                     const realIdx = (currentPage - 1) * itemsPerPage + idx + 1;
                     return (
                       <TableRow key={student.id} className="group hover:bg-slate-50/60 transition-colors border-b border-slate-100/80">
                         <TableCell className="text-center text-slate-500 font-bold text-xs whitespace-nowrap px-4 py-3.5">{realIdx}</TableCell>
                         <TableCell className="whitespace-nowrap px-4 py-3.5">
-                          <div className="font-extrabold text-[#172033] text-sm">{student.name}</div>
+                          <div className="flex items-center gap-2">
+                            <div className="font-extrabold text-[#172033] text-sm">{student.name}</div>
+                            {alertInfo?.hasAlert && (
+                              <span 
+                                title={`Santri ini tercatat ${alertInfo.isConsecutiveAlert ? `${alertInfo.consecutiveAlpaCount}x Alpa berturut-turut` : `${alertInfo.totalAlpaCount}x Alpa`} (${alertInfo.recentDates.join(', ')})`}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-amber-50 text-amber-800 border border-amber-300"
+                              >
+                                <AlertTriangle size={11} className="text-amber-600" />
+                                {alertInfo.isConsecutiveAlert ? '3x Alpa Berturut' : 'Peringatan Alpa'}
+                              </span>
+                            )}
+                          </div>
                           <div className="text-[11px] text-slate-500 font-medium">
                             NIS: {student.nis || '-'} • {student.gender === 'L' ? 'Laki-laki' : 'Perempuan'}
                           </div>
@@ -417,64 +609,53 @@ export function Students() {
                           <span className={`px-2.5 py-1 text-[10px] font-black uppercase rounded-md border whitespace-nowrap ${
                             student.status === 'Aktif' 
                               ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
-                              : 'bg-rose-50 text-rose-700 border-rose-200'
+                              : 'bg-slate-100 text-slate-700 border-slate-300'
                           }`}>
                             {student.status || 'Aktif'}
                           </span>
                         </TableCell>
                         <TableCell className="text-right whitespace-nowrap px-4 py-3.5">
-                          {isDeleting ? (
-                            <div className="flex items-center justify-end gap-1.5">
-                              <span className="text-[11px] font-bold text-rose-600 mr-1">Hapus?</span>
-                              <Button size="sm" className="h-7 px-2 bg-rose-600 hover:bg-rose-700 text-white font-bold" onClick={() => handleDelete(student.id)}>
-                                <Check size={12} />
-                              </Button>
-                              <Button size="sm" variant="outline" className="h-7 px-2 border-slate-300" onClick={() => setDeleteConfirmId(null)}>
-                                <X size={12} />
-                              </Button>
-                            </div>
-                          ) : (
-                            <div className="flex items-center justify-end gap-1">
-                              {!isMentor && (
-                                <Button 
-                                  variant="ghost" 
-                                  size="sm" 
-                                  onClick={() => handlePrintSingle(student)}
-                                  className="text-slate-600 hover:bg-slate-100 font-bold text-xs"
-                                >
-                                  <Printer size={14} className="mr-1" /> Kartu
-                                </Button>
-                              )}
+                          <div className="flex items-center justify-end gap-1">
+                            {!isMentor && (
                               <Button 
                                 variant="ghost" 
                                 size="sm" 
-                                onClick={() => {
-                                  setReportStudent(student);
-                                  setIsReportModalOpen(true);
-                                }}
-                                className="text-[#C99A2E] hover:bg-[#C99A2E]/10 font-bold text-xs"
-                                title="Cetak Raport Resmi A4 SMPN 102"
+                                onClick={() => handlePrintSingle(student)}
+                                className="text-slate-600 hover:bg-slate-100 font-bold text-xs"
                               >
-                                <FileText size={14} className="mr-1" /> Rapor
+                                <Printer size={14} className="mr-1" /> Kartu
                               </Button>
-                              <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                onClick={() => handleOpenEdit(student)}
-                                className="text-[#0362D0] hover:bg-[#0362D0]/10 font-bold text-xs"
-                              >
-                                <Edit3 size={14} className="mr-1" /> Edit
-                              </Button>
-                              <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                onClick={() => setDeleteConfirmId(student.id)}
-                                className="text-rose-600 hover:bg-rose-50 font-bold text-xs"
-                              >
-                                <Trash2 size={14} className="mr-1" /> Hapus
-                              </Button>
-                            </div>
-                          )}
+                            )}
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={() => {
+                                setReportStudent(student);
+                                setIsReportModalOpen(true);
+                              }}
+                              className="text-[#C99A2E] hover:bg-[#C99A2E]/10 font-bold text-xs"
+                              title="Cetak Raport Resmi A4 SMPN 102"
+                            >
+                              <FileText size={14} className="mr-1" /> Rapor
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={() => handleOpenEdit(student)}
+                              className="text-[#0362D0] hover:bg-[#0362D0]/10 font-bold text-xs"
+                            >
+                              <Edit3 size={14} className="mr-1" /> Edit
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={() => setActionStudent(student)}
+                              className="text-rose-600 hover:bg-rose-50 font-bold text-xs"
+                              title="Nonaktifkan atau Hapus Santri"
+                            >
+                              <Trash2 size={14} className="mr-1" /> Hapus
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     );
@@ -492,15 +673,23 @@ export function Students() {
 
             {/* Mobile Card View */}
             <div className="md:hidden flex flex-col gap-3 p-1">
-              {paginatedStudents.map((student, idx) => {
+              {paginatedStudents.map((student) => {
                 const group = student.groupId ? groupMap.get(student.groupId) : undefined;
-                const isDeleting = deleteConfirmId === student.id;
+                const alertInfo = absenceAlerts.get(student.id);
                 
                 return (
                   <div key={student.id} className="bg-white border border-slate-100 rounded-xl p-4 shadow-sm">
-                    <div className="flex justify-between items-start mb-3">
+                    <div className="flex justify-between items-start mb-2">
                       <div>
-                        <div className="font-extrabold text-[#172033] text-sm leading-tight">{student.name}</div>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-extrabold text-[#172033] text-sm leading-tight">{student.name}</span>
+                          {alertInfo?.hasAlert && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-black bg-amber-50 text-amber-800 border border-amber-300">
+                              <AlertTriangle size={10} className="text-amber-600" />
+                              {alertInfo.isConsecutiveAlert ? '3x Alpa Berturut' : 'Peringatan Alpa'}
+                            </span>
+                          )}
+                        </div>
                         <div className="text-[11px] text-slate-500 font-medium mt-1">
                           NIS: {student.nis || '-'} • {student.gender === 'L' ? 'Laki-laki' : 'Perempuan'}
                         </div>
@@ -508,7 +697,7 @@ export function Students() {
                       <span className={`px-2 py-0.5 text-[9px] font-black uppercase rounded-md border shrink-0 ${
                         student.status === 'Aktif' 
                           ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
-                          : 'bg-rose-50 text-rose-700 border-rose-200'
+                          : 'bg-slate-100 text-slate-700 border-slate-300'
                       }`}>
                         {student.status || 'Aktif'}
                       </span>
@@ -524,57 +713,43 @@ export function Students() {
                     </div>
 
                     <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
-                      {isDeleting ? (
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-bold text-rose-600">Yakin hapus?</span>
-                          <Button size="sm" className="bg-rose-600 hover:bg-rose-700 text-white font-bold h-8" onClick={() => handleDelete(student.id)}>
-                            <Check size={14} />
-                          </Button>
-                          <Button size="sm" variant="outline" className="border-slate-300 h-8" onClick={() => setDeleteConfirmId(null)}>
-                            <X size={14} />
-                          </Button>
-                        </div>
-                      ) : (
-                        <>
-                          {!isMentor && (
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              onClick={() => handlePrintSingle(student)}
-                              className="flex-1 h-8 text-slate-700 border-slate-300 hover:bg-slate-50 font-bold text-xs"
-                            >
-                              <Printer size={14} className="mr-1.5" /> Kartu
-                            </Button>
-                          )}
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            onClick={() => {
-                              setReportStudent(student);
-                              setIsReportModalOpen(true);
-                            }}
-                            className="flex-1 h-8 text-[#C99A2E] border-[#C99A2E]/40 hover:bg-[#C99A2E]/10 font-bold text-xs"
-                          >
-                            <FileText size={14} className="mr-1.5" /> Rapor
-                          </Button>
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            onClick={() => handleOpenEdit(student)}
-                            className="flex-1 h-8 text-[#0362D0] border-[#0362D0]/30 hover:bg-[#0362D0]/5 font-bold text-xs"
-                          >
-                            <Edit3 size={14} className="mr-1.5" /> Edit
-                          </Button>
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            onClick={() => setDeleteConfirmId(student.id)}
-                            className="flex-1 h-8 text-rose-600 border-rose-200 hover:bg-rose-50 font-bold text-xs"
-                          >
-                            <Trash2 size={14} className="mr-1.5" /> Hapus
-                          </Button>
-                        </>
+                      {!isMentor && (
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => handlePrintSingle(student)}
+                          className="flex-1 h-8 text-slate-700 border-slate-300 hover:bg-slate-50 font-bold text-xs"
+                        >
+                          <Printer size={14} className="mr-1.5" /> Kartu
+                        </Button>
                       )}
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => {
+                          setReportStudent(student);
+                          setIsReportModalOpen(true);
+                        }}
+                        className="flex-1 h-8 text-[#C99A2E] border-[#C99A2E]/40 hover:bg-[#C99A2E]/10 font-bold text-xs"
+                      >
+                        <FileText size={14} className="mr-1.5" /> Rapor
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => handleOpenEdit(student)}
+                        className="flex-1 h-8 text-[#0362D0] border-[#0362D0]/30 hover:bg-[#0362D0]/5 font-bold text-xs"
+                      >
+                        <Edit3 size={14} className="mr-1.5" /> Edit
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => setActionStudent(student)}
+                        className="flex-1 h-8 text-rose-600 border-rose-200 hover:bg-rose-50 font-bold text-xs"
+                      >
+                        <Trash2 size={14} className="mr-1.5" /> Hapus
+                      </Button>
                     </div>
                   </div>
                 );
@@ -900,7 +1075,7 @@ export function Students() {
           existingStudents={students}
           groups={groups}
           onSuccess={async () => {
-            await loadData();
+            await loadData(true);
             setToast({
               show: true,
               type: 'success',
@@ -910,6 +1085,19 @@ export function Students() {
           }}
         />
       )}
+
+      {/* Student Action & Deletion Modal */}
+      <StudentActionModal
+        isOpen={Boolean(actionStudent)}
+        onClose={() => setActionStudent(null)}
+        student={actionStudent}
+        group={actionStudent?.groupId ? groups.find(g => g.id === actionStudent.groupId) : undefined}
+        absenceAlert={actionStudent ? absenceAlerts.get(actionStudent.id) : undefined}
+        onDeactivate={handleDeactivate}
+        onActivate={handleActivate}
+        onPermanentDelete={handlePermanentDelete}
+        isLoading={isActionLoading}
+      />
 
       {toast.show && (
         <Toast

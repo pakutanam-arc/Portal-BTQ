@@ -187,14 +187,14 @@ export const WeeklyAttendanceSummaryCard = React.memo(function WeeklyAttendanceS
               <div>
                 <div className="flex items-center gap-2">
                   <h3 className="font-extrabold text-[#172033] text-base leading-tight">
-                    Tren Kehadiran Mingguan
+                    Tren Kehadiran per Pertemuan
                   </h3>
                   <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black bg-blue-50 text-[#0362D0] border border-blue-200">
-                    Recharts
+                    Kalender Riil
                   </span>
                 </div>
                 <p className="text-xs text-slate-500 font-semibold mt-0.5">
-                  Visualisasi pola presensi santri per pekan pembelajaran
+                  Visualisasi pola presensi santri per sesi pertemuan pembelajaran dengan tanggal riil
                 </p>
               </div>
             </div>
@@ -246,9 +246,9 @@ export const WeeklyAttendanceSummaryCard = React.memo(function WeeklyAttendanceS
 
         {/* 2. Fast Pattern Insights Ribbon */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-3">
-          {/* Latest Week & Trend Direction */}
+          {/* Latest Meeting & Trend Direction */}
           <div className="bg-[#F8FAFC] border border-transparent shadow-sm p-2.5 rounded-xl">
-            <span className="text-[11px] text-slate-500 font-semibold block">Pekan Terbaru</span>
+            <span className="text-[11px] text-slate-500 font-semibold block">Pertemuan Terbaru</span>
             <div className="flex items-baseline gap-1.5 mt-0.5">
               <span className="text-base font-black text-[#172033]">{stats.latest}%</span>
               {stats.delta !== 0 ? (
@@ -275,7 +275,7 @@ export const WeeklyAttendanceSummaryCard = React.memo(function WeeklyAttendanceS
             </div>
           </div>
 
-          {/* Peak Attendance Week */}
+          {/* Peak Attendance Meeting */}
           <div className="bg-[#F8FAFC] border border-transparent shadow-sm p-2.5 rounded-xl">
             <span className="text-[11px] text-slate-500 font-semibold block">Puncak Kehadiran</span>
             <div className="flex items-baseline gap-1.5 mt-0.5">
@@ -283,7 +283,7 @@ export const WeeklyAttendanceSummaryCard = React.memo(function WeeklyAttendanceS
                 {stats.highestWeek ? `${stats.highestWeek.rate}%` : '88%'}
               </span>
               <span className="text-[10px] text-slate-500 font-bold truncate">
-                ({stats.highestWeek ? stats.highestWeek.label : 'Pekan 3'})
+                ({stats.highestWeek ? stats.highestWeek.label : 'Pertemuan 3'})
               </span>
             </div>
           </div>
@@ -306,7 +306,7 @@ export const WeeklyAttendanceSummaryCard = React.memo(function WeeklyAttendanceS
               ) : (
                 <>
                   <AlertCircle size={13} className="text-amber-600 shrink-0" />
-                  <span>Ada Pekan Di Bawah KKM</span>
+                  <span>Ada Pertemuan Di Bawah KKM</span>
                 </>
               )}
             </span>
@@ -458,8 +458,8 @@ export const WeeklyAttendanceSummaryCard = React.memo(function WeeklyAttendanceS
           <Sparkles size={13} className="text-[#C99A2E]" />
           <span>
             {stats.delta >= 0 
-              ? `Pola kehadiran naik +${stats.delta}% di pekan terakhir` 
-              : `Pola kehadiran terkoreksi ${stats.delta}% di pekan terakhir`}
+              ? `Pola kehadiran naik +${stats.delta}% di pertemuan terakhir` 
+              : `Pola kehadiran terkoreksi ${stats.delta}% di pertemuan terakhir`}
           </span>
         </div>
       </div>

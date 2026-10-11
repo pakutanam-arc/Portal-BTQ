@@ -1,0 +1,6 @@
+{
+  "summary":  "Rencana implementasi sistem pengaturan hari libur pada Kalender Akademik Fleksibel via klik tanggal di Dashboard, sinkronisasi penyimpanan Cloud Firestore, serta formulasi pergeseran nomor pertemuan dan pengecualian hari libur dari kalkulasi kehadiran santri.",
+  "updatedAt":  "2026-10-11T11:16:23.740985450Z",
+  "requestFeedback":  true,
+  "userFacing":  true
+}

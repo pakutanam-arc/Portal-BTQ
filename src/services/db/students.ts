@@ -24,18 +24,6 @@ import {
 } from '../cacheService';
 import { Student, OperationType, handleFirestoreError } from './types';
 import { getGroupAliases } from './groups';
-import {
-  g1NewNames,
-  g2NewNames,
-  g3NewNames,
-  g4NewNames,
-  g5NewNames,
-  g6NewNames,
-  g7NewNames,
-  g8NewNames,
-  g9NewNames,
-  g10NewNames,
-} from './initialData';
 
 // Fetch all students with SWR (20 mins static TTL)
 export async function getStudents(forceFresh = false): Promise<Student[]> {
@@ -44,60 +32,7 @@ export async function getStudents(forceFresh = false): Promise<Student[]> {
       const q = query(collection(db, 'students'));
       const snapshot = await getDocs(q);
       if (!snapshot.empty) {
-        let items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student));
-        
-        // Reconcile with updated legacy group rosters if needed
-        const hasLegacyG1 = items.some(s => (s.groupId === 'g1' || s.groupId === 'group_1') && !g1NewNames.has(s.name));
-        if (hasLegacyG1) {
-          const g1MockStudents = mockStudents.filter(s => s.groupId === 'g1');
-          items = items.filter(s => s.groupId !== 'g1' && s.groupId !== 'group_1').concat(g1MockStudents);
-        }
-        const hasLegacyG2 = items.some(s => (s.groupId === 'g2' || s.groupId === 'group_2') && !g2NewNames.has(s.name));
-        if (hasLegacyG2) {
-          const g2MockStudents = mockStudents.filter(s => s.groupId === 'g2');
-          items = items.filter(s => s.groupId !== 'g2' && s.groupId !== 'group_2').concat(g2MockStudents);
-        }
-        const hasLegacyG3 = items.some(s => (s.groupId === 'g3' || s.groupId === 'group_3') && !g3NewNames.has(s.name));
-        if (hasLegacyG3) {
-          const g3MockStudents = mockStudents.filter(s => s.groupId === 'g3');
-          items = items.filter(s => s.groupId !== 'g3' && s.groupId !== 'group_3').concat(g3MockStudents);
-        }
-        const hasLegacyG4 = items.some(s => (s.groupId === 'g4' || s.groupId === 'group_4') && !g4NewNames.has(s.name));
-        if (hasLegacyG4) {
-          const g4MockStudents = mockStudents.filter(s => s.groupId === 'g4');
-          items = items.filter(s => s.groupId !== 'g4' && s.groupId !== 'group_4').concat(g4MockStudents);
-        }
-        const hasLegacyG5 = items.some(s => (s.groupId === 'g5' || s.groupId === 'group_5') && !g5NewNames.has(s.name));
-        if (hasLegacyG5) {
-          const g5MockStudents = mockStudents.filter(s => s.groupId === 'g5');
-          items = items.filter(s => s.groupId !== 'g5' && s.groupId !== 'group_5').concat(g5MockStudents);
-        }
-        const hasLegacyG6 = items.some(s => (s.groupId === 'g6' || s.groupId === 'group_6') && !g6NewNames.has(s.name));
-        if (hasLegacyG6) {
-          const g6MockStudents = mockStudents.filter(s => s.groupId === 'g6');
-          items = items.filter(s => s.groupId !== 'g6' && s.groupId !== 'group_6').concat(g6MockStudents);
-        }
-        const hasLegacyG7 = items.some(s => (s.groupId === 'g7' || s.groupId === 'group_7') && !g7NewNames.has(s.name));
-        if (hasLegacyG7) {
-          const g7MockStudents = mockStudents.filter(s => s.groupId === 'g7');
-          items = items.filter(s => s.groupId !== 'g7' && s.groupId !== 'group_7').concat(g7MockStudents);
-        }
-        const hasLegacyG8 = items.some(s => (s.groupId === 'g8' || s.groupId === 'group_8') && !g8NewNames.has(s.name));
-        if (hasLegacyG8) {
-          const g8MockStudents = mockStudents.filter(s => s.groupId === 'g8');
-          items = items.filter(s => s.groupId !== 'g8' && s.groupId !== 'group_8').concat(g8MockStudents);
-        }
-        const hasLegacyG9 = items.some(s => (s.groupId === 'g9' || s.groupId === 'group_9') && !g9NewNames.has(s.name));
-        if (hasLegacyG9) {
-          const g9MockStudents = mockStudents.filter(s => s.groupId === 'g9');
-          items = items.filter(s => s.groupId !== 'g9' && s.groupId !== 'group_9').concat(g9MockStudents);
-        }
-        const hasLegacyG10 = items.some(s => (s.groupId === 'g10' || s.groupId === 'group_10') && !g10NewNames.has(s.name));
-        if (hasLegacyG10) {
-          const g10MockStudents = mockStudents.filter(s => s.groupId === 'g10');
-          items = items.filter(s => s.groupId !== 'g10' && s.groupId !== 'group_10').concat(g10MockStudents);
-        }
-        return items;
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student));
       }
     } catch (error) {
       handleFirestoreError(error, OperationType.LIST, 'students');
@@ -199,7 +134,6 @@ export async function getStudentsPaginated(
 }
 
 export async function addStudent(studentData: Omit<Student, 'id'>): Promise<string> {
-  invalidateDbCache('students');
   const payload = {
     ...studentData,
     gender: (studentData.gender === 'P' ? 'P' : 'L') as 'L' | 'P',
@@ -215,13 +149,11 @@ export async function addStudent(studentData: Omit<Student, 'id'>): Promise<stri
     } else {
       mockStudents.unshift(newStudent);
     }
+    invalidateDbCache('students');
     return docRef.id;
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, 'students');
-    const newId = `s_${Date.now()}`;
-    const newStudent = { id: newId, ...payload } as any;
-    mockStudents.unshift(newStudent);
-    return newId;
+    throw error;
   }
 }
 
@@ -271,11 +203,11 @@ export async function batchAddStudents(
     }
   }
 
+  invalidateDbCache('students');
   return { successCount, errorCount };
 }
 
 export async function updateStudent(id: string, studentData: Partial<Student>): Promise<void> {
-  invalidateDbCache('students');
   try {
     const docRef = doc(db, 'students', id);
     await setDoc(docRef, studentData, { merge: true });
@@ -283,36 +215,119 @@ export async function updateStudent(id: string, studentData: Partial<Student>): 
     if (idx >= 0) {
       mockStudents[idx] = { ...mockStudents[idx], ...studentData } as any;
     }
+    invalidateDbCache('students');
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, `students/${id}`);
-    const idx = mockStudents.findIndex(s => s.id === id);
-    if (idx >= 0) {
-      mockStudents[idx] = { ...mockStudents[idx], ...studentData } as any;
-    }
+    throw error;
   }
 }
 
 export async function deleteStudent(id: string): Promise<void> {
-  invalidateDbCache('students');
   try {
     await deleteDoc(doc(db, 'students', id));
     const idx = mockStudents.findIndex(s => s.id === id);
     if (idx >= 0) {
       mockStudents.splice(idx, 1);
     }
+    invalidateDbCache('students');
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, `students/${id}`);
-    const idx = mockStudents.findIndex(s => s.id === id);
-    if (idx >= 0) {
-      mockStudents.splice(idx, 1);
-    }
+    throw error;
   }
 }
+
+export async function deactivateStudent(id: string): Promise<void> {
+  return updateStudent(id, { status: 'Nonaktif' });
+}
+
+export async function activateStudent(id: string): Promise<void> {
+  return updateStudent(id, { status: 'Aktif' });
+}
+
+export interface StudentAbsenceAlert {
+  studentId: string;
+  consecutiveAlpaCount: number;
+  totalAlpaCount: number;
+  hasAlert: boolean; // true if consecutiveAlpaCount >= 3 or totalAlpaCount >= 3
+  isConsecutiveAlert: boolean; // true if consecutiveAlpaCount >= 3
+  recentDates: string[];
+}
+
+export function calculateStudentAbsenceAlerts(
+  attendanceRecords: any[]
+): Map<string, StudentAbsenceAlert> {
+  const recordsByStudent = new Map<string, any[]>();
+
+  attendanceRecords.forEach(rec => {
+    if (!rec.studentId) return;
+    const list = recordsByStudent.get(rec.studentId) || [];
+    list.push(rec);
+    recordsByStudent.set(rec.studentId, list);
+  });
+
+  const alerts = new Map<string, StudentAbsenceAlert>();
+
+  recordsByStudent.forEach((records, studentId) => {
+    const uniqueRecordsMap = new Map<string, any>();
+    records.forEach(r => {
+      const key = r.meetingNumber ? `m_${r.meetingNumber}` : (r.date ? r.date.split('T')[0] : r.id || Math.random().toString());
+      uniqueRecordsMap.set(key, r);
+    });
+
+    const sorted = Array.from(uniqueRecordsMap.values()).sort((a, b) => {
+      if (a.date && b.date) {
+        return b.date.localeCompare(a.date);
+      }
+      return (b.meetingNumber || 0) - (a.meetingNumber || 0);
+    });
+
+    let consecutiveAlpa = 0;
+    let totalAlpa = 0;
+    const recentAlpaDates: string[] = [];
+
+    sorted.forEach(r => {
+      const st = (r.status || '').toLowerCase().trim();
+      if (st === 'alpa') {
+        totalAlpa++;
+      }
+    });
+
+    for (const rec of sorted) {
+      const st = (rec.status || '').toLowerCase().trim();
+      if (st === 'alpa') {
+        consecutiveAlpa++;
+        const dStr = rec.date ? rec.date.split('T')[0] : `Pertemuan ${rec.meetingNumber || ''}`;
+        recentAlpaDates.push(dStr);
+      } else {
+        break;
+      }
+    }
+
+    // Sesuai permintaan pengguna: peringatan khusus untuk 3x alpa beruntun (consecutive)
+    const hasAlert = consecutiveAlpa >= 3;
+
+    alerts.set(studentId, {
+      studentId,
+      consecutiveAlpaCount: consecutiveAlpa,
+      totalAlpaCount: totalAlpa,
+      hasAlert,
+      isConsecutiveAlert: consecutiveAlpa >= 3,
+      recentDates: recentAlpaDates.slice(0, 3)
+    });
+  });
+
+  return alerts;
+}
+
+const isStudentInactive = (s: { status?: string }) => {
+  const st = s.status || '';
+  return st === 'Nonaktif' || st === 'Non-Aktif';
+};
 
 export async function getTotalStudentsCount(): Promise<number> {
   const cachedStudents = getCached<Student[]>('students');
   if (cachedStudents) {
-    return cachedStudents.length;
+    return cachedStudents.filter(s => !isStudentInactive(s)).length;
   }
   try {
     const colRef = collection(db, 'students');
@@ -320,63 +335,76 @@ export async function getTotalStudentsCount(): Promise<number> {
     return snapshot.data().count;
   } catch (error) {
     console.warn("Failed to get count from server, falling back to mock", error);
-    return mockStudents.length;
+    return mockStudents.filter(s => !isStudentInactive(s)).length;
   }
 }
 
 export async function getGroupStudentsCount(groupId: string): Promise<number> {
   const cachedStudents = getCached<Student[]>('students');
   if (cachedStudents) {
-    return cachedStudents.filter(s => s.groupId === groupId).length;
+    return cachedStudents.filter(s => s.groupId === groupId && !isStudentInactive(s)).length;
   }
   try {
     const q = query(collection(db, 'students'), where('groupId', '==', groupId));
     const snapshot = await getCountFromServer(q);
     return snapshot.data().count;
   } catch (error) {
-    return mockStudents.filter(s => s.groupId === groupId).length;
+    return mockStudents.filter(s => s.groupId === groupId && !isStudentInactive(s)).length;
   }
 }
 
-// Fetch students for a specific group with server-side query and SWR
-export async function getStudentsByGroup(groupId: string, forceFresh = false): Promise<Student[]> {
+// Fetch students for a specific group with server-side query and SWR (excludes inactive students by default)
+export async function getStudentsByGroup(
+  groupId: string, 
+  forceFresh = false, 
+  includeInactive = false
+): Promise<Student[]> {
   const cacheKey = `students_group_${groupId}`;
   const aliases = getGroupAliases(groupId);
 
+  let rawStudents: Student[] | null = null;
   if (!forceFresh) {
     const cachedGroup = getCached<Student[]>(cacheKey);
-    if (cachedGroup) return cachedGroup;
-    const cachedAll = getCached<Student[]>('students');
-    if (cachedAll) {
-      const filtered = cachedAll.filter(s => aliases.includes(s.groupId));
-      if (filtered.length > 0) return filtered;
+    if (cachedGroup) {
+      rawStudents = cachedGroup;
+    } else {
+      const cachedAll = getCached<Student[]>('students');
+      if (cachedAll) {
+        const filtered = cachedAll.filter(s => aliases.includes(s.groupId));
+        if (filtered.length > 0) rawStudents = filtered;
+      }
     }
   }
 
-  return fetchWithSWR<Student[]>(cacheKey, async () => {
-    try {
-      const q = aliases.length > 1
-        ? query(
-            collection(db, 'students'),
-            where('groupId', 'in', aliases),
-            limit(50)
-          )
-        : query(
-            collection(db, 'students'),
-            where('groupId', '==', groupId),
-            limit(50)
-          );
-      const snapshot = await getDocs(q);
-      if (!snapshot.empty) {
-        const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student));
-        if (items.length > 0) {
-          return items;
+  if (!rawStudents) {
+    rawStudents = await fetchWithSWR<Student[]>(cacheKey, async () => {
+      try {
+        const q = aliases.length > 1
+          ? query(
+              collection(db, 'students'),
+              where('groupId', 'in', aliases)
+            )
+          : query(
+              collection(db, 'students'),
+              where('groupId', '==', groupId)
+            );
+        const snapshot = await getDocs(q);
+        if (!snapshot.empty) {
+          const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student));
+          if (items.length > 0) {
+            return items;
+          }
         }
+      } catch (error) {
+        handleFirestoreError(error, OperationType.LIST, 'students');
       }
-    } catch (error) {
-      handleFirestoreError(error, OperationType.LIST, 'students');
-    }
 
-    return mockStudents.filter(s => aliases.includes(s.groupId));
-  }, { forceFresh, freshTtlMs: STATIC_CACHE_TTL_MS });
+      return mockStudents.filter(s => aliases.includes(s.groupId));
+    }, { forceFresh, freshTtlMs: STATIC_CACHE_TTL_MS });
+  }
+
+  if (includeInactive) {
+    return rawStudents;
+  }
+  return rawStudents.filter(s => !isStudentInactive(s));
 }

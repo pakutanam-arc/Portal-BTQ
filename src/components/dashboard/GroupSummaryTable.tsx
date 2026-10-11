@@ -177,20 +177,20 @@ export const GroupSummaryTable = React.memo(function GroupSummaryTable({ groups 
     // Tanggal acuan kalender akademik per pekan
     const getWeekDate = (w: number) => {
       const dates: Record<number, string> = {
-        1: '18 - 23 Agu',
-        2: '25 - 30 Agu',
-        3: '1 - 6 Sep',
-        4: '8 - 13 Sep',
-        5: '15 - 20 Sep',
-        6: '22 - 27 Sep',
-        7: '29 Sep - 4 Okt',
-        8: '6 - 11 Okt',
-        9: '13 - 18 Okt',
-        10: '20 - 25 Okt',
-        11: '27 Okt - 1 Nov',
-        12: '3 - 8 Nov',
+        1: '15 Agu',
+        2: '22 Agu',
+        3: '29 Agu',
+        4: '05 Sep',
+        5: '12 Sep',
+        6: '19 Sep',
+        7: '26 Sep',
+        8: '03 Okt',
+        9: '10 Okt',
+        10: '17 Okt',
+        11: '24 Okt',
+        12: '31 Okt',
       };
-      return dates[w] || `Pekan ${w}`;
+      return dates[w] || `Pertemuan ${w}`;
     };
 
     return sortedWeeks.map((weekNum, idx, arr) => {
@@ -219,10 +219,12 @@ export const GroupSummaryTable = React.memo(function GroupSummaryTable({ groups 
         delta = Math.round((avg - 70) * 10) / 10; // Baseline initial growth
       }
 
+      const dateLabel = getWeekDate(weekNum);
+
       return {
         week: weekNum,
-        name: isCurrent ? `Pekan ${weekNum} (Aktif)` : `Pekan ${weekNum}`,
-        date: getWeekDate(weekNum),
+        name: isCurrent ? `P-${weekNum} (${dateLabel}) Aktif` : `P-${weekNum} (${dateLabel})`,
+        date: dateLabel,
         averageProgress: avg,
         targetProgress: 75, // Standar KKM Kurikulum BTQ Statis 75%
         minProgress: min,
@@ -338,10 +340,10 @@ export const GroupSummaryTable = React.memo(function GroupSummaryTable({ groups 
               <div className="flex items-center gap-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-[#0362D0]" />
                 <h4 className="font-extrabold text-[#172033] text-sm sm:text-base tracking-tight">
-                  Progress Pekanan (Rata-rata Capaian BTQ)
+                  Progress per Pertemuan (Rata-rata Capaian BTQ)
                 </h4>
                 <span className="text-[10px] font-bold text-[#0362D0] bg-[#0362D0]/10 px-2 py-0.5 rounded-md border border-[#0362D0]/20">
-                  Data Saat Ini
+                  Data Sesi Riil
                 </span>
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
@@ -500,7 +502,7 @@ export const GroupSummaryTable = React.memo(function GroupSummaryTable({ groups 
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-1.5">
                 <span className="w-3 h-1 bg-[#0362D0] rounded-full" />
-                <span className="font-bold text-[#172033]">Rata-rata Kelompok (Pekan Berjalan)</span>
+                <span className="font-bold text-[#172033]">Rata-rata Kelompok (Pertemuan Berjalan)</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="w-3 h-0.5 border-b-2 border-dashed border-[#93C5FD]" />
@@ -508,7 +510,7 @@ export const GroupSummaryTable = React.memo(function GroupSummaryTable({ groups 
               </div>
             </div>
             <div className="text-[10px] text-slate-500 font-semibold bg-slate-50 px-2 py-0.5 rounded border border-transparent shadow-sm">
-              Terakhir diperbarui: Sesi Pekan {chartMetrics?.latestWeekNumber || 2} Berjalan (Sinkron Data Riil)
+              Terakhir diperbarui: Sesi Pertemuan {chartMetrics?.latestWeekNumber || 2} Berjalan (Sinkron Data Riil)
             </div>
           </div>
         </div>
@@ -583,7 +585,7 @@ export const GroupSummaryTable = React.memo(function GroupSummaryTable({ groups 
                               <div 
                                 key={pt.week} 
                                 className="flex-1 bg-slate-200 h-full rounded-xs flex flex-col justify-end overflow-hidden group/bar relative"
-                                title={`Pekan ${pt.week}: ${pt.progress}% (Standar KKM: 75%)`}
+                                title={`Pertemuan ${pt.week}: ${pt.progress}% (Standar KKM: 75%)`}
                               >
                                 <div 
                                   className={`w-full rounded-xs transition-all ${
@@ -610,7 +612,7 @@ export const GroupSummaryTable = React.memo(function GroupSummaryTable({ groups 
                             </span>
                           </div>
                           <span className="text-[9px] text-slate-400 font-semibold mt-0.5">
-                            Pekan {item.weekly[item.weekly.length - 1]?.week || 2} (Aktif)
+                            Pertemuan {item.weekly[item.weekly.length - 1]?.week || 2} (Aktif)
                           </span>
                         </div>
                       </div>
@@ -751,7 +753,7 @@ export const GroupSummaryTable = React.memo(function GroupSummaryTable({ groups 
                   <div className="flex items-center justify-between text-[9px] text-slate-500 font-medium mt-2 pt-1.5 border-t border-transparent shadow-sm">
                     <div className="flex items-center gap-1.5">
                       <span className="w-1.5 h-1.5 rounded-full bg-[#0362D0]" />
-                      <span>{item.weekly.length} Pekan Terlaksana</span>
+                      <span>{item.weekly.length} Pertemuan Terlaksana</span>
                       <span className="text-[#0362D0] font-bold ml-1">• Standar KKM: 75%</span>
                     </div>
                     <span className={`font-bold flex items-center gap-0.5 ${isMeetingTarget ? 'text-emerald-700' : 'text-[#950415]'}`}>
