@@ -1,6 +1,6 @@
 {
-  "summary":  "Rencana implementasi sistem pengaturan hari libur pada Kalender Akademik Fleksibel via klik tanggal di Dashboard, sinkronisasi penyimpanan Cloud Firestore, serta formulasi pergeseran nomor pertemuan dan pengecualian hari libur dari kalkulasi kehadiran santri.",
-  "updatedAt":  "2026-10-11T11:16:23.740985450Z",
-  "requestFeedback":  true,
-  "userFacing":  true
+  "summary": "Rencana Perbaikan Jadwal Kalender: Mengatasi pergeseran tanggal pertemuan BTQ dari hari Jumat ke hari Sabtu yang disebabkan oleh konversi UTC toISOString() pada zona waktu WIB (UTC+7).",
+  "updatedAt": "2026-10-13T08:22:09.356581350Z",
+  "requestFeedback": true,
+  "userFacing": true
 }

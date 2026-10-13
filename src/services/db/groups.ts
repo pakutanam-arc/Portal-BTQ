@@ -1,6 +1,5 @@
 import { collection, getDocs, query } from 'firebase/firestore';
 import { db } from '../firebase';
-import { mockGroups } from '../mockData';
 import { fetchWithSWR, STATIC_CACHE_TTL_MS } from '../cacheService';
 import { Group, OperationType, handleFirestoreError } from './types';
 
@@ -72,15 +71,10 @@ export async function getGroups(forceFresh = false): Promise<Group[]> {
         });
         return items.sort((a, b) => getGroupNumber(a) - getGroupNumber(b));
       }
+      return [];
     } catch (error) {
       handleFirestoreError(error, OperationType.LIST, 'groups');
+      return [];
     }
-
-    // Fallback to initial groups
-    const sortedMock = [...mockGroups].sort((a, b) => getGroupNumber(a) - getGroupNumber(b));
-    return sortedMock.map(g => {
-      const gradeId = getGroupGradeId(g);
-      return { ...g, schedule: 'Sabtu, 07:15 - 08:00', gradeId };
-    });
   }, { forceFresh, freshTtlMs: STATIC_CACHE_TTL_MS });
 }

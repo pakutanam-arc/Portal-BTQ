@@ -11,7 +11,14 @@ export default defineConfig(() => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
-        includeAssets: ['rohis-102.png', 'apple-touch-icon.png', 'icon.svg'],
+        includeAssets: [
+          'rohis-102.png',
+          'apple-touch-icon.png',
+          'icon.svg',
+          'favicon.ico',
+          'favicon-32x32.png',
+          'favicon-16x16.png'
+        ],
         manifest: {
           id: '/',
           name: 'Portal BTQ SMP Negeri 102 Jakarta',

@@ -37,7 +37,7 @@ function formatActivityTime(date: Date): string {
 }
 
 export async function logSystemActivity(
-  type: 'journal' | 'progress' | 'certification' | 'attendance',
+  type: 'journal' | 'progress' | 'certification' | 'attendance' | 'mentor',
   title: string,
   description: string
 ): Promise<void> {
@@ -76,25 +76,28 @@ export async function logSystemActivity(
 export async function getSystemActivities(): Promise<SystemActivity[]> {
   const activities: SystemActivity[] = [];
 
-  const iconMap = {
+  const iconMap: Record<string, string> = {
     journal: '📝',
     progress: '📈',
     certification: '🎓',
-    attendance: '✅'
+    attendance: '✅',
+    mentor: '👤'
   };
 
-  const colorMap = {
+  const colorMap: Record<string, string> = {
     journal: 'text-[#C99A2E]',
     progress: 'text-[#0362D0]',
     certification: 'text-[#950415]',
-    attendance: 'text-[#0362D0]'
+    attendance: 'text-[#0362D0]',
+    mentor: 'text-[#0362D0]'
   };
 
-  const bgMap = {
+  const bgMap: Record<string, string> = {
     journal: 'bg-[#C99A2E]/10',
     progress: 'bg-[#0362D0]/10',
     certification: 'bg-[#950415]/10',
-    attendance: 'bg-[#0362D0]/10'
+    attendance: 'bg-[#0362D0]/10',
+    mentor: 'bg-[#0362D0]/10'
   };
 
   try {

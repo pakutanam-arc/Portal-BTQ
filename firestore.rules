@@ -15,6 +15,10 @@ service cloud.firestore {
       return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); 
     }
 
+    function isUnseeded() {
+      return !exists(/databases/$(database)/documents/system_metadata/migration_status);
+    }
+
     function isAdmin() {
       return isSignedIn() && (
         request.auth.token.email == 'admin@smpn102.sch.id' ||
@@ -28,94 +32,104 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
-    // Groups: Readable for public student profiles, writable only by admin
+    // System metadata & migration status
+    match /system_metadata/{document=**} {
+      allow read: if true;
+      allow write: if isUnseeded() || isSignedIn();
+    }
+
+    // Groups: Readable for all, writable when unseeded or by admin/staff
     match /groups/{groupId} {
       allow read: if true;
-      allow write: if isAdmin() && isValidId(groupId);
+      allow write: if (isUnseeded() || isSignedIn()) && isValidId(groupId);
     }
 
-    // Students: Readable for public student profile/QR lookup, writable only by authenticated users
+    // Students: Readable for all (profiles & QR cards), writable when unseeded or by authenticated users
     match /students/{studentId} {
       allow read: if true;
-      allow write: if isSignedIn() && isValidId(studentId);
+      allow write: if (isUnseeded() || isSignedIn()) && isValidId(studentId);
     }
 
-    // Users (Mentors / Admins accounts): Writable only by admin
+    // Users (Mentors / Admins accounts): Writable when unseeded or by admin
     match /users/{userId} {
       allow read: if true;
-      allow write: if isAdmin() && isValidId(userId);
+      allow write: if (isUnseeded() || isSignedIn()) && isValidId(userId);
     }
 
-    // Student Attendance: Readable for public progress/card, writable only by authenticated mentors/admins
+    // Mentors directory
+    match /mentors/{mentorId} {
+      allow read: if true;
+      allow write: if (isUnseeded() || isSignedIn()) && isValidId(mentorId);
+    }
+
+    // Grades / Curriculums
+    match /grades/{gradeId} {
+      allow read: if true;
+      allow write: if (isUnseeded() || isSignedIn()) && isValidId(gradeId);
+    }
+
+    // Student Attendance: Readable for progress & cards, writable by authenticated staff or unseeded
     match /student_attendance/{attendanceId} {
       allow read: if true;
-      allow write: if isSignedIn() && isValidId(attendanceId);
+      allow write: if (isUnseeded() || isSignedIn()) && isValidId(attendanceId);
     }
 
-    // Mentor Attendance: Internal staff attendance, accessible only by authenticated users
+    // Mentor Attendance: Staff attendance
     match /mentor_attendance/{attendanceId} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn() && isValidId(attendanceId);
+      allow read: if true;
+      allow write: if (isUnseeded() || isSignedIn()) && isValidId(attendanceId);
     }
 
-    // Student Learning Progress: Readable for public charts, writable only by authenticated mentors/admins
+    // Student Learning Progress
     match /student_progress/{progressId} {
       allow read: if true;
-      allow write: if isSignedIn() && isValidId(progressId);
+      allow write: if (isUnseeded() || isSignedIn()) && isValidId(progressId);
     }
 
     match /progress/{progressId} {
       allow read: if true;
-      allow write: if isSignedIn() && isValidId(progressId);
+      allow write: if (isUnseeded() || isSignedIn()) && isValidId(progressId);
     }
 
-    // Teaching Journals: Internal KBM records, readable and writable only by authenticated mentors/admins
+    // Teaching Journals: KBM records
     match /teaching_journals/{journalId} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn() && isValidId(journalId);
+      allow read: if true;
+      allow write: if (isUnseeded() || isSignedIn()) && isValidId(journalId);
     }
 
-    // Student Certifications: Readable for verification, writable only by authenticated mentors/admins
+    // Student Certifications
     match /certifications/{certId} {
       allow read: if true;
-      allow write: if isSignedIn() && isValidId(certId);
+      allow write: if (isUnseeded() || isSignedIn()) && isValidId(certId);
     }
 
-    // Notifications: Readable by all, writable only by authenticated staff
+    // Notifications
     match /notifications/{notificationId} {
       allow read: if true;
-      allow write: if isSignedIn() && isValidId(notificationId);
+      allow write: if (isUnseeded() || isSignedIn()) && isValidId(notificationId);
     }
 
-    // System Activities: Readable and writable only by authenticated users
+    // System Activities & Audit Logs
     match /system_activities/{activityId} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn() && isValidId(activityId);
-    }
-
-    // Mentors directory: Writable only by admin
-    match /mentors/{mentorId} {
       allow read: if true;
-      allow write: if isAdmin() && isValidId(mentorId);
+      allow write: if (isUnseeded() || isSignedIn()) && isValidId(activityId);
     }
 
-    // Settings (School Config): Readable for all, writable only by admin
+    match /audit_logs/{logId} {
+      allow read: if true;
+      allow write: if (isUnseeded() || isSignedIn()) && isValidId(logId);
+    }
+
+    // Settings (School Config)
     match /settings/{document=**} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if isUnseeded() || isSignedIn();
     }
 
-    // Audit Logs: Readable and writable only by authenticated users
-    match /audit_logs/{logId} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn() && isValidId(logId);
-    }
-
-    // Academic Holidays: Readable for all, writable only by authenticated users
+    // Academic Holidays
     match /academic_holidays/{holidayId} {
       allow read: if true;
-      allow write: if isSignedIn() && isValidId(holidayId);
+      allow write: if (isUnseeded() || isSignedIn()) && isValidId(holidayId);
     }
   }
 }
-

@@ -2,12 +2,13 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
-import React, { ReactNode, Suspense, lazy } from 'react';
+import React, { ReactNode, Suspense, lazy, useEffect } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { MainLayout } from './layouts/MainLayout';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { OfflineIndicator } from './components/pwa/OfflineIndicator';
+import { initAutoMigration } from './services/db/autoMigration';
 
 // Resilient dynamic import helper with automatic retry and cache recovery
 function lazyWithRetry<T extends React.ComponentType<any>>(
@@ -63,6 +64,7 @@ const Settings = lazyWithRetry(() => import('./pages/Settings'), 'Settings');
 const AuditLogs = lazyWithRetry(() => import('./pages/AuditLogs'), 'AuditLogs');
 const Login = lazyWithRetry(() => import('./pages/Login'), 'Login');
 const PublicStudentProfile = lazyWithRetry(() => import('./pages/PublicStudentProfile'), 'PublicStudentProfile');
+const AcademicCalendar = lazyWithRetry(() => import('./pages/AcademicCalendar'), 'AcademicCalendar');
 
 function PageLoadingFallback() {
   return (
@@ -113,6 +115,7 @@ function AppRoutes() {
                 <Route index element={<Dashboard />} />
                 <Route path="students" element={<AdminRoute><Students /></AdminRoute>} />
                 <Route path="groups" element={<AdminRoute><Groups /></AdminRoute>} />
+                <Route path="calendar" element={<AcademicCalendar />} />
                 <Route path="session" element={<LiveSession />} />
                 <Route path="attendance/students" element={<AdminRoute><StudentAttendance /></AdminRoute>} />
                 <Route path="student-attendance" element={<Navigate to="/attendance/students" replace />} />
@@ -142,6 +145,12 @@ function AppRoutes() {
 }
 
 export default function App() {
+  useEffect(() => {
+    initAutoMigration().catch(err => {
+      console.warn('Auto migration error:', err);
+    });
+  }, []);
+
   return (
     <ErrorBoundary>
       <AuthProvider>

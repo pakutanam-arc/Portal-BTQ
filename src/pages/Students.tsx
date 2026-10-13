@@ -935,7 +935,7 @@ export function Students() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-[210mm]">
                 {printStudents.map((s, idx) => {
                   const group = groups.find(g => g.id === s.groupId);
-                  const mentor = mentors.find(m => m.id === group?.mentorId);
+                  const mentor = mentors.find(m => m.id === group?.mentorId || m.groupId === group?.id);
                   return (
                     <div key={idx} className="flex justify-center">
                       <StudentIdCard student={s} group={group} mentor={mentor} />
@@ -1018,7 +1018,7 @@ export function Students() {
               <div className="print-a4-grid">
                 {pageStudents.map((s, idx) => {
                   const group = groups.find(g => g.id === s.groupId);
-                  const mentor = mentors.find(m => m.id === group?.mentorId);
+                  const mentor = mentors.find(m => m.id === group?.mentorId || m.groupId === group?.id);
                   return (
                     <div 
                       key={idx} 

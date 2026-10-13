@@ -7,14 +7,15 @@ setLogLevel('silent');
 
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
+const dbId = (firebaseConfig as any).firestoreDatabaseId;
 let firestoreDb;
 try {
   firestoreDb = initializeFirestore(app, {
     experimentalAutoDetectLongPolling: true,
     ignoreUndefinedProperties: true,
-  }, firebaseConfig.firestoreDatabaseId);
+  }, dbId);
 } catch (e) {
-  firestoreDb = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+  firestoreDb = getFirestore(app, dbId);
 }
 
 export const db = firestoreDb;

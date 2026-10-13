@@ -297,6 +297,16 @@ export function formatMeetingLabel(
 }
 
 /**
+ * Memformat objek Date ke string YYYY-MM-DD berbasis tanggal lokal (menghindari pergeseran zona waktu UTC)
+ */
+export function formatLocalDateString(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/**
  * Menghasilkan daftar pertemuan akademik dinamis yang disinkronkan dengan:
  * 1. Hari Libur yang disetel Admin (menggeser jadwal ke Sabtu berikutnya secara otomatis)
  * 2. Data riil presensi dan jurnal yang tersimpan di Cloud Firestore
@@ -331,7 +341,9 @@ export function getSynchronizedMeetings(
   );
 
   // Tanggal awal semester 1 (Sabtu, 15 Agustus 2026)
-  const baseStartDate = new Date(2026, 7, 15); // Month is 0-indexed (7 = Agustus)
+  const baseYear = 2026;
+  const baseMonth = 7; // Month is 0-indexed (7 = Agustus)
+  const baseDay = 15;
   const result: AcademicMeeting[] = [];
 
   let currentMeetingNum = 1;
@@ -340,8 +352,9 @@ export function getSynchronizedMeetings(
   const maxWeeksSafety = 30; // Mencegah infinite loop
 
   while (currentMeetingNum <= targetMeetingCount && weekOffset < maxWeeksSafety) {
-    const curDate = new Date(baseStartDate.getTime() + weekOffset * 7 * 24 * 60 * 60 * 1000);
-    const dateStr = curDate.toISOString().split('T')[0];
+    // Tambah hari berbasis kalender lokal (7 hari per pekan) agar selalu jatuh di hari Sabtu murni
+    const curDate = new Date(baseYear, baseMonth, baseDay + (weekOffset * 7));
+    const dateStr = formatLocalDateString(curDate);
 
     const holiday = holidayMap.get(dateStr);
 

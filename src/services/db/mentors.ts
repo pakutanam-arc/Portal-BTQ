@@ -1,16 +1,19 @@
 import {
   collection,
+  doc,
   getDocs,
+  setDoc,
   query,
 } from 'firebase/firestore';
 import { db } from '../firebase';
-import { mockMentors } from '../mockData';
 import {
   fetchWithSWR,
+  invalidateDbCache,
   STATIC_CACHE_TTL_MS,
 } from '../cacheService';
 import { Mentor, OperationType, handleFirestoreError } from './types';
 import { mentorMappingData } from './initialData';
+import { logSystemActivity } from './auditLogs';
 
 // Fetch all mentors with SWR (20 mins static TTL)
 export async function getMentors(forceFresh = false): Promise<Mentor[]> {
@@ -25,26 +28,48 @@ export async function getMentors(forceFresh = false): Promise<Mentor[]> {
           return {
             id: doc.id,
             ...data,
-            name: mapEntry ? mapEntry.name : data.name,
-            email: mapEntry ? mapEntry.newEmail : (data.email || 'mentor@smpn102.sch.id'),
+            name: data.name || (mapEntry ? mapEntry.name : 'Mentor'),
+            email: data.email || (mapEntry ? mapEntry.newEmail : 'mentor@smpn102.sch.id'),
             role: 'mentor',
             status: 'Aktif'
           };
         });
       }
+      return [];
     } catch (error) {
       handleFirestoreError(error, OperationType.LIST, 'mentors');
+      return [];
     }
-
-    return mockMentors.map(m => {
-      const mapEntry = mentorMappingData.find(map => map.id === m.id || map.groupId === m.groupId);
-      return {
-        ...m,
-        name: mapEntry ? mapEntry.name : m.name,
-        email: mapEntry ? mapEntry.newEmail : m.email,
-        role: 'mentor',
-        status: 'Aktif'
-      };
-    });
   }, { forceFresh, freshTtlMs: STATIC_CACHE_TTL_MS });
+}
+
+/**
+ * Memperbarui nama tampilan mentor di Firestore tanpa mengubah akun/user login
+ */
+export async function updateMentorName(mentorId: string, newName: string): Promise<void> {
+  const trimmed = newName.trim();
+  if (!trimmed) {
+    throw new Error('Nama mentor tidak boleh kosong');
+  }
+
+  try {
+    const docRef = doc(db, 'mentors', mentorId);
+    await setDoc(docRef, {
+      name: trimmed,
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+
+    // Invalidate caches agar perubahan langsung muncul di seluruh antarmuka
+    invalidateDbCache('mentors');
+    invalidateDbCache('groups');
+
+    await logSystemActivity(
+      'mentor',
+      'Pembaruan Profil Mentor',
+      `Nama mentor ID "${mentorId}" diperbarui menjadi "${trimmed}". Akun user tetap aman.`
+    );
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `mentors/${mentorId}`);
+    throw error;
+  }
 }

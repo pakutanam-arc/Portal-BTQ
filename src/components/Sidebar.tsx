@@ -12,7 +12,8 @@ import {
   Settings,
   BookMarked,
   Award,
-  ShieldCheck
+  ShieldCheck,
+  CalendarDays
 } from 'lucide-react';
 import { cn } from '../utils/cn';
 import { useAuth } from '../contexts/AuthContext';
@@ -21,6 +22,7 @@ import { PWAInstallButton } from './pwa/PWAInstallButton';
 
 const navItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/', roles: ['admin', 'mentor'] },
+  { icon: CalendarDays, label: 'Kalender Akademik', path: '/calendar', roles: ['admin', 'mentor'] },
   { icon: CheckSquare, label: 'Sesi Mengajar', path: '/session', roles: ['admin', 'mentor'] },
   { icon: Award, label: 'Ujian & Sertifikasi', path: '/certifications', roles: ['admin', 'mentor'] },
   { icon: BookOpen, label: 'Kurikulum', path: '/curriculum', roles: ['admin', 'mentor'] },

@@ -15,7 +15,6 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import { db } from '../firebase';
-import { mockStudents } from '../mockData';
 import {
   getCached,
   invalidateDbCache,
@@ -34,11 +33,11 @@ export async function getStudents(forceFresh = false): Promise<Student[]> {
       if (!snapshot.empty) {
         return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student));
       }
+      return [];
     } catch (error) {
       handleFirestoreError(error, OperationType.LIST, 'students');
+      return [];
     }
-
-    return mockStudents;
   }, { forceFresh, freshTtlMs: STATIC_CACHE_TTL_MS });
 }
 
@@ -46,15 +45,11 @@ export async function getStudents(forceFresh = false): Promise<Student[]> {
 export function subscribeToStudents(callback: (students: Student[]) => void): () => void {
   const colRef = collection(db, 'students');
   return onSnapshot(colRef, (snapshot) => {
-    if (!snapshot.empty) {
-      const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student));
-      callback(items);
-    } else {
-      callback(mockStudents);
-    }
+    const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student));
+    callback(items);
   }, (error) => {
     handleFirestoreError(error, OperationType.LIST, 'students');
-    callback(mockStudents);
+    callback([]);
   });
 }
 
@@ -71,7 +66,12 @@ export async function getStudentsPaginated(
     let q: any = collection(db, 'students');
 
     if (filters?.groupId && filters.groupId !== 'all') {
-      q = query(q, where('groupId', '==', filters.groupId));
+      const aliases = getGroupAliases(filters.groupId);
+      if (aliases.length > 1) {
+        q = query(q, where('groupId', 'in', aliases));
+      } else {
+        q = query(q, where('groupId', '==', filters.groupId));
+      }
     }
     
     q = query(q, orderBy('name', 'asc'));
@@ -103,34 +103,11 @@ export async function getStudentsPaginated(
         hasMore: docs.length === pageSize
       };
     }
+    return { data: [], lastDoc: null, hasMore: false };
   } catch (error) {
     handleFirestoreError(error, OperationType.LIST, 'students');
+    return { data: [], lastDoc: null, hasMore: false };
   }
-
-  // Fallback to local mock
-  let items = mockStudents;
-  if (filters?.groupId && filters.groupId !== 'all') {
-    items = items.filter(s => s.groupId === filters.groupId);
-  }
-  if (filters?.classFilter) {
-    items = items.filter(s => s.class?.includes(filters.classFilter as string));
-  }
-  if (filters?.searchTerm) {
-    items = items.filter(s => 
-      s.name.toLowerCase().includes(filters.searchTerm!.toLowerCase()) || 
-      (s.nis && s.nis.includes(filters.searchTerm!))
-    );
-  }
-  
-  const startIndex = lastDocSnap && typeof lastDocSnap.index === 'number' ? lastDocSnap.index : 0;
-  const paginated = items.slice(startIndex, startIndex + pageSize);
-  const hasMore = startIndex + pageSize < items.length;
-
-  return {
-    data: paginated,
-    lastDoc: hasMore ? { index: startIndex + pageSize } : null,
-    hasMore
-  };
 }
 
 export async function addStudent(studentData: Omit<Student, 'id'>): Promise<string> {
@@ -142,13 +119,6 @@ export async function addStudent(studentData: Omit<Student, 'id'>): Promise<stri
   };
   try {
     const docRef = await addDoc(collection(db, 'students'), payload);
-    const newStudent = { id: docRef.id, ...payload } as any;
-    const existingIdx = mockStudents.findIndex(s => s.id === docRef.id);
-    if (existingIdx >= 0) {
-      mockStudents[existingIdx] = newStudent;
-    } else {
-      mockStudents.unshift(newStudent);
-    }
     invalidateDbCache('students');
     return docRef.id;
   } catch (error) {
@@ -170,8 +140,6 @@ export async function batchAddStudents(
     const chunk = studentsList.slice(i, i + CHUNK_SIZE);
     try {
       const batch = writeBatch(db);
-      const addedStudents: Student[] = [];
-
       for (const item of chunk) {
         const docRef = doc(collection(db, 'students'));
         const payload = {
@@ -181,11 +149,8 @@ export async function batchAddStudents(
           createdAt: new Date().toISOString(),
         };
         batch.set(docRef, payload);
-        addedStudents.push({ id: docRef.id, ...payload });
       }
-
       await batch.commit();
-      mockStudents.unshift(...(addedStudents as any[]));
       successCount += chunk.length;
     } catch (err) {
       console.error('Batch commit failed, falling back to sequential save:', err);
@@ -210,11 +175,7 @@ export async function batchAddStudents(
 export async function updateStudent(id: string, studentData: Partial<Student>): Promise<void> {
   try {
     const docRef = doc(db, 'students', id);
-    await setDoc(docRef, studentData, { merge: true });
-    const idx = mockStudents.findIndex(s => s.id === id);
-    if (idx >= 0) {
-      mockStudents[idx] = { ...mockStudents[idx], ...studentData } as any;
-    }
+    await setDoc(docRef, { ...studentData, updatedAt: new Date().toISOString() }, { merge: true });
     invalidateDbCache('students');
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, `students/${id}`);
@@ -225,10 +186,6 @@ export async function updateStudent(id: string, studentData: Partial<Student>): 
 export async function deleteStudent(id: string): Promise<void> {
   try {
     await deleteDoc(doc(db, 'students', id));
-    const idx = mockStudents.findIndex(s => s.id === id);
-    if (idx >= 0) {
-      mockStudents.splice(idx, 1);
-    }
     invalidateDbCache('students');
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, `students/${id}`);
@@ -303,7 +260,6 @@ export function calculateStudentAbsenceAlerts(
       }
     }
 
-    // Sesuai permintaan pengguna: peringatan khusus untuk 3x alpa beruntun (consecutive)
     const hasAlert = consecutiveAlpa >= 3;
 
     alerts.set(studentId, {
@@ -334,8 +290,9 @@ export async function getTotalStudentsCount(): Promise<number> {
     const snapshot = await getCountFromServer(colRef);
     return snapshot.data().count;
   } catch (error) {
-    console.warn("Failed to get count from server, falling back to mock", error);
-    return mockStudents.filter(s => !isStudentInactive(s)).length;
+    console.warn("Failed to get count from server:", error);
+    const students = await getStudents();
+    return students.filter(s => !isStudentInactive(s)).length;
   }
 }
 
@@ -345,11 +302,15 @@ export async function getGroupStudentsCount(groupId: string): Promise<number> {
     return cachedStudents.filter(s => s.groupId === groupId && !isStudentInactive(s)).length;
   }
   try {
-    const q = query(collection(db, 'students'), where('groupId', '==', groupId));
+    const aliases = getGroupAliases(groupId);
+    const q = aliases.length > 1
+      ? query(collection(db, 'students'), where('groupId', 'in', aliases))
+      : query(collection(db, 'students'), where('groupId', '==', groupId));
     const snapshot = await getCountFromServer(q);
     return snapshot.data().count;
   } catch (error) {
-    return mockStudents.filter(s => s.groupId === groupId && !isStudentInactive(s)).length;
+    const students = await getStudentsByGroup(groupId);
+    return students.length;
   }
 }
 
@@ -390,21 +351,18 @@ export async function getStudentsByGroup(
             );
         const snapshot = await getDocs(q);
         if (!snapshot.empty) {
-          const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student));
-          if (items.length > 0) {
-            return items;
-          }
+          return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student));
         }
+        return [];
       } catch (error) {
         handleFirestoreError(error, OperationType.LIST, 'students');
+        return [];
       }
-
-      return mockStudents.filter(s => aliases.includes(s.groupId));
     }, { forceFresh, freshTtlMs: STATIC_CACHE_TTL_MS });
   }
 
   if (includeInactive) {
-    return rawStudents;
+    return rawStudents || [];
   }
-  return rawStudents.filter(s => !isStudentInactive(s));
+  return (rawStudents || []).filter(s => !isStudentInactive(s));
 }

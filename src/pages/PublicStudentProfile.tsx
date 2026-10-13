@@ -88,7 +88,7 @@ export function PublicStudentProfile() {
         let foundMentor = null;
         if (foundGroup) {
           const mentors = await getMentors();
-          foundMentor = mentors.find(m => m.id === foundGroup.mentorId);
+          foundMentor = mentors.find(m => m.id === foundGroup.mentorId || m.groupId === foundGroup.id);
         }
 
         const attHistory = await getStudentAttendanceByStudent(foundStudent.id);

@@ -106,7 +106,15 @@ export const AcademicCalendarCard: React.FC<AcademicCalendarCardProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-2 self-start sm:self-auto">
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+          <Link
+            to="/calendar"
+            className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg bg-[#0362D0] hover:bg-[#024ea7] text-white transition-colors shadow-2xs"
+          >
+            <CalendarIcon size={13} />
+            <span>Tampilan Google Calendar</span>
+            <ChevronRight size={13} />
+          </Link>
           <button
             type="button"
             onClick={() => setViewMode(v => v === 'compact' ? 'full' : 'compact')}

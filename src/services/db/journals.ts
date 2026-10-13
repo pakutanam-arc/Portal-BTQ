@@ -16,9 +16,6 @@ import { invalidateDbCache } from '../cacheService';
 import { TeachingJournal, OperationType, handleFirestoreError } from './types';
 import { getGroupAliases, cleanGroupName } from './groups';
 import { logSystemActivity } from './auditLogs';
-import { defaultSeedJournals } from './initialData';
-
-const LOCAL_STORAGE_JOURNALS_KEY = 'sibtq_teaching_journals_v1';
 
 export async function getTeachingJournals(
   groupId?: string,
@@ -67,35 +64,7 @@ export async function getTeachingJournals(
     }
   } catch (error) {
     handleFirestoreError(error, OperationType.LIST, 'teaching_journals');
-  }
-
-  // Local storage fallback
-  try {
-    const raw = localStorage.getItem(LOCAL_STORAGE_JOURNALS_KEY);
-    let list: TeachingJournal[] = raw ? JSON.parse(raw) : defaultSeedJournals;
-    if (!raw) {
-      localStorage.setItem(LOCAL_STORAGE_JOURNALS_KEY, JSON.stringify(defaultSeedJournals));
-    }
-    if (groupId && groupId !== 'all') {
-      const aliases = getGroupAliases(groupId);
-      list = list.filter(j => aliases.includes(j.groupId));
-    }
-    if (startDate) {
-      list = list.filter(j => !j.date || j.date >= startDate);
-    }
-    
-    const startIndex = lastDocSnap && typeof lastDocSnap.index === 'number' ? lastDocSnap.index : 0;
-    const paginated = list.slice(startIndex, startIndex + pageSize);
-    const hasMore = startIndex + pageSize < list.length;
-    
-    return {
-      data: paginated,
-      lastDoc: hasMore ? { index: startIndex + pageSize } : null,
-      hasMore
-    };
-  } catch {
-    const fallbackList = defaultSeedJournals.filter(j => !startDate || !j.date || j.date >= startDate);
-    return { data: fallbackList.slice(0, pageSize), lastDoc: null, hasMore: false };
+    return { data: [], lastDoc: null, hasMore: false };
   }
 }
 
@@ -103,28 +72,11 @@ export async function saveTeachingJournal(journal: TeachingJournal): Promise<str
   invalidateDbCache('teaching_journals');
   const payload = {
     ...journal,
-    createdAt: journal.createdAt || new Date().toISOString()
+    createdAt: journal.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString()
   };
 
-  // 1. Update local cache
-  try {
-    const raw = localStorage.getItem(LOCAL_STORAGE_JOURNALS_KEY);
-    const list: TeachingJournal[] = raw ? JSON.parse(raw) : defaultSeedJournals;
-    const tempId = journal.id || `journal_${Date.now()}`;
-    const existingIndex = list.findIndex(j => j.id === tempId || (j.groupId === journal.groupId && j.date === journal.date));
-    
-    if (existingIndex >= 0) {
-      list[existingIndex] = { ...list[existingIndex], ...payload, id: list[existingIndex].id };
-    } else {
-      list.unshift({ ...payload, id: tempId });
-    }
-    localStorage.setItem(LOCAL_STORAGE_JOURNALS_KEY, JSON.stringify(list));
-  } catch (e) {
-    console.warn("Could not save journal locally", e);
-  }
-
   let finalId = journal.id || `journal_${Date.now()}`;
-  // 2. Persist to Firestore
   try {
     if (journal.id) {
       const docRef = doc(db, 'teaching_journals', journal.id);
@@ -150,17 +102,6 @@ export async function saveTeachingJournal(journal: TeachingJournal): Promise<str
 
 export async function deleteTeachingJournal(journalId: string): Promise<void> {
   invalidateDbCache('teaching_journals');
-  try {
-    const raw = localStorage.getItem(LOCAL_STORAGE_JOURNALS_KEY);
-    if (raw) {
-      const list: TeachingJournal[] = JSON.parse(raw);
-      const filtered = list.filter(j => j.id !== journalId);
-      localStorage.setItem(LOCAL_STORAGE_JOURNALS_KEY, JSON.stringify(filtered));
-    }
-  } catch (e) {
-    console.warn(e);
-  }
-
   try {
     await deleteDoc(doc(db, 'teaching_journals', journalId));
   } catch (error) {

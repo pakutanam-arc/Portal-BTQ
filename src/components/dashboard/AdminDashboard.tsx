@@ -49,7 +49,7 @@ import { CurriculumSyncAlert } from '../CurriculumSyncAlert';
 import { WeeklyAttendanceSummaryCard, WeeklyOverallAttendancePoint } from './WeeklyAttendanceSummaryCard';
 import { GroupWeeklyAttendanceCard, WeeklyGroupDataPoint, GroupAttendanceDetail } from './GroupWeeklyAttendanceCard';
 import { AcademicCalendarCard } from './AcademicCalendarCard';
-import { getMeetingRealDate, formatShortDateID } from '../../services/academicCalendar';
+import { getMeetingRealDate, formatShortDateID, formatLocalDateString } from '../../services/academicCalendar';
 import { getAcademicHolidays, subscribeAcademicHolidays, AcademicHoliday } from '../../services/db/calendar';
 
 export type DashboardTimeRange = 'semester' | '8weeks' | '4weeks';
@@ -441,7 +441,7 @@ export function AdminDashboard() {
     const now = new Date();
     const currentDay = now.getDay(); // 0 = Sun, 1 = Mon, ..., 5 = Fri, 6 = Sat
     const isSaturdayToday = currentDay === 6;
-    const todayStr = now.toISOString().split('T')[0];
+    const todayStr = formatLocalDateString(now);
 
     // If today is Saturday, check if attendance has been taken for today
     if (isSaturdayToday) {
@@ -481,7 +481,7 @@ export function AdminDashboard() {
     // Check records for the most recent Saturday
     const daysSinceLastSaturday = (currentDay + 1) % 7;
     const lastSaturdayDate = new Date(now.getTime() - daysSinceLastSaturday * 24 * 60 * 60 * 1000);
-    const lastSaturdayStr = lastSaturdayDate.toISOString().split('T')[0];
+    const lastSaturdayStr = formatLocalDateString(lastSaturdayDate);
 
     const lastSaturdayMatches = allAttendance.filter(a => a.date && a.date.startsWith(lastSaturdayStr));
     if (lastSaturdayMatches.length > 0) {

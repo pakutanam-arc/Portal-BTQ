@@ -4,7 +4,7 @@ import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Badge } from '../components/ui/Badge';
-import { getGroups, getMentors, getStudents, getStudentsByGroup, getGroupNumber, invalidateDbCache, Group, Mentor, Student } from '../services/db';
+import { getGroups, getMentors, getStudents, getStudentsByGroup, getGroupNumber, updateMentorName, invalidateDbCache, Group, Mentor, Student } from '../services/db';
 import { useAuth } from '../contexts/AuthContext';
 import { masterGrades, getGradeForGroup } from '../services/curriculumData';
 import { doc, updateDoc } from 'firebase/firestore';
@@ -29,6 +29,11 @@ export function Groups() {
   const [isEditingRoom, setIsEditingRoom] = useState(false);
   const [editedRoom, setEditedRoom] = useState('');
   const [savingRoom, setSavingRoom] = useState(false);
+
+  // Mentor Name Edit State
+  const [isEditingMentor, setIsEditingMentor] = useState(false);
+  const [editedMentorName, setEditedMentorName] = useState('');
+  const [savingMentor, setSavingMentor] = useState(false);
 
   const isMentor = userRole === 'mentor' && currentUser?.email !== 'admin@smpn102.sch.id';
 
@@ -102,6 +107,24 @@ export function Groups() {
       console.error("Failed to update room:", e);
     } finally {
       setSavingRoom(false);
+    }
+  };
+
+  const handleSaveMentorName = async () => {
+    if (!selectedGroup) return;
+    const currentMentor = mentors.find(m => m.id === selectedGroup.mentorId || m.groupId === selectedGroup.id);
+    if (!currentMentor || !editedMentorName.trim()) return;
+
+    setSavingMentor(true);
+    try {
+      await updateMentorName(currentMentor.id, editedMentorName.trim());
+      // Update local state
+      setMentors(prev => prev.map(m => m.id === currentMentor.id ? { ...m, name: editedMentorName.trim() } : m));
+      setIsEditingMentor(false);
+    } catch (e) {
+      console.error("Gagal memperbarui nama mentor:", e);
+    } finally {
+      setSavingMentor(false);
     }
   };
 
@@ -301,6 +324,7 @@ export function Groups() {
                         setSelectedGroup(group);
                         setEditedRoom(group.room || '');
                         setIsEditingRoom(false);
+                        setIsEditingMentor(false);
                         setLoadingStudents(true);
                         try {
                           const stds = await getStudentsByGroup(group.id);
@@ -409,12 +433,55 @@ export function Groups() {
               </div>
 
               {/* Mentor & Schedule Details */}
-              <div className="grid grid-cols-2 gap-3 text-xs">
-                <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                  <span className="text-[10px] text-slate-500 font-bold uppercase block mb-0.5">Mentor Pembimbing</span>
-                  <span className="font-extrabold text-[#172033]">
-                    {mentors.find(m => m.id === selectedGroup.mentorId)?.name || 'Belum ditentukan'}
-                  </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex flex-col justify-between">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] text-slate-500 font-bold uppercase block">Mentor Pembimbing</span>
+                    {userRole === 'admin' && !isEditingMentor && (
+                      <button
+                        onClick={() => {
+                          const currentMentor = mentors.find(m => m.id === selectedGroup.mentorId || m.groupId === selectedGroup.id);
+                          setEditedMentorName(currentMentor?.name || '');
+                          setIsEditingMentor(true);
+                        }}
+                        className="text-[10px] font-bold text-[#0362D0] hover:underline flex items-center gap-1 cursor-pointer"
+                        title="Ubah nama mentor (hanya nama profil, akun login tetap aman)"
+                      >
+                        <Edit2 size={11} /> Ubah Nama
+                      </button>
+                    )}
+                  </div>
+                  {isEditingMentor ? (
+                    <div className="flex flex-col gap-1.5 mt-1">
+                      <input
+                        type="text"
+                        value={editedMentorName}
+                        onChange={(e) => setEditedMentorName(e.target.value)}
+                        placeholder="Nama lengkap mentor..."
+                        className="w-full px-2.5 py-1 text-xs font-semibold bg-white border border-[#0362D0] rounded-lg focus:outline-none text-[#172033]"
+                        autoFocus
+                      />
+                      <div className="flex items-center gap-1.5 justify-end">
+                        <button
+                          onClick={() => setIsEditingMentor(false)}
+                          className="px-2 py-0.5 bg-slate-200 text-slate-700 rounded-md text-[10px] font-bold cursor-pointer"
+                        >
+                          Batal
+                        </button>
+                        <button
+                          onClick={handleSaveMentorName}
+                          disabled={savingMentor}
+                          className="px-2.5 py-0.5 bg-[#0362D0] hover:bg-[#0252b3] text-white rounded-md text-[10px] font-bold flex items-center gap-1 disabled:opacity-50 cursor-pointer"
+                        >
+                          <Check size={11} /> {savingMentor ? 'Menyimpan...' : 'Simpan'}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <span className="font-extrabold text-[#172033]">
+                      {mentors.find(m => m.id === selectedGroup.mentorId || m.groupId === selectedGroup.id)?.name || 'Belum ditentukan'}
+                    </span>
+                  )}
                 </div>
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
                   <span className="text-[10px] text-slate-500 font-bold uppercase block mb-0.5">Jadwal Belajar</span>

@@ -192,7 +192,7 @@ export interface StudentCertification {
 
 export interface SystemActivity {
   id: string;
-  type: 'journal' | 'progress' | 'certification' | 'attendance';
+  type: 'journal' | 'progress' | 'certification' | 'attendance' | 'mentor';
   title: string;
   description: string;
   timestamp: string;

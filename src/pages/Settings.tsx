@@ -15,7 +15,8 @@ import {
   Clock, 
   Sparkles,
   Layers,
-  Building2
+  Building2,
+  Users
 } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -25,10 +26,11 @@ import { runDataHealthCheck, forceSyncGroupProgress, HealthCheckResult } from '.
 import { DatabaseBackupSection } from '../components/settings/DatabaseBackupSection';
 import { AcademicRollOverWizard } from '../components/settings/AcademicRollOverWizard';
 import { SchoolSettingsTab } from '../components/settings/SchoolSettingsTab';
+import { MentorSettingsTab } from '../components/settings/MentorSettingsTab';
 
 export function Settings() {
   const { userData } = useAuth();
-  const [activeTab, setActiveTab] = useState<'school' | 'profile' | 'academic' | 'security' | 'database'>('school');
+  const [activeTab, setActiveTab] = useState<'school' | 'mentors' | 'profile' | 'academic' | 'security' | 'database'>('school');
   const [showToast, setShowToast] = useState(false);
   const [toastText, setToastText] = useState<{ title: string; desc: string; isError?: boolean }>({
     title: 'Pengaturan Berhasil Disimpan',
@@ -208,6 +210,16 @@ export function Settings() {
             <Building2 size={18} className={activeTab === 'school' ? 'text-[#C99A2E]' : 'text-slate-400'} /> Pengaturan Sekolah & KKM
           </button>
           <button 
+            onClick={() => setActiveTab('mentors')}
+            className={`w-full flex items-center gap-3 px-5 py-3.5 font-bold rounded-2xl border transition-all text-sm text-left cursor-pointer ${
+              activeTab === 'mentors' 
+                ? 'bg-[#172033] text-white border-[#172033] shadow-xs' 
+                : 'bg-white text-slate-600 border-slate-100 hover:bg-slate-50'
+            }`}
+          >
+            <Users size={18} className={activeTab === 'mentors' ? 'text-[#C99A2E]' : 'text-slate-400'} /> Kelola Profil Mentor
+          </button>
+          <button 
             onClick={() => setActiveTab('profile')}
             className={`w-full flex items-center gap-3 px-5 py-3.5 font-bold rounded-2xl border transition-all text-sm text-left cursor-pointer ${
               activeTab === 'profile' 
@@ -268,6 +280,10 @@ export function Settings() {
                 setTimeout(() => setShowToast(false), 4500);
               }}
             />
+          )}
+
+          {activeTab === 'mentors' && (
+            <MentorSettingsTab />
           )}
 
           {activeTab === 'profile' && (
