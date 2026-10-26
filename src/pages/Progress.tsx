@@ -6,9 +6,10 @@ import { Button } from '../components/ui/Button';
 import { Select } from '../components/ui/Select';
 import { Input } from '../components/ui/Input';
 import { Search, Loader2, Save, FileText, CheckCircle, Award, BookOpen, Sparkles, Zap, CheckCircle2, RotateCcw } from 'lucide-react';
-import { getGroups, getStudentsByGroup, getStudentProgressBySession, saveStudentProgress, getMentors, createNotification, Student, Group, StudentProgress } from '../services/db';
+import { getGroups, getStudentsByGroup, getStudentProgressBySession, saveStudentProgress, saveMultipleStudentProgress, getMentors, createNotification, Student, Group, StudentProgress } from '../services/db';
 import { masterGrades, masterSessions, getGradeForGroup, JUZ_30_SURAHS, CURRICULUM_CONFIG } from '../services/curriculumData';
 import { cn } from '../utils/cn';
+import { sortStudents } from '../utils/studentUtils';
 import { useAuth } from '../contexts/AuthContext';
 import { useDebounce } from '../hooks/useDebounce';
 
@@ -128,8 +129,8 @@ export function Progress() {
           getStudentsByGroup(selectedGroupId)
         ]);
         
-        setStudents(groupStudents);
-        
+        setStudents(sortStudents(groupStudents));
+
         const stateMap: Record<string, Partial<StudentProgress>> = {};
         records.forEach(r => {
           r.total = calculateProgressAverage(r);
@@ -164,12 +165,13 @@ export function Progress() {
   // Filtered student list
   const filteredStudents = useMemo(() => {
     const q = debouncedStudentSearch.trim().toLowerCase();
-    if (!q) return students;
-    return students.filter(s => 
+    if (!q) return sortStudents(students);
+    const filtered = students.filter(s => 
       s.name.toLowerCase().includes(q) ||
       (s.nis && s.nis.toLowerCase().includes(q)) ||
       (s.class && s.class.toLowerCase().includes(q))
     );
+    return sortStudents(filtered);
   }, [students, debouncedStudentSearch]);
 
   // Quick Preset Score Applicator (Batch Fill)
@@ -209,10 +211,11 @@ export function Progress() {
       const meetingNum = sessionObj?.sessionNumber || 1;
       const recordDate = meetingNum === 1 ? '2026-08-15' : meetingNum === 2 ? '2026-08-22' : new Date().toISOString().split('T')[0];
       
+      const progsToSave: StudentProgress[] = [];
       for (const student of groupStudents) {
         const p = sessionProgress[student.id];
         if (p) {
-          const record: StudentProgress = {
+          progsToSave.push({
             id: p.id,
             studentId: student.id,
             groupId: selectedGroupId,
@@ -226,13 +229,18 @@ export function Progress() {
             memorization: p.memorization || 0,
             writing: p.writing || 0,
             total: p.total || 0,
-          };
-          await saveStudentProgress(record);
+          });
         }
       }
+      await saveMultipleStudentProgress(progsToSave);
       
       setShowToast(true);
       setTimeout(() => setShowToast(false), 3000);
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('progress-updated'));
+        window.dispatchEvent(new CustomEvent('db-cache-invalidated', { detail: { keyPrefix: 'progress' } }));
+      }
       
       // Real-time notification dispatch
       try {
@@ -623,9 +631,9 @@ export function Progress() {
         </div>
       </Card>
 
-      {/* Toast Notification */}
+      {/* Toast Notification (Safely above BottomNav on mobile) */}
       {showToast && (
-        <div className="fixed bottom-8 right-8 bg-[#172033] text-white px-5 py-4 rounded-2xl shadow-2xl flex items-center gap-3 animate-in slide-in-from-bottom-5 fade-in duration-300 z-50 border border-slate-100/20">
+        <div className="fixed bottom-20 sm:bottom-8 left-4 right-4 sm:left-auto sm:right-8 bg-[#172033] text-white px-5 py-4 rounded-2xl shadow-2xl flex items-center gap-3 animate-in slide-in-from-bottom-5 fade-in duration-300 z-50 border border-slate-100/20 max-w-md">
           <div className="bg-[#C99A2E]/20 p-2 rounded-xl text-[#C99A2E]">
             <CheckCircle size={20} />
           </div>

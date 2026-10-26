@@ -7,6 +7,7 @@ import {
   where,
   setDoc,
   limit,
+  writeBatch,
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import {
@@ -19,7 +20,7 @@ import {
   OperationType,
   handleFirestoreError,
 } from './types';
-import { getGroupAliases } from './groups';
+import { getGroupAliases, cleanGroupName } from './groups';
 import { logSystemActivity } from './auditLogs';
 
 export async function getAllStudentProgress(limitCount = 2000, forceFresh = false): Promise<StudentProgress[]> {
@@ -149,6 +150,40 @@ export async function getStudentProgressByMeeting(
   return [];
 }
 
+export async function saveMultipleStudentProgress(records: StudentProgress[]): Promise<void> {
+  invalidateDbCache('progress');
+  invalidateDbCache('all_student_progress');
+  if (records.length === 0) return;
+
+  const now = new Date().toISOString();
+  const batch = writeBatch(db);
+
+  for (const record of records) {
+    const docId = record.meetingNumber 
+      ? `${record.studentId}_m${record.meetingNumber}` 
+      : `${record.studentId}_${record.sessionId || record.date}`;
+    const { id, ...data } = record;
+    const docRef = doc(db, 'student_progress', docId);
+    batch.set(docRef, { ...data, updatedAt: now }, { merge: true });
+  }
+
+  try {
+    await batch.commit();
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, 'student_progress');
+  }
+
+  // Non-blocking single audit log summary
+  if (records[0]?.groupId) {
+    const groupName = cleanGroupName(records[0].groupId);
+    logSystemActivity(
+      'progress',
+      'Progress Santri',
+      `Pencapaian santri ${groupName} diperbarui (${records.length} santri).`
+    ).catch(() => {});
+  }
+}
+
 export async function saveStudentProgress(record: StudentProgress): Promise<void> {
   invalidateDbCache('progress');
   invalidateDbCache('all_student_progress');
@@ -164,18 +199,19 @@ export async function saveStudentProgress(record: StudentProgress): Promise<void
     handleFirestoreError(error, OperationType.WRITE, `student_progress/${docId}`);
   }
 
-  // Find student name dynamically
-  let studentName = 'Santri';
-  try {
-    const studentDoc = await getDoc(doc(db, 'students', record.studentId));
-    if (studentDoc.exists()) {
-      studentName = studentDoc.data().name || 'Santri';
-    }
-  } catch {}
-
-  await logSystemActivity(
-    'progress',
-    'Progress Santri',
-    `Pencapaian ${studentName} diperbarui (Rata-rata: ${record.total || 0}%).`
-  );
+  // Non-blocking activity logging to prevent UI delays
+  (async () => {
+    try {
+      let studentName = 'Santri';
+      const studentDoc = await getDoc(doc(db, 'students', record.studentId));
+      if (studentDoc.exists()) {
+        studentName = studentDoc.data().name || 'Santri';
+      }
+      await logSystemActivity(
+        'progress',
+        'Progress Santri',
+        `Pencapaian ${studentName} diperbarui (Rata-rata: ${record.total || 0}%).`
+      );
+    } catch {}
+  })();
 }

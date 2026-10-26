@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { getGroups, getStudentsByGroup, getStudentAttendance, saveStudentAttendance, getMentors, createNotification, Group, Student, Mentor } from '../services/db';
 import { masterGrades, masterSessions, CurriculumSession } from '../services/curriculumData';
 import { cn } from '../utils/cn';
+import { sortStudents } from '../utils/studentUtils';
 import { Toast } from '../components/Toast';
 import { useAuth } from '../contexts/AuthContext';
 import { theme } from '../theme';
@@ -156,7 +157,8 @@ export function StudentAttendance() {
       if (!selectedGroup) return;
       setLoading(true);
       try {
-        const students = await getStudentsByGroup(selectedGroup);
+        const rawStudents = await getStudentsByGroup(selectedGroup);
+        const students = sortStudents(rawStudents);
         setGroupStudents(students);
         
         // Load existing attendance by meetingNumber or date
@@ -236,6 +238,11 @@ export function StudentAttendance() {
       await saveStudentAttendance(recordsToSave);
       setInitialAttendance(JSON.parse(JSON.stringify(attendance)));
       setToast({ show: true, type: 'success', message: 'Presensi Berhasil Disimpan', description: `Data presensi untuk tanggal ${selectedDate} telah tersimpan.` });
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('attendance-updated'));
+        window.dispatchEvent(new CustomEvent('db-cache-invalidated', { detail: { keyPrefix: 'attendance' } }));
+      }
 
       // Real-time notification dispatch
       try {

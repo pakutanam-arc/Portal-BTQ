@@ -6,6 +6,7 @@ import {
   where,
   setDoc,
   limit,
+  writeBatch,
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import {
@@ -178,30 +179,38 @@ export async function getStudentAttendanceByGroup(groupId: string, limitCount = 
 export async function saveStudentAttendance(records: StudentAttendance[]): Promise<void> {
   invalidateDbCache('attendance');
   invalidateDbCache('all_attendance');
+  if (records.length === 0) return;
+
+  const now = new Date().toISOString();
+  const batch = writeBatch(db);
+
   for (const record of records) {
     const datePrefix = record.date.split('T')[0];
     const meetingNum = record.meetingNumber || (datePrefix === '2026-08-15' ? 1 : datePrefix === '2026-08-22' ? 2 : 3);
     const docId = `${record.studentId}_m${meetingNum}`;
     const { id, ...data } = record;
-    try {
-      await setDoc(doc(db, 'student_attendance', docId), { 
-        ...data, 
-        date: datePrefix, 
-        meetingNumber: meetingNum,
-        updatedAt: new Date().toISOString()
-      }, { merge: true });
-    } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `student_attendance/${docId}`);
-    }
+    const docRef = doc(db, 'student_attendance', docId);
+    batch.set(docRef, {
+      ...data,
+      date: datePrefix,
+      meetingNumber: meetingNum,
+      updatedAt: now
+    }, { merge: true });
+  }
+
+  try {
+    await batch.commit();
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, 'student_attendance');
   }
 
   if (records.length > 0) {
     const groupName = cleanGroupName(records[0].groupId);
-    await logSystemActivity(
+    logSystemActivity(
       'attendance',
       'Presensi Siswa',
       `Absensi ${groupName} diperbarui (${records.length} siswa).`
-    );
+    ).catch(() => {});
   }
 }
 

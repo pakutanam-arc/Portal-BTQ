@@ -6,6 +6,8 @@ export interface User {
   role: Role;
   avatar?: string;
   email: string;
+  signature?: string;
+  nip?: string;
 }
 
 export interface Student {
@@ -37,6 +39,7 @@ export interface Mentor {
   email: string;
   groupId?: string; // Some mentors might not have a group assigned yet
   status: 'Aktif' | 'Nonaktif';
+  signature?: string;
 }
 
 export type AttendanceStatus = 'Hadir' | 'Izin' | 'Sakit' | 'Alpa';

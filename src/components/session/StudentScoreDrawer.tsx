@@ -64,18 +64,20 @@ export function StudentScoreDrawer({
 
   const isGrade3 = currentGrade.id === 'grade3';
 
-  const reading = progress.reading ?? (isGrade3 ? 80 : 0);
-  const tajwid = progress.tajwid ?? 80;
-  const writing = progress.writing ?? 80;
-  const memorization = progress.memorization ?? (isGrade3 ? 80 : 0);
+  const reading = progress.reading ?? 0;
+  const tajwid = progress.tajwid ?? 0;
+  const writing = progress.writing ?? 0;
+  const memorization = progress.memorization ?? 0;
   const memorizedSurah = progress.memorizedSurah || '';
-  const total = progress.total ?? 80;
+  const total = progress.total ?? 0;
 
   const scoreBadge = total >= 85 
     ? { label: 'Sangat Baik (A)', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' }
     : total >= 75
     ? { label: 'Baik (B)', color: 'bg-[#0362D0]/10 text-[#0362D0] border-[#0362D0]/20' }
-    : { label: 'Perlu Bimbingan (C)', color: 'bg-rose-50 text-rose-700 border-rose-200' };
+    : total > 0
+    ? { label: 'Perlu Bimbingan (C)', color: 'bg-rose-50 text-rose-700 border-rose-200' }
+    : { label: 'Belum Dinilai', color: 'bg-slate-100 text-slate-600 border-slate-200' };
 
   const handleQuickPreset = (field: keyof StudentProgress, value: number) => {
     onProgressChange(student.id, field, value);
@@ -83,7 +85,7 @@ export function StudentScoreDrawer({
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 overflow-hidden">
+      <div className="fixed inset-0 z-[60] overflow-hidden">
         {/* Backdrop */}
         <motion.div
           initial={{ opacity: 0 }}
@@ -94,47 +96,48 @@ export function StudentScoreDrawer({
         />
 
         {/* Drawer panel */}
-        <div className="fixed inset-y-0 right-0 max-w-full flex pl-10 pointer-events-none">
+        <div className="fixed inset-y-0 right-0 max-w-full flex pl-0 sm:pl-10 pointer-events-none">
           <motion.div
             initial={{ x: '100%' }}
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
             transition={{ type: 'spring', damping: 28, stiffness: 300 }}
-            className="w-screen max-w-md bg-white pointer-events-auto flex flex-col shadow-2xl border-l border-slate-100"
+            className="w-screen max-w-md bg-white pointer-events-auto flex flex-col shadow-2xl border-l border-slate-100 h-full max-h-screen"
           >
             {/* Header */}
-            <div className="p-5 bg-gradient-to-r from-[#172033] to-[#1E293B] text-white flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-[#0362D0] flex items-center justify-center text-white font-black shrink-0 border border-white/20">
-                  <User size={20} />
+            <div className="p-4 sm:p-5 bg-gradient-to-r from-[#172033] to-[#1E293B] text-white flex items-center justify-between gap-2 shrink-0">
+              <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-[#0362D0] flex items-center justify-center text-white font-black shrink-0 border border-white/20">
+                  <User size={18} />
                 </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-extrabold text-sm sm:text-base leading-tight truncate max-w-[200px]">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <h3 className="font-extrabold text-xs sm:text-sm leading-tight text-white truncate max-w-[140px] sm:max-w-[190px]" title={student.name}>
                       {student.name}
                     </h3>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-white/15 text-slate-200 border border-white/20">
-                      Kelas {student.class}
+                    <span className="px-1.5 py-0.5 rounded-full text-[9px] font-black uppercase bg-white/15 text-slate-200 border border-white/20 shrink-0">
+                      {student.class}
                     </span>
                   </div>
-                  <p className="text-[11px] text-slate-300 font-medium mt-0.5">
-                    NIS: {student.nis || '-'} • Pertemuan Ke-{meetingNumber}
+                  <p className="text-[10px] sm:text-[11px] text-slate-300 font-medium truncate mt-0.5">
+                    NIS: {student.nis || '-'} • Ke-{meetingNumber}
                   </p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1.5 shrink-0">
                 {totalStudents > 0 && (
-                  <span className="text-[11px] font-bold text-slate-300 bg-white/10 px-2.5 py-1 rounded-lg mr-1 border border-white/10">
+                  <span className="text-[10px] sm:text-[11px] font-bold text-slate-200 bg-white/10 px-2 py-1 rounded-lg border border-white/10">
                     {studentIndex + 1}/{totalStudents}
                   </span>
                 )}
                 <button
                   type="button"
                   onClick={onClose}
-                  className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-slate-300 hover:text-white transition-colors cursor-pointer"
+                  className="w-9 h-9 rounded-xl bg-white/15 hover:bg-white/25 active:bg-white/30 flex items-center justify-center text-white transition-all cursor-pointer shrink-0 border border-white/20"
+                  aria-label="Tutup"
                 >
-                  <X size={16} />
+                  <X size={18} />
                 </button>
               </div>
             </div>
@@ -426,41 +429,51 @@ export function StudentScoreDrawer({
             </div>
 
             {/* Footer Actions */}
-            <div className="p-4 bg-slate-50 border-t border-slate-100 flex flex-col gap-2.5 shrink-0">
+            <div className="p-3.5 sm:p-4 bg-slate-50 border-t border-slate-100 flex flex-col gap-2 shrink-0 pb-safe pb-6 sm:pb-4">
               {/* WhatsApp Notification Direct Button */}
               {onSendWA && (
                 <button
                   type="button"
                   onClick={() => onSendWA(student, status, progress)}
-                  className="w-full py-2.5 px-4 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-black flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                  className="w-full py-2 px-3 bg-emerald-50 hover:bg-emerald-100 active:bg-emerald-200 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                 >
-                  <MessageCircle size={15} />
-                  <span>Kirim Laporan WA ke Orang Tua</span>
+                  <MessageCircle size={14} className="text-emerald-600" />
+                  <span>Kirim Laporan WA ke Ortu</span>
                 </button>
               )}
 
               {/* Prev / Next Santri Navigation Buttons */}
-              <div className="flex items-center gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
                   disabled={!hasPrev}
                   onClick={onPrevStudent}
-                  className="flex-1 py-3 px-3 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:pointer-events-none text-slate-700 border border-slate-200 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                  className="py-2.5 px-2 bg-white hover:bg-slate-100 active:bg-slate-200 disabled:opacity-40 disabled:pointer-events-none text-slate-700 border border-slate-200 rounded-xl text-xs font-bold flex items-center justify-center gap-1 transition-colors cursor-pointer"
                 >
-                  <ChevronLeft size={16} />
-                  <span>Santri Sebelumnya</span>
+                  <ChevronLeft size={16} className="shrink-0" />
+                  <span className="truncate">Sebelumnya</span>
                 </button>
 
                 <button
                   type="button"
                   disabled={!hasNext}
                   onClick={onNextStudent}
-                  className="flex-1 py-3 px-3 bg-[#0362D0] hover:bg-[#0250AA] disabled:opacity-40 disabled:pointer-events-none text-white rounded-xl text-xs font-black flex items-center justify-center gap-1.5 shadow-md shadow-[#0362D0]/20 transition-all cursor-pointer"
+                  className="py-2.5 px-2 bg-[#0362D0] hover:bg-[#0250AA] active:bg-[#013F88] disabled:opacity-40 disabled:pointer-events-none text-white rounded-xl text-xs font-black flex items-center justify-center gap-1 shadow-sm transition-all cursor-pointer"
                 >
-                  <span>Lanjut Santri Berikutnya</span>
-                  <ChevronRight size={16} />
+                  <span className="truncate">Lanjut Santri</span>
+                  <ChevronRight size={16} className="shrink-0" />
                 </button>
               </div>
+
+              {/* Dedicated Selesai / Tutup Button */}
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-full py-2.5 px-4 bg-white hover:bg-slate-100 active:bg-slate-200 text-[#172033] border border-slate-200 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
+              >
+                <Check size={15} className="text-emerald-600" />
+                <span>Selesai & Tutup Nilai</span>
+              </button>
             </div>
           </motion.div>
         </div>

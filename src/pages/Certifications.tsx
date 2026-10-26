@@ -7,6 +7,7 @@ import {
   CheckCircle2, 
   Clock, 
   AlertCircle, 
+  AlertTriangle,
   Plus, 
   Edit3, 
   Trash2, 
@@ -230,15 +231,31 @@ export function Certifications() {
     setIsModalOpen(true);
   };
 
-  const handleDelete = async (certId: string) => {
-    if (!window.confirm("Hapus data sertifikasi santri ini?")) return;
+  const [certToDelete, setCertToDelete] = useState<StudentCertification | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const promptDelete = (cert: StudentCertification) => {
+    setCertToDelete(cert);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!certToDelete || !certToDelete.id) return;
+    const certId = certToDelete.id;
+    setIsDeleting(true);
     try {
-      await deleteCertification(certId);
+      await deleteCertification(certId, certToDelete.studentName, certToDelete.category);
       setCertifications(prev => prev.filter(c => c.id !== certId));
-      showToast("Data sertifikasi dihapus");
-    } catch (e) {
-      console.error(e);
-      showToast("Gagal menghapus sertifikasi", "error");
+      showToast(`Data ujian/sertifikasi untuk ${certToDelete.studentName || 'santri'} berhasil dihapus`);
+      setCertToDelete(null);
+      if (isModalOpen && editingCertId === certId) {
+        setIsModalOpen(false);
+        setEditingCertId(null);
+      }
+    } catch (e: any) {
+      console.error('Delete certification failed:', e);
+      showToast(e?.message || "Gagal menghapus sertifikasi dari database", "error");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -626,7 +643,7 @@ export function Certifications() {
                             <Edit3 size={15} />
                           </button>
                           <button
-                            onClick={() => handleDelete(cert.id)}
+                            onClick={() => promptDelete(cert)}
                             className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
                             title="Hapus Data"
                           >
@@ -706,7 +723,7 @@ export function Certifications() {
                       <Edit3 size={14} /> Update
                     </button>
                     <button
-                      onClick={() => handleDelete(cert.id)}
+                      onClick={() => promptDelete(cert)}
                       className="flex-1 flex justify-center items-center gap-1.5 py-2 text-rose-600 border border-rose-200 hover:bg-rose-50 rounded-xl font-bold text-[11px] transition-colors"
                     >
                       <Trash2 size={14} /> Hapus
@@ -921,21 +938,37 @@ export function Certifications() {
                 />
               </div>
 
-              <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-50 rounded-xl transition-colors cursor-pointer"
-                >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSaving}
-                  className="px-6 py-2.5 bg-[#0362D0] hover:bg-[#0252b3] text-white font-black text-xs rounded-xl flex items-center gap-2 shadow-md cursor-pointer disabled:opacity-50"
-                >
-                  <FileCheck size={15} /> {isSaving ? 'Menyimpan...' : 'Simpan Data Sertifikasi'}
-                </button>
+              <div className="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-2.5 pt-3 border-t border-slate-100">
+                {editingCertId ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const currentCert = certifications.find(c => c.id === editingCertId);
+                      if (currentCert) promptDelete(currentCert);
+                    }}
+                    className="w-full sm:w-auto px-3.5 py-2.5 text-xs font-bold text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-xl transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                    title="Hapus data sertifikasi ini"
+                  >
+                    <Trash2 size={14} /> Hapus Data
+                  </button>
+                ) : <div />}
+
+                <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setIsModalOpen(false)}
+                    className="flex-1 sm:flex-initial px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-50 border border-slate-200 sm:border-transparent rounded-xl transition-colors cursor-pointer text-center"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSaving}
+                    className="flex-1 sm:flex-initial px-5 py-2.5 bg-[#0362D0] hover:bg-[#0252b3] text-white font-black text-xs rounded-xl flex items-center justify-center gap-2 shadow-md cursor-pointer disabled:opacity-50 text-center"
+                  >
+                    <FileCheck size={15} /> {isSaving ? 'Menyimpan...' : 'Simpan Data'}
+                  </button>
+                </div>
               </div>
             </form>
           </div>
@@ -1044,6 +1077,73 @@ export function Certifications() {
                   <div className="text-[10px] text-slate-400 font-bold">Pembina Rohis</div>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Dialog Konfirmasi Hapus In-App */}
+      {certToDelete && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[#172033]/60 backdrop-blur-xs p-4 animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 animate-in zoom-in-95">
+            <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-100 text-rose-600 flex items-center justify-center mb-4 shadow-xs">
+              <Trash2 size={24} />
+            </div>
+
+            <h3 className="text-base font-black text-[#172033] mb-1">
+              Hapus Data Ujian / Sertifikasi?
+            </h3>
+            
+            <p className="text-xs text-slate-500 mb-4 leading-relaxed">
+              Anda akan menghapus data penilaian sertifikasi santri berikut dari database:
+            </p>
+
+            <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 mb-4 space-y-1.5 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400 font-bold">Nama Santri:</span>
+                <span className="font-extrabold text-[#172033]">{certToDelete.studentName || 'Santri'}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400 font-bold">Kategori:</span>
+                <span className="font-extrabold text-[#0362D0]">{certToDelete.category}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400 font-bold">Status:</span>
+                <span className="font-bold text-slate-700">{certToDelete.status}</span>
+              </div>
+              {certToDelete.score !== undefined && (
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400 font-bold">Nilai:</span>
+                  <span className="font-black text-[#172033]">{certToDelete.score}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-[11px] leading-relaxed flex items-start gap-2 mb-5 font-medium">
+              <AlertTriangle size={15} className="shrink-0 text-amber-600 mt-0.5" />
+              <span>
+                <strong>Peringatan:</strong> Data yang dihapus akan hilang dari sistem secara permanen dan tidak dapat dipulihkan.
+              </span>
+            </div>
+
+            <div className="flex flex-col-reverse sm:flex-row items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setCertToDelete(null)}
+                disabled={isDeleting}
+                className="w-full sm:w-auto px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-50 rounded-xl transition-colors cursor-pointer disabled:opacity-50 text-center"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                disabled={isDeleting}
+                className="w-full sm:w-auto px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-md cursor-pointer disabled:opacity-50"
+              >
+                <Trash2 size={14} />
+                {isDeleting ? 'Menghapus...' : 'Hapus Permanen'}
+              </button>
             </div>
           </div>
         </div>

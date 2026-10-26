@@ -43,7 +43,7 @@ export interface GroupDetailItem {
   studentsCount: number;
   progress: number;
   attendance: number;
-  status: 'Baik' | 'Perlu Dipantau' | 'Perlu Pendampingan';
+  status: 'Baik' | 'Perlu Dipantau' | 'Perlu Pendampingan' | 'Belum Diinput';
   weeklyProgress?: WeeklyProgressPoint[];
 }
 
@@ -145,9 +145,9 @@ export const GroupSummaryTable = React.memo(function GroupSummaryTable({ groups 
 
   // Pre-calculate weekly points for each group with memoization
   const groupsWithWeekly = useMemo(() => {
-    return filteredGroups.map((g, idx) => ({
+    return filteredGroups.map((g) => ({
       ...g,
-      weekly: g.weeklyProgress || generateWeeklyProgress(g.progress, idx)
+      weekly: g.weeklyProgress || []
     }));
   }, [filteredGroups]);
 
@@ -155,23 +155,27 @@ export const GroupSummaryTable = React.memo(function GroupSummaryTable({ groups 
   const averageWeeklyProgressData = useMemo(() => {
     if (!groups || groups.length === 0) return [];
 
-    // Temukan seluruh nomor pekan yang ada pada data kelompok secara dinamis
+    // Temukan seluruh nomor pekan yang ada pada data kelompok secara dinamis murni
     const weekSet = new Set<number>();
     groups.forEach((g) => {
       if (g.weeklyProgress && g.weeklyProgress.length > 0) {
-        g.weeklyProgress.forEach((wp) => weekSet.add(wp.week));
+        g.weeklyProgress.forEach((wp) => {
+          if (wp.progress > 0) {
+            weekSet.add(wp.week);
+          }
+        });
       }
     });
 
     const sortedWeeks = Array.from(weekSet).sort((a, b) => a - b);
     if (sortedWeeks.length === 0) {
-      sortedWeeks.push(1, 2);
+      return [];
     }
     const latestWeek = sortedWeeks[sortedWeeks.length - 1];
 
-    const allPopulatedGroups = groups.map((g, idx) => ({
+    const allPopulatedGroups = groups.map((g) => ({
       ...g,
-      weekly: g.weeklyProgress || generateWeeklyProgress(g.progress, idx, latestWeek)
+      weekly: g.weeklyProgress || []
     }));
 
     // Tanggal acuan kalender akademik per pekan
@@ -549,11 +553,15 @@ export const GroupSummaryTable = React.memo(function GroupSummaryTable({ groups 
                   statusBadge = 'bg-[#0362D0]/10 text-[#0362D0] border-[#0362D0]/20';
                 } else if (item.status === 'Perlu Dipantau') {
                   statusBadge = 'bg-[#C99A2E]/10 text-[#C99A2E] border-[#C99A2E]/20';
+                } else if (item.status === 'Belum Diinput') {
+                  statusBadge = 'bg-slate-100 text-slate-600 border-slate-200';
                 } else {
                   statusBadge = 'bg-[#950415]/10 text-[#950415] border-[#950415]/20';
                 }
 
-                const latestDelta = item.weekly[item.weekly.length - 1]?.delta || 5;
+                const validWeekly = item.weekly.filter(w => w.progress > 0);
+                const latestDelta = validWeekly.length > 0 ? validWeekly[validWeekly.length - 1].delta : 0;
+                const latestWeekNumber = validWeekly.length > 0 ? validWeekly[validWeekly.length - 1].week : null;
 
                 return (
                   <tr key={item.id} className="hover:bg-slate-50/60 transition-colors">
@@ -565,57 +573,69 @@ export const GroupSummaryTable = React.memo(function GroupSummaryTable({ groups 
                     </td>
                     <td className="py-3.5 px-3 text-[#172033] whitespace-nowrap font-medium">{item.mentorName}</td>
                     <td className="py-3.5 px-3 text-center font-medium text-slate-700 whitespace-nowrap">{item.studentsCount} siswa</td>
-                    <td className="py-3.5 px-3 text-center font-bold text-[#0362D0] whitespace-nowrap">{item.attendance}%</td>
+                    <td className="py-3.5 px-3 text-center font-bold text-[#0362D0] whitespace-nowrap">
+                      {item.attendance > 0 ? `${item.attendance}%` : '-'}
+                    </td>
                     
                     {/* Weekly Progress Graphic Column (P1 & P2 Real Data) */}
                     <td className="py-3.5 px-4 whitespace-nowrap">
-                      <div className="flex items-center gap-3">
-                        {/* Mini Sparkline Bar Chart for P1 & P2 */}
-                        <div 
-                          className="flex items-end gap-1.5 h-9 w-24 bg-slate-50 p-1.5 rounded-lg border border-transparent shadow-sm relative"
-                          title="Grafik tren progres riil P1 & P2"
-                        >
+                      {validWeekly.length === 0 ? (
+                        <span className="text-slate-400 text-xs italic">Belum ada nilai sesi</span>
+                      ) : (
+                        <div className="flex items-center gap-3">
+                          {/* Mini Sparkline Bar Chart for valid weeks */}
                           <div 
-                            className="absolute left-1 right-1 border-b border-dashed border-[#93C5FD] pointer-events-none" 
-                            style={{ bottom: '75%' }} 
-                          />
-                          {item.weekly.map((pt) => {
-                            const heightPercent = Math.max(14, Math.min(100, pt.progress));
-                            return (
-                              <div 
-                                key={pt.week} 
-                                className="flex-1 bg-slate-200 h-full rounded-xs flex flex-col justify-end overflow-hidden group/bar relative"
-                                title={`Pertemuan ${pt.week}: ${pt.progress}% (Standar KKM: 75%)`}
-                              >
+                            className="flex items-end gap-1.5 h-9 w-24 bg-slate-50 p-1.5 rounded-lg border border-transparent shadow-sm relative"
+                            title="Grafik tren progres riil"
+                          >
+                            <div 
+                              className="absolute left-1 right-1 border-b border-dashed border-[#93C5FD] pointer-events-none" 
+                              style={{ bottom: '75%' }} 
+                            />
+                            {validWeekly.map((pt) => {
+                              const heightPercent = Math.max(14, Math.min(100, pt.progress));
+                              return (
                                 <div 
-                                  className={`w-full rounded-xs transition-all ${
-                                    pt.isCurrent 
-                                      ? 'bg-[#0362D0]' 
-                                      : item.status === 'Perlu Pendampingan'
-                                        ? 'bg-[#950415]/70 group-hover/bar:bg-[#950415]'
-                                        : 'bg-[#0362D0]/60 group-hover/bar:bg-[#0362D0]'
-                                  }`}
-                                  style={{ height: `${heightPercent}%` }}
-                                />
-                              </div>
-                            );
-                          })}
-                        </div>
-
-                        {/* Percentage & Trend Delta */}
-                        <div className="flex flex-col">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-xs font-black text-[#172033]">{item.progress}%</span>
-                            <span className="text-[10px] text-emerald-700 font-bold flex items-center bg-emerald-50 px-1 py-0.2 rounded border border-emerald-200">
-                              <TrendingUp size={10} className="mr-0.5 text-emerald-600" />
-                              +{latestDelta}%
-                            </span>
+                                  key={pt.week} 
+                                  className="flex-1 bg-slate-200 h-full rounded-xs flex flex-col justify-end overflow-hidden group/bar relative"
+                                  title={`Pertemuan ${pt.week}: ${pt.progress}% (Standar KKM: 75%)`}
+                                >
+                                  <div 
+                                    className={`w-full rounded-xs transition-all ${
+                                      pt.isCurrent 
+                                        ? 'bg-[#0362D0]' 
+                                        : item.status === 'Perlu Pendampingan'
+                                          ? 'bg-[#950415]/70 group-hover/bar:bg-[#950415]'
+                                          : 'bg-[#0362D0]/60 group-hover/bar:bg-[#0362D0]'
+                                    }`}
+                                    style={{ height: `${heightPercent}%` }}
+                                  />
+                                </div>
+                              );
+                            })}
                           </div>
-                          <span className="text-[9px] text-slate-400 font-semibold mt-0.5">
-                            Pertemuan {item.weekly[item.weekly.length - 1]?.week || 2} (Aktif)
-                          </span>
+
+                          {/* Percentage & Trend Delta */}
+                          <div className="flex flex-col">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs font-black text-[#172033]">{item.progress > 0 ? `${item.progress}%` : '-'}</span>
+                              {latestDelta !== 0 && (
+                                <span className={`text-[10px] font-bold flex items-center px-1 py-0.2 rounded border ${
+                                  latestDelta > 0 ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-rose-700 bg-rose-50 border-rose-200'
+                                }`}>
+                                  <TrendingUp size={10} className="mr-0.5" />
+                                  {latestDelta > 0 ? `+${latestDelta}%` : `${latestDelta}%`}
+                                </span>
+                              )}
+                            </div>
+                            {latestWeekNumber && (
+                              <span className="text-[9px] text-slate-400 font-semibold mt-0.5">
+                                Pertemuan {latestWeekNumber} (Aktif)
+                              </span>
+                            )}
+                          </div>
                         </div>
-                      </div>
+                      )}
                     </td>
 
                     <td className="py-3.5 px-5 text-right whitespace-nowrap">
@@ -644,11 +664,14 @@ export const GroupSummaryTable = React.memo(function GroupSummaryTable({ groups 
               statusBadge = 'bg-[#0362D0]/10 text-[#0362D0] border-[#0362D0]/20';
             } else if (item.status === 'Perlu Dipantau') {
               statusBadge = 'bg-[#C99A2E]/10 text-[#C99A2E] border-[#C99A2E]/20';
+            } else if (item.status === 'Belum Diinput') {
+              statusBadge = 'bg-slate-100 text-slate-600 border-slate-200';
             } else {
               statusBadge = 'bg-[#950415]/10 text-[#950415] border-[#950415]/20';
             }
             const gr = getGradeForGroup({ id: item.id, name: item.name });
-            const latestDelta = item.weekly[item.weekly.length - 1]?.delta || 6;
+            const validWeekly = item.weekly.filter(w => w.progress > 0);
+            const latestDelta = validWeekly.length > 0 ? validWeekly[validWeekly.length - 1].delta : 0;
             const isMeetingTarget = item.progress >= 75;
             
             return (
@@ -675,7 +698,7 @@ export const GroupSummaryTable = React.memo(function GroupSummaryTable({ groups 
                   </div>
                   <div className="bg-[#0362D0]/5 p-2.5 rounded-xl text-center border border-[#0362D0]/15">
                     <p className="text-[10px] text-slate-500 font-bold uppercase mb-0.5">Kehadiran</p>
-                    <p className="text-sm font-black text-[#0362D0]">{item.attendance}%</p>
+                    <p className="text-sm font-black text-[#0362D0]">{item.attendance > 0 ? `${item.attendance}%` : '-'}</p>
                   </div>
                 </div>
                 
@@ -685,15 +708,17 @@ export const GroupSummaryTable = React.memo(function GroupSummaryTable({ groups 
                     <div className="flex items-center gap-1.5">
                       <BarChart2 size={14} className="text-[#0362D0]" />
                       <span className="text-[10px] font-extrabold text-[#172033] uppercase tracking-wider">
-                        Grafik
+                        Grafik Sesi
                       </span>
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-black text-[#172033]">{item.progress}%</span>
-                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 flex items-center">
-                        <TrendingUp size={10} className="mr-0.5 text-emerald-600" />
-                        +{latestDelta}%
-                      </span>
+                      <span className="text-xs font-black text-[#172033]">{item.progress > 0 ? `${item.progress}%` : '-'}</span>
+                      {latestDelta !== 0 && (
+                        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 flex items-center">
+                          <TrendingUp size={10} className="mr-0.5 text-emerald-600" />
+                          {latestDelta > 0 ? `+${latestDelta}%` : `${latestDelta}%`}
+                        </span>
+                      )}
                     </div>
                   </div>
 

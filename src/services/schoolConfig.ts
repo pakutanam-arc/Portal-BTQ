@@ -8,6 +8,10 @@ export interface SchoolConfig {
   schoolAddress: string; // e.g. "Jl. Cijantung IV, Pasar Rebo, Jakarta Timur"
   headmasterName: string; // e.g. "Dra. Hj. Sri Rahayu, M.Pd."
   headmasterNip: string; // e.g. "19680512 199412 2 001"
+  headmasterSignature?: string; // base64 PNG data URL
+  coordinatorName?: string; // e.g. "H. Ahmad Fauzi, S.Pd.I" (Pembina Rohis/Admin)
+  coordinatorNip?: string; // e.g. "19790415 200801 1 012"
+  coordinatorSignature?: string; // base64 PNG data URL (Tanda tangan Admin/Pembina)
   kkm: number; // e.g. 75 or 78
   academicYear: string; // e.g. "2026/2027"
   semester: 'Ganjil' | 'Genap';
@@ -23,6 +27,10 @@ export const DEFAULT_SCHOOL_CONFIG: SchoolConfig = {
   schoolAddress: 'Jl. Cijantung IV, Pasar Rebo, Jakarta Timur',
   headmasterName: 'Dra. Hj. Sri Rahayu, M.Pd.',
   headmasterNip: '19680512 199412 2 001',
+  headmasterSignature: '',
+  coordinatorName: 'H. Ahmad Fauzi, S.Pd.I',
+  coordinatorNip: '19790415 200801 1 012',
+  coordinatorSignature: '',
   kkm: 75,
   academicYear: '2026/2027',
   semester: 'Ganjil',
@@ -154,3 +162,57 @@ export async function saveSchoolConfig(config: SchoolConfig, userEmail?: string)
     throw err;
   }
 }
+
+/**
+ * Menyimpan profil Admin/Pembina Rohis dan Pejabat Kepala Sekolah sekaligus
+ */
+export async function saveAdminAndSchoolProfile(params: {
+  adminName: string;
+  adminNip?: string;
+  adminSignature?: string;
+  headmasterName: string;
+  headmasterNip?: string;
+  headmasterSignature?: string;
+  userEmail?: string;
+}): Promise<void> {
+  const current = getStoredSchoolConfig();
+  const updated: SchoolConfig = {
+    ...current,
+    coordinatorName: params.adminName.trim() || current.coordinatorName,
+    coordinatorNip: params.adminNip?.trim() || current.coordinatorNip,
+    coordinatorSignature: params.adminSignature !== undefined ? params.adminSignature : current.coordinatorSignature,
+    headmasterName: params.headmasterName.trim() || current.headmasterName,
+    headmasterNip: params.headmasterNip?.trim() || current.headmasterNip,
+    headmasterSignature: params.headmasterSignature !== undefined ? params.headmasterSignature : current.headmasterSignature,
+    updatedAt: new Date().toISOString(),
+    updatedBy: params.userEmail || 'Administrator',
+  };
+
+  // Simpan ke konfigurasi sekolah
+  await saveSchoolConfig(updated, params.userEmail);
+
+  // Simpan profil admin ke dokumen users
+  try {
+    const adminUserRef = doc(db, 'users', 'admin_profile');
+    await setDoc(adminUserRef, {
+      name: updated.coordinatorName,
+      nip: updated.coordinatorNip,
+      signature: updated.coordinatorSignature,
+      role: 'admin',
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+  } catch (e) {
+    console.warn('Gagal sinkronisasi admin_profile ke users:', e);
+  }
+
+  // Dispatch event agar antarmuka realtime ter-update
+  window.dispatchEvent(new CustomEvent('user_profile_updated', { 
+    detail: { 
+      role: 'admin', 
+      name: updated.coordinatorName,
+      nip: updated.coordinatorNip,
+      signature: updated.coordinatorSignature
+    } 
+  }));
+}
+

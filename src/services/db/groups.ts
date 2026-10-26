@@ -43,6 +43,12 @@ export function getGroupGradeId(group: { name?: string; id?: string; gradeId?: s
   return 'grade1';
 }
 
+export function normalizeGroupId(groupId?: string): string {
+  if (!groupId) return '';
+  const num = groupId.trim().replace(/^group_/, '').replace(/^g/, '');
+  return `g${num}`;
+}
+
 export function getGroupAliases(groupId: string): string[] {
   if (!groupId) return [];
   const normalized = groupId.trim();

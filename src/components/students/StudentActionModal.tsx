@@ -167,7 +167,7 @@ export function StudentActionModal({
               </span>
             </div>
               <p className="text-xs text-rose-900/90 font-medium leading-relaxed">
-                Menghapus dokumen santri secara langsung dan permanen dari database <strong>Cloud Firestore</strong> (bukan penyimpanan lokal). Gunakan opsi ini jika data santri merupakan kesalahan input atau duplikat.
+                Menghapus dokumen santri secara langsung dan permanen. Gunakan opsi ini jika data santri merupakan kesalahan input atau duplikat atau santri sudah lama tidak masuk
               </p>
             
             <label className="flex items-start gap-2 pt-1 cursor-pointer">
@@ -178,7 +178,7 @@ export function StudentActionModal({
                 className="mt-0.5 rounded text-rose-600 focus:ring-rose-500 border-rose-300"
               />
               <span className="text-[11px] text-rose-950 font-bold select-none">
-                Saya yakin ingin menghapus santri ini secara permanen dari Cloud Firestore.
+                Saya yakin ingin menghapus santri ini secara permanen.
               </span>
             </label>
 

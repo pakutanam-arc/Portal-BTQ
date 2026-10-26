@@ -65,6 +65,10 @@ export function OfficialReportSheet({
   const activeSemester = semester || schoolConfig.semester || 'Ganjil';
   const activeHeadmasterName = headmasterName || schoolConfig.headmasterName || 'Dra. Hj. Sri Rahayu, M.Pd.';
   const activeHeadmasterNip = headmasterNip || schoolConfig.headmasterNip || '19680512 199412 2 001';
+  const activeHeadmasterSignature = schoolConfig.headmasterSignature || '';
+  const activeCoordinatorName = schoolConfig.coordinatorName || 'H. Ahmad Fauzi, S.Pd.I';
+  const activeCoordinatorNip = schoolConfig.coordinatorNip || '19790415 200801 1 012';
+  const activeCoordinatorSignature = schoolConfig.coordinatorSignature || '';
   const activeKkm = kkm ?? schoolConfig.kkm ?? 75;
   const activeSchoolName = schoolConfig.schoolName || 'SMP Negeri 102 Jakarta';
   const activeSchoolAddress = schoolConfig.schoolAddress || 'Jl. Raya Cijantung No. 1, Kel. Gedong, Kec. Pasar Rebo, Kota Jakarta Timur 13770';
@@ -78,21 +82,38 @@ export function OfficialReportSheet({
   const alpaCount = attendance.filter((a) => a.status === 'Alpa').length;
   const attendancePercentage = totalMeetings > 0 ? Math.round((hadirCount / totalMeetings) * 100) : 0;
 
-  // Calculate Progress & Score Stats
-  const latestProgress = progress.length > 0 ? progress[progress.length - 1] : null;
+  // Calculate Progress & Score Stats (Murni data riil tersimpan di Firestore tanpa fabrikasi)
+  const hasRealProgress = progress.length > 0 && progress.some((p) => 
+    (typeof p.tajwid === 'number' && !isNaN(p.tajwid)) || 
+    (typeof p.reading === 'number' && !isNaN(p.reading)) || 
+    (typeof p.writing === 'number' && !isNaN(p.writing)) || 
+    (typeof p.total === 'number' && !isNaN(p.total))
+  );
+  const latestProgress = hasRealProgress ? progress[progress.length - 1] : null;
 
-  // Derive scores (default to realistic baseline if data not yet inputted)
-  const tajwidScore = latestProgress?.tajwid ? Number(latestProgress.tajwid) : 82;
-  const writingScore = latestProgress?.writing ? Number(latestProgress.writing) : 80;
-  const readingScore = latestProgress?.reading ? Number(latestProgress.reading) : 85;
+  // Nilai murni dari Firestore tanpa angka asumsi/baseline bawaan
+  const tajwidScore: number | null = (latestProgress && typeof latestProgress.tajwid === 'number' && !isNaN(latestProgress.tajwid)) 
+    ? Number(latestProgress.tajwid) 
+    : null;
+  const writingScore: number | null = (latestProgress && typeof latestProgress.writing === 'number' && !isNaN(latestProgress.writing)) 
+    ? Number(latestProgress.writing) 
+    : null;
+  const readingScore: number | null = (latestProgress && typeof latestProgress.reading === 'number' && !isNaN(latestProgress.reading)) 
+    ? Number(latestProgress.reading) 
+    : null;
   
-  // Calculate average total score
-  const avgScore = latestProgress?.total 
-    ? Number(latestProgress.total) 
-    : Math.round((tajwidScore + writingScore + readingScore) / 3);
+  // Calculate average total score (null jika belum diinput mentor)
+  const avgScore: number | null = (latestProgress && typeof latestProgress.total === 'number' && !isNaN(latestProgress.total))
+    ? Number(latestProgress.total)
+    : (tajwidScore !== null && writingScore !== null && readingScore !== null)
+      ? Math.round((tajwidScore + writingScore + readingScore) / 3)
+      : null;
 
   // Determine Predicate dynamically scaled to active KKM
-  const getPredicate = (score: number) => {
+  const getPredicate = (score: number | null) => {
+    if (score === null || score === undefined) {
+      return { grade: '-', label: 'Belum Diinput Mentor' };
+    }
     const mumtazThreshold = Math.max(88, activeKkm + 10);
     const jayyidThreshold = activeKkm;
     const maqbulThreshold = Math.max(60, activeKkm - 8);
@@ -110,15 +131,20 @@ export function OfficialReportSheet({
     .filter((p) => p.memorizedSurah && p.memorizedSurah.trim() !== '')
     .map((p) => p.memorizedSurah!.trim());
   const uniqueSurahs = Array.from(new Set(memorizedList));
-  const memorizedSummary = uniqueSurahs.length > 0 ? uniqueSurahs.join(', ') : 'Surah Pendek Juz 30 (An-Nas s.d. Adh-Dhuha)';
+  const memorizedSummary = uniqueSurahs.length > 0 
+    ? uniqueSurahs.join(', ') 
+    : '- (Belum ada setoran hafalan)';
 
   // Automated descriptive note
   const generateDefaultNote = () => {
+    if (avgScore === null) {
+      return `Data capaian nilai dan perkembangan Al-Qur'an untuk Ananda ${student.name} belum diinput oleh mentor pembina. Evaluasi pembelajaran akan diperbarui setelah mentor merekam capaian berkala pada sesi halaqah BTQ.`;
+    }
     if (avgScore >= 88) {
-      return `Alhamdulillah, Ananda ${student.name} menunjukkan penguasaan membaca Al-Qur'an yang sangat baik (Mumtaz), tartil dengan makharijul huruf dan hukum tajwid yang tepat. Hafalan surah (${memorizedSummary}) telah disetorkan dengan lancar. Tingkat kehadiran sangat istiqomah (${attendancePercentage}%). Pertahankan semangat tilawah harian di rumah bersama keluarga.`;
+      return `Alhamdulillah, Ananda ${student.name} menunjukkan penguasaan membaca Al-Qur'an yang sangat baik (Mumtaz), tartil dengan makharijul huruf dan hukum tajwid yang tepat.${uniqueSurahs.length > 0 ? ` Hafalan surah (${memorizedSummary}) telah disetorkan dengan lancar.` : ''} Tingkat kehadiran: ${attendancePercentage}%. Pertahankan semangat tilawah harian di rumah bersama keluarga.`;
     }
     if (avgScore >= 78) {
-      return `Alhamdulillah, Ananda ${student.name} telah menuntaskan target pembelajaran semester ini dengan predikat Baik (Jayyid). Mampu membaca ayat dengan lancar dan mengenali kaidah hukum tajwid dasar. Terus tingkatkan muraja'ah hafalan surah Juz 30 dan latihan menulis khat Al-Qur'an secara teratur.`;
+      return `Alhamdulillah, Ananda ${student.name} telah menuntaskan target pembelajaran semester ini dengan predikat Baik (Jayyid). Mampu membaca ayat dengan lancar dan mengenali kaidah hukum tajwid dasar.${uniqueSurahs.length > 0 ? ` Telah menyetorkan hafalan surah (${memorizedSummary}).` : ''} Terus tingkatkan muraja'ah hafalan surah dan latihan menulis khat Al-Qur'an secara teratur.`;
     }
     if (avgScore >= 70) {
       return `Ananda ${student.name} cukup tekun dalam mengikuti pembelajaran BTQ. Pembacaan huruf hijaiyah dan tajwid dasar telah berkembang cukup baik. Diharapkan bimbingan dan pendampingan orang tua di rumah agar Ananda lebih percaya diri dan lancar saat menyetor hafalan surah.`;
@@ -410,10 +436,12 @@ export function OfficialReportSheet({
                   </div>
                 </td>
                 <td className="border border-black text-center py-1.5 font-bold">{activeKkm}</td>
-                <td className="border border-black text-center font-black py-1.5">{readingScore}</td>
+                <td className="border border-black text-center font-black py-1.5">{readingScore ?? '-'}</td>
                 <td className="border border-black text-center font-bold py-1.5">{getPredicate(readingScore).grade}</td>
                 <td className="border border-black px-3 py-1.5 text-[11px] leading-snug">
-                  {readingScore >= activeKkm ? 'Sangat tartil dan fasih dalam melafalkan ayat Al-Qur\'an.' : 'Cukup lancar dan memahami ketukan harakat.'}
+                  {readingScore !== null 
+                    ? (readingScore >= activeKkm ? 'Sangat tartil dan fasih dalam melafalkan ayat Al-Qur\'an.' : 'Cukup lancar dan memahami ketukan harakat.') 
+                    : 'Belum diinput oleh mentor pembina.'}
                 </td>
               </tr>
               <tr>
@@ -425,10 +453,12 @@ export function OfficialReportSheet({
                   </div>
                 </td>
                 <td className="border border-black text-center py-1.5 font-bold">{activeKkm}</td>
-                <td className="border border-black text-center font-black py-1.5">{tajwidScore}</td>
+                <td className="border border-black text-center font-black py-1.5">{tajwidScore ?? '-'}</td>
                 <td className="border border-black text-center font-bold py-1.5">{getPredicate(tajwidScore).grade}</td>
                 <td className="border border-black px-3 py-1.5 text-[11px] leading-snug">
-                  {tajwidScore >= activeKkm ? 'Mampu menerapkan hukum bacaan tajwid secara konsisten.' : 'Memahami hukum tajwid dasar, perlu pembiasaan.'}
+                  {tajwidScore !== null 
+                    ? (tajwidScore >= activeKkm ? 'Mampu menerapkan hukum bacaan tajwid secara konsisten.' : 'Memahami hukum tajwid dasar, perlu pembiasaan.') 
+                    : 'Belum diinput oleh mentor pembina.'}
                 </td>
               </tr>
               <tr>
@@ -440,10 +470,12 @@ export function OfficialReportSheet({
                   </div>
                 </td>
                 <td className="border border-black text-center py-1.5 font-bold">{activeKkm}</td>
-                <td className="border border-black text-center font-black py-1.5">{writingScore}</td>
+                <td className="border border-black text-center font-black py-1.5">{writingScore ?? '-'}</td>
                 <td className="border border-black text-center font-bold py-1.5">{getPredicate(writingScore).grade}</td>
                 <td className="border border-black px-3 py-1.5 text-[11px] leading-snug">
-                  {writingScore >= activeKkm ? 'Khat rapi, proporsional, dan sesuai kaidah penulisan Al-Qur\'an.' : 'Mampu menyambung huruf hijaiyah dengan cukup baik.'}
+                  {writingScore !== null 
+                    ? (writingScore >= activeKkm ? 'Khat rapi, proporsional, dan sesuai kaidah penulisan Al-Qur\'an.' : 'Mampu menyambung huruf hijaiyah dengan cukup baik.') 
+                    : 'Belum diinput oleh mentor pembina.'}
                 </td>
               </tr>
               <tr>
@@ -455,7 +487,7 @@ export function OfficialReportSheet({
                   </div>
                 </td>
                 <td className="border border-black text-center py-1.5 font-bold">{activeKkm}</td>
-                <td className="border border-black text-center font-black py-1.5">{avgScore}</td>
+                <td className="border border-black text-center font-black py-1.5">{avgScore ?? '-'}</td>
                 <td className="border border-black text-center font-bold py-1.5">{overallPredicate.grade}</td>
                 <td className="border border-black px-3 py-1.5 text-[11px] leading-snug">
                   <span className="font-semibold">Capaian: </span>{memorizedSummary}
@@ -466,7 +498,7 @@ export function OfficialReportSheet({
                 <td colSpan={3} className="border border-black text-center py-1.5 uppercase tracking-wider">
                   Rata-rata Nilai Mutu Akhir (KKM: {activeKkm})
                 </td>
-                <td className="border border-black text-center font-black py-1.5 text-sm">{avgScore}</td>
+                <td className="border border-black text-center font-black py-1.5 text-sm">{avgScore ?? '-'}</td>
                 <td className="border border-black text-center font-black py-1.5 text-sm">{overallPredicate.grade}</td>
                 <td className="border border-black px-3 py-1.5 font-bold text-[#172033]">
                   Predikat: {overallPredicate.label}
@@ -502,7 +534,7 @@ export function OfficialReportSheet({
               </div>
               <div className="flex justify-between pt-1 border-t border-slate-200 text-black font-black">
                 <span>Persentase Kehadiran</span>
-                <span className="text-[#0362D0]">{attendancePercentage}%</span>
+                <span className="text-[#0362D0]">{totalMeetings > 0 ? `${attendancePercentage}%` : '- (Belum ada presensi)'}</span>
               </div>
             </div>
           </div>
@@ -535,46 +567,88 @@ export function OfficialReportSheet({
           </div>
         </div>
 
-        {/* 6. KOLOM TANDA TANGAN RESMI (3 PIHAK) */}
+        {/* 6. KOLOM TANDA TANGAN RESMI (3 PIHAK: MENTOR, PEMBINA ROHIS, KEPALA SEKOLAH) */}
         <div className="mt-6 pt-2 font-serif text-xs">
           <div className="text-right mb-2 font-sans text-xs">
             {activePrintCity}, {displayDate}
           </div>
 
-          <div className="grid grid-cols-3 gap-2 text-center">
-            {/* Kolom Orang Tua */}
-            <div className="flex flex-col justify-between h-28">
+          <div className="grid grid-cols-3 gap-3 text-center">
+            {/* 1. Kolom Kiri: Mentor BTQ (Tanpa NIP) */}
+            <div className="flex flex-col justify-between h-32">
               <div>
-                <p className="font-bold text-black">Mengetahui,</p>
-                <p className="text-slate-800">Orang Tua / Wali Siswa</p>
+                <p className="font-bold text-black">Mentor BTQ Kelompok,</p>
+                <p className="text-slate-700 text-[11px]">Pembimbing Pembelajaran</p>
               </div>
-              <div className="border-b border-black w-36 mx-auto"></div>
-              <p className="font-medium text-slate-600">( ......................................... )</p>
-            </div>
 
-            {/* Kolom Guru Pembina */}
-            <div className="flex flex-col justify-between h-28">
-              <div>
-                <p className="font-bold text-black">Guru Pembina / Mentor BTQ,</p>
-                <p className="text-slate-800">Koordinator Pembelajaran</p>
+              <div className="my-auto flex items-center justify-center min-h-[48px]">
+                {mentor?.signature ? (
+                  <img 
+                    src={mentor.signature} 
+                    alt="Tanda Tangan Mentor" 
+                    className="max-h-14 max-w-[130px] object-contain mx-auto" 
+                  />
+                ) : (
+                  <div className="h-10" />
+                )}
               </div>
-              <div className="border-b border-black w-40 mx-auto"></div>
+
               <div>
+                <div className="border-b border-black w-40 mx-auto mb-1"></div>
                 <p className="font-bold text-black underline">{mentor?.name || 'Ustadz Pembimbing'}</p>
-                <p className="text-[10px] text-slate-600 font-sans">NIP/ID. {mentor?.id || '-'}</p>
+                <p className="text-[10px] text-slate-500 font-sans italic">Mentor Halaqah</p>
               </div>
             </div>
 
-            {/* Kolom Kepala Sekolah */}
-            <div className="flex flex-col justify-between h-28">
+            {/* 2. Kolom Tengah: Pembina Rohis (Admin - Dengan NIP) */}
+            <div className="flex flex-col justify-between h-32">
+              <div>
+                <p className="font-bold text-black">Pembina Rohis BTQ,</p>
+                <p className="text-slate-700 text-[11px]">Koordinator Pembelajaran</p>
+              </div>
+
+              <div className="my-auto flex items-center justify-center min-h-[48px]">
+                {activeCoordinatorSignature ? (
+                  <img 
+                    src={activeCoordinatorSignature} 
+                    alt="Tanda Tangan Pembina Rohis" 
+                    className="max-h-14 max-w-[130px] object-contain mx-auto" 
+                  />
+                ) : (
+                  <div className="h-10" />
+                )}
+              </div>
+
+              <div>
+                <div className="border-b border-black w-44 mx-auto mb-1"></div>
+                <p className="font-bold text-black underline">{activeCoordinatorName}</p>
+                <p className="text-[10px] text-slate-600 font-sans">NIP. {activeCoordinatorNip || '-'}</p>
+              </div>
+            </div>
+
+            {/* 3. Kolom Kanan: Kepala Sekolah */}
+            <div className="flex flex-col justify-between h-32">
               <div>
                 <p className="font-bold text-black">Mengetahui,</p>
-                <p className="text-slate-800 font-bold">Kepala {activeSchoolName}</p>
+                <p className="text-slate-800 font-bold text-[11px]">Kepala {activeSchoolName}</p>
               </div>
-              <div className="border-b border-black w-44 mx-auto"></div>
+
+              <div className="my-auto flex items-center justify-center min-h-[48px]">
+                {activeHeadmasterSignature ? (
+                  <img 
+                    src={activeHeadmasterSignature} 
+                    alt="Tanda Tangan Kepala Sekolah" 
+                    className="max-h-14 max-w-[130px] object-contain mx-auto" 
+                  />
+                ) : (
+                  <div className="h-10" />
+                )}
+              </div>
+
               <div>
+                <div className="border-b border-black w-44 mx-auto mb-1"></div>
                 <p className="font-bold text-black underline">{activeHeadmasterName}</p>
-                <p className="text-[10px] text-slate-600 font-sans">NIP. {activeHeadmasterNip}</p>
+                <p className="text-[10px] text-slate-600 font-sans">NIP. {activeHeadmasterNip || '-'}</p>
               </div>
             </div>
           </div>

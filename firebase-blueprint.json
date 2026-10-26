@@ -9,6 +9,8 @@
         "name": { "type": "string" },
         "role": { "type": "string", "enum": ["admin", "mentor"] },
         "phone": { "type": "string" },
+        "signature": { "type": "string" },
+        "nip": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["email", "name", "role", "createdAt"]
@@ -151,7 +153,8 @@
         "name": { "type": "string" },
         "email": { "type": "string" },
         "groupId": { "type": "string" },
-        "role": { "type": "string" }
+        "role": { "type": "string" },
+        "signature": { "type": "string" }
       },
       "required": ["name", "email", "role"]
     },

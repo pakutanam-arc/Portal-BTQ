@@ -74,6 +74,7 @@ export interface Mentor {
   role: string;
   status?: string;
   groupId?: string;
+  signature?: string;
 }
 
 export interface StudentAttendance {

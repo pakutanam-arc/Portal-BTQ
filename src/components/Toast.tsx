@@ -39,7 +39,7 @@ export function Toast({ message, description, type = 'success', onClose }: Toast
 
   return (
     <div className={cn(
-      "fixed top-8 right-8 z-[100] px-5 py-4 rounded-2xl flex items-start gap-3 animate-in slide-in-from-top-5 fade-in duration-300",
+      "fixed top-4 sm:top-8 left-4 right-4 sm:left-auto sm:right-8 max-w-md z-[100] px-4 sm:px-5 py-3 sm:py-4 rounded-2xl flex items-start gap-3 animate-in slide-in-from-top-5 fade-in duration-300 shadow-2xl",
       themeStyles[type]
     )}>
       {icons[type]}

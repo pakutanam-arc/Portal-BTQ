@@ -51,6 +51,8 @@ import { GroupWeeklyAttendanceCard, WeeklyGroupDataPoint, GroupAttendanceDetail 
 import { AcademicCalendarCard } from './AcademicCalendarCard';
 import { getMeetingRealDate, formatShortDateID, formatLocalDateString } from '../../services/academicCalendar';
 import { getAcademicHolidays, subscribeAcademicHolidays, AcademicHoliday } from '../../services/db/calendar';
+import { normalizeGroupId } from '../../services/db/groups';
+import { sortStudents } from '../../utils/studentUtils';
 
 export type DashboardTimeRange = 'semester' | '8weeks' | '4weeks';
 
@@ -163,16 +165,9 @@ export function AdminDashboard() {
 
     loadData();
 
-    // Dengarkan event 'attendance-updated', 'calendar-updated' dan 'storage'
-    const handleAttendanceUpdated = async () => {
-      try {
-        const freshAttendance = await getAllStudentAttendance(activeRangeConfig.startDate, 2000);
-        if (isMounted) {
-          setAllAttendance(freshAttendance);
-        }
-      } catch (err) {
-        console.warn("Gagal memperbarui presensi realtime:", err);
-      }
+    // Dengarkan event pembaruan presensi, progress, kalender, & jurnal realtime
+    const handleDataUpdated = () => {
+      loadData();
     };
 
     const handleCalendarUpdated = async () => {
@@ -190,16 +185,22 @@ export function AdminDashboard() {
       if (isMounted) setHolidays(fresh);
     });
 
-    window.addEventListener('attendance-updated', handleAttendanceUpdated);
+    window.addEventListener('attendance-updated', handleDataUpdated);
+    window.addEventListener('progress-updated', handleDataUpdated);
+    window.addEventListener('journal-updated', handleDataUpdated);
+    window.addEventListener('db-cache-invalidated', handleDataUpdated);
     window.addEventListener('calendar-updated', handleCalendarUpdated);
-    window.addEventListener('storage', handleAttendanceUpdated);
+    window.addEventListener('storage', handleDataUpdated);
 
     return () => {
       isMounted = false;
       unsubHolidays();
-      window.removeEventListener('attendance-updated', handleAttendanceUpdated);
+      window.removeEventListener('attendance-updated', handleDataUpdated);
+      window.removeEventListener('progress-updated', handleDataUpdated);
+      window.removeEventListener('journal-updated', handleDataUpdated);
+      window.removeEventListener('db-cache-invalidated', handleDataUpdated);
       window.removeEventListener('calendar-updated', handleCalendarUpdated);
-      window.removeEventListener('storage', handleAttendanceUpdated);
+      window.removeEventListener('storage', handleDataUpdated);
     };
   }, []);
 
@@ -244,22 +245,24 @@ export function AdminDashboard() {
 
   // Memoize group details transformation synchronized with REAL progress data & future weeks
   const groupDetails: GroupDetailItem[] = useMemo(() => {
-    // Map students by groupId
+    // Map students by normalized groupId
     const studentsByGroup = new Map<string, Student[]>();
     students.forEach((s) => {
-      const list = studentsByGroup.get(s.groupId) || [];
+      const gNorm = normalizeGroupId(s.groupId);
+      const list = studentsByGroup.get(gNorm) || [];
       list.push(s);
-      studentsByGroup.set(s.groupId, list);
+      studentsByGroup.set(gNorm, list);
     });
 
-    // Map progress by studentId and groupId
+    // Map progress by studentId and normalized groupId
     const progressByGroup = new Map<string, StudentProgress[]>();
     allProgress.forEach((p) => {
-      const gId = p.groupId || students.find((s) => s.id === p.studentId)?.groupId;
-      if (gId) {
-        const list = progressByGroup.get(gId) || [];
+      const rawGId = p.groupId || students.find((s) => s.id === p.studentId)?.groupId;
+      const gNorm = normalizeGroupId(rawGId);
+      if (gNorm) {
+        const list = progressByGroup.get(gNorm) || [];
         list.push(p);
-        progressByGroup.set(gId, list);
+        progressByGroup.set(gNorm, list);
       }
     });
 
@@ -277,94 +280,94 @@ export function AdminDashboard() {
     // 1. Dari jurnal pengajaran yang telah direkam mentor
     const journalMaxWeek = journals.reduce((max, j) => Math.max(max, j.meetingNumber || 0), 0);
 
-    // 2. Dari catatan progres siswa tersimpan (misal input nilai langsung di halaman Progress)
-    let savedProgressMaxWeek = 0;
-    try {
-      const rawProg = localStorage.getItem('sibtq_student_progress');
-      if (rawProg) {
-        const parsed: StudentProgress[] = JSON.parse(rawProg);
-        parsed.forEach((p) => {
-          const s = extractSessionNumber(p);
-          if (s > savedProgressMaxWeek) savedProgressMaxWeek = s;
-        });
-      }
-    } catch {}
+    // 2. Dari catatan progres siswa tersimpan di Firestore (input nilai oleh mentor)
+    const savedProgressMaxWeek = allProgress.reduce((max, p) => {
+      const s = extractSessionNumber(p);
+      return Math.max(max, s);
+    }, 0);
 
-    // Standar acuan: default 2 pekan terlaksana (15 & 22 Agustus). Jika mentor/admin menginput pekan 3, 4, dst., otomatis terhitung dinamis!
     const attendanceMaxWeek = allAttendance.reduce((max, a) => Math.max(max, a.meetingNumber || 0), 0);
-    const activeMaxWeek = Math.max(2, journalMaxWeek, savedProgressMaxWeek, attendanceMaxWeek);
+    const activeMaxWeek = Math.max(0, journalMaxWeek, savedProgressMaxWeek, attendanceMaxWeek);
     const activeWeeksList: number[] = [];
     for (let w = 1; w <= activeMaxWeek; w++) {
       activeWeeksList.push(w);
     }
 
-    // Precompute attendance stats per group from allAttendance
+    // Precompute attendance stats per group from allAttendance using normalized groupId
     const groupAttendanceMap = new Map<string, { present: number; total: number }>();
     allAttendance.forEach((att) => {
-      if (!att.groupId) return;
-      const cur = groupAttendanceMap.get(att.groupId) || { present: 0, total: 0 };
+      const gNorm = normalizeGroupId(att.groupId);
+      if (!gNorm) return;
+      const cur = groupAttendanceMap.get(gNorm) || { present: 0, total: 0 };
       cur.total += 1;
       if (att.status === 'Hadir') cur.present += 1;
-      groupAttendanceMap.set(att.groupId, cur);
+      groupAttendanceMap.set(gNorm, cur);
     });
 
-    return groups.map((g, idx) => {
+    return groups.map((g) => {
+      const gNorm = normalizeGroupId(g.id);
       const mentorName = mentorMap.get(g.mentorId) || 'Ustadz / Ustadzah';
-      const gStudents = studentsByGroup.get(g.id) || [];
-      const studentsCount = gStudents.length || groupCounts[g.id] || 12;
-      const gProgs = progressByGroup.get(g.id) || [];
+      const gStudents = sortStudents(studentsByGroup.get(gNorm) || []);
+      const studentsCount = gStudents.length || groupCounts[g.id] || groupCounts[gNorm] || 0;
+      const gProgs = progressByGroup.get(gNorm) || [];
 
-      // Kelompokkan nilai siswa per nomor pekan
+      // Kelompokkan nilai siswa per nomor pekan murni dari Firestore
       const progsByWeek = new Map<number, number[]>();
       gProgs.forEach((p) => {
         const sNum = extractSessionNumber(p);
         const scores = progsByWeek.get(sNum) || [];
-        if (typeof p.total === 'number' && p.total > 0) {
+        if (typeof p.total === 'number' && !isNaN(p.total) && p.total > 0) {
           scores.push(p.total);
         }
         progsByWeek.set(sNum, scores);
       });
 
-      // Hitung capaian per pekan secara dinamis
-      let priorWeekProgress = 76 + (idx % 3);
+      // Hitung capaian per pekan secara dinamis murni dari data Firestore
       const weeklyProgress: WeeklyProgressPoint[] = activeWeeksList.map((weekNum, wIdx) => {
         const weekScores = progsByWeek.get(weekNum) || [];
-        let weekAvg: number;
-        if (weekScores.length > 0) {
-          weekAvg = Math.round(weekScores.reduce((acc, c) => acc + c, 0) / weekScores.length);
-        } else {
-          weekAvg = wIdx === 0 ? priorWeekProgress : priorWeekProgress + 1;
-        }
+        const hasScores = weekScores.length > 0;
+        const weekAvg = hasScores
+          ? Math.round(weekScores.reduce((acc, c) => acc + c, 0) / weekScores.length)
+          : 0;
 
-        const delta = wIdx === 0 ? (weekAvg - 70) : (weekAvg - priorWeekProgress);
-        priorWeekProgress = weekAvg;
+        const prevWeekScores = wIdx > 0 ? (progsByWeek.get(activeWeeksList[wIdx - 1]) || []) : [];
+        const prevAvg = prevWeekScores.length > 0
+          ? Math.round(prevWeekScores.reduce((acc, c) => acc + c, 0) / prevWeekScores.length)
+          : 0;
+
+        const delta = (hasScores && prevAvg > 0) ? (weekAvg - prevAvg) : 0;
 
         return {
           week: weekNum,
           label: `P${weekNum}`,
           progress: weekAvg,
-          target: 75, // Standar KKM Kurikulum BTQ Statis 75%
+          target: 75,
           delta,
           isCurrent: weekNum === activeMaxWeek
         };
       });
 
-      // Capaian terkini adalah capaian di pekan terakhir yang telah berjalan
-      const latestPoint = weeklyProgress[weeklyProgress.length - 1];
-      const currentProgress = latestPoint ? latestPoint.progress : 75;
+      // Capaian terkini adalah capaian di pekan terakhir yang memiliki nilai riil
+      const validPoints = weeklyProgress.filter(p => p.progress > 0);
+      const latestPoint = validPoints.length > 0 ? validPoints[validPoints.length - 1] : null;
+      const currentProgress = latestPoint ? latestPoint.progress : 0;
 
-      let statusLabel: 'Baik' | 'Perlu Dipantau' | 'Perlu Pendampingan' = 'Baik';
-      if (currentProgress < 65) {
-        statusLabel = 'Perlu Pendampingan';
-      } else if (currentProgress < 75) {
-        statusLabel = 'Perlu Dipantau';
+      let statusLabel: 'Baik' | 'Perlu Dipantau' | 'Perlu Pendampingan' | 'Belum Diinput' = 'Belum Diinput';
+      if (currentProgress > 0) {
+        if (currentProgress < 65) {
+          statusLabel = 'Perlu Pendampingan';
+        } else if (currentProgress < 75) {
+          statusLabel = 'Perlu Dipantau';
+        } else {
+          statusLabel = 'Baik';
+        }
       }
 
-      // Real attendance rate from allAttendance (with graceful fallback)
-      const groupAtt = groupAttendanceMap.get(g.id);
+      // Real attendance rate from allAttendance murni tanpa estimasi acak
+      const groupAtt = groupAttendanceMap.get(gNorm);
       const attendance = groupAtt && groupAtt.total > 0
         ? Math.round((groupAtt.present / groupAtt.total) * 100)
-        : (idx === 0 ? 83 : idx === 6 ? 80 : 85 + (idx % 3) * 4);
+        : 0;
 
       return {
         id: g.id,
@@ -379,8 +382,8 @@ export function AdminDashboard() {
     });
   }, [groups, mentorMap, groupCounts, students, allProgress, journals, allAttendance]);
 
-  // Helper to compute stats for a specific set of attendance records
-  const computeAttendanceStats = (records: StudentAttendance[], fallbackRate = 83): AttendancePeriodStats => {
+  // Helper to compute stats for a specific set of attendance records (murni tanpa fabrikasi)
+  const computeAttendanceStats = (records: StudentAttendance[]): AttendancePeriodStats => {
     let present = 0;
     let permission = 0;
     let sick = 0;
@@ -395,22 +398,18 @@ export function AdminDashboard() {
 
     const total = present + permission + sick + absent;
     if (total === 0) {
-      const pHadir = fallbackRate;
-      const pIzin = 6;
-      const pSakit = 6;
-      const pAlpa = Math.max(0, 100 - (pHadir + pIzin + pSakit));
       return {
-        rate: pHadir,
+        rate: 0,
         present: 0,
         permission: 0,
         sick: 0,
         absent: 0,
         total: 0,
         slices: [
-          { name: 'Hadir', value: pHadir, count: 0, color: '#0362D0' },
-          { name: 'Izin', value: pIzin, count: 0, color: '#C99A2E' },
-          { name: 'Sakit', value: pSakit, count: 0, color: '#94A3B8' },
-          { name: 'Alpa', value: pAlpa, count: 0, color: '#950415' }
+          { name: 'Hadir', value: 0, count: 0, color: '#0362D0' },
+          { name: 'Izin', value: 0, count: 0, color: '#C99A2E' },
+          { name: 'Sakit', value: 0, count: 0, color: '#94A3B8' },
+          { name: 'Alpa', value: 0, count: 0, color: '#950415' }
         ]
       };
     }
@@ -509,10 +508,10 @@ export function AdminDashboard() {
   const attendancePeriodData = useMemo<Record<'thisWeek' | 'month' | 'sixMonths' | 'all', AttendancePeriodStats>>(() => {
     if (!allAttendance || allAttendance.length === 0) {
       return {
-        thisWeek: computeAttendanceStats([], 83),
-        month: computeAttendanceStats([], 82),
-        sixMonths: computeAttendanceStats([], 81),
-        all: computeAttendanceStats([], 81)
+        thisWeek: computeAttendanceStats([]),
+        month: computeAttendanceStats([]),
+        sixMonths: computeAttendanceStats([]),
+        all: computeAttendanceStats([])
       };
     }
 
@@ -543,10 +542,10 @@ export function AdminDashboard() {
     // All records: cumulative history
     const allRecords = allAttendance;
 
-    const thisWeekStats = computeAttendanceStats(thisWeekRecords.length > 0 ? thisWeekRecords : allAttendance, 83);
-    const monthStats = computeAttendanceStats(monthRecords.length > 0 ? monthRecords : allAttendance, thisWeekStats.rate);
-    const sixMonthsStats = computeAttendanceStats(sixMonthsRecords.length > 0 ? sixMonthsRecords : allAttendance, 81);
-    const allStats = computeAttendanceStats(allRecords, 81);
+    const thisWeekStats = computeAttendanceStats(thisWeekRecords);
+    const monthStats = computeAttendanceStats(monthRecords);
+    const sixMonthsStats = computeAttendanceStats(sixMonthsRecords);
+    const allStats = computeAttendanceStats(allRecords);
 
     return {
       thisWeek: thisWeekStats,
@@ -564,16 +563,17 @@ export function AdminDashboard() {
     }));
   }, [groupDetails]);
 
-  // Memoize summary statistics cards for Admin
+  // Memoize summary statistics cards for Admin (Murni data riil)
   const statCards: StatCardItem[] = useMemo(() => {
-    const totalSiswaVal = totalStudents || 126;
-    const totalKelompokVal = groups.length || 10;
-    const totalMentorVal = mentors.length || 10;
+    const totalSiswaVal = totalStudents || students.length;
+    const totalKelompokVal = groups.length;
+    const totalMentorVal = mentors.length;
     const attendanceThisWeekVal = attendancePeriodData.thisWeek.rate;
     const attendanceAvgVal = attendancePeriodData.sixMonths.rate;
-    const progressAvgVal = groupDetails.length 
-      ? Math.round(groupDetails.reduce((sum, g) => sum + g.progress, 0) / groupDetails.length)
-      : 79;
+    const groupsWithProg = groupDetails.filter(g => g.progress > 0);
+    const progressAvgVal = groupsWithProg.length 
+      ? Math.round(groupsWithProg.reduce((sum, g) => sum + g.progress, 0) / groupsWithProg.length)
+      : 0;
 
     return [
       { 
@@ -608,9 +608,9 @@ export function AdminDashboard() {
       },
       { 
         label: 'Kehadiran Minggu Ini', 
-        value: `${attendanceThisWeekVal}%`, 
+        value: attendancePeriodData.thisWeek.total > 0 ? `${attendanceThisWeekVal}%` : '-', 
         sub: thisWeekLabel === 'pertemuan Sabtu hari ini' ? 'Pertemuan Sabtu ini' : 'Pertemuan Sabtu lalu',
-        trend: 'Siswa hadir kelas',
+        trend: attendancePeriodData.thisWeek.total > 0 ? 'Siswa hadir kelas' : 'Belum ada presensi',
         icon: UserCheck, 
         color: 'text-[#0362D0]', 
         bg: 'bg-[#0362D0]/10', 
@@ -618,9 +618,9 @@ export function AdminDashboard() {
       },
       { 
         label: 'Rata-rata Kehadiran', 
-        value: `${attendanceAvgVal}%`, 
+        value: attendancePeriodData.sixMonths.total > 0 ? `${attendanceAvgVal}%` : '-', 
         sub: 'Akumulasi semester',
-        trend: 'Konsisten di atas target',
+        trend: attendancePeriodData.sixMonths.total > 0 ? 'Konsisten di atas target' : 'Belum ada data',
         icon: TrendingUp, 
         color: 'text-[#0362D0]', 
         bg: 'bg-[#0362D0]/10', 
@@ -628,9 +628,9 @@ export function AdminDashboard() {
       },
       { 
         label: 'Rata-rata Progress', 
-        value: `${progressAvgVal}%`, 
+        value: groupsWithProg.length > 0 ? `${progressAvgVal}%` : '-', 
         sub: 'Pencapaian silabus',
-        trend: 'Sesuai timeline kurikulum',
+        trend: groupsWithProg.length > 0 ? 'Sesuai timeline kurikulum' : 'Belum diinput mentor',
         icon: CheckSquare, 
         color: 'text-[#C99A2E]', 
         bg: 'bg-[#C99A2E]/10', 
@@ -685,14 +685,8 @@ export function AdminDashboard() {
       }
     });
 
-    // Ambil daftar nomor pekan unik
+    // Ambil daftar nomor pekan unik HANYA dari data riil presensi dan jurnal
     const allWeekNumbersSet = new Set<number>();
-    // Pastikan minimal ada Pekan 1 s.d. 4 untuk visualisasi tren yang komprehensif
-    allWeekNumbersSet.add(1);
-    allWeekNumbersSet.add(2);
-    allWeekNumbersSet.add(3);
-    allWeekNumbersSet.add(4);
-
     allAttendance.forEach(a => {
       if (a.meetingNumber && a.meetingNumber > 0) {
         allWeekNumbersSet.add(a.meetingNumber);
@@ -700,6 +694,12 @@ export function AdminDashboard() {
         const dStr = a.date.split('T')[0];
         const wNum = dateToWeekMap.get(dStr);
         if (wNum) allWeekNumbersSet.add(wNum);
+      }
+    });
+
+    journals.forEach(j => {
+      if (j.meetingNumber && j.meetingNumber > 0) {
+        allWeekNumbersSet.add(j.meetingNumber);
       }
     });
 
@@ -730,24 +730,17 @@ export function AdminDashboard() {
         if (wNum === weekNum) return formatShortDate(dStr);
       }
 
-      // 4. Fallback ke jadwal kalender akademik fleksibel
+      // 4. Jadwal kalender akademik riil
       const fallbackDate = getMeetingRealDate(weekNum, [], holidays);
       if (fallbackDate) return formatShortDate(fallbackDate);
-
-      if (weekNum === 1) return '15 Agu';
-      if (weekNum === 2) return '22 Agu';
-      if (weekNum === 3) return '29 Agu';
-      if (weekNum === 4) return '05 Sep';
 
       return undefined;
     };
 
-    // 2. Hitung Ringkasan Tiap Pertemuan Keseluruhan Siswa
-    const weeklyOverall: WeeklyOverallAttendancePoint[] = sortedWeeks.map((weekNum, idx) => {
+    // 2. Hitung Ringkasan Tiap Pertemuan Keseluruhan Siswa Murni Data Firestore
+    const weeklyOverall: WeeklyOverallAttendancePoint[] = sortedWeeks.map((weekNum) => {
       const weekRecords = allAttendance.filter(a => {
         if (a.meetingNumber && a.meetingNumber === weekNum) return true;
-        if (weekNum === 1 && a.date && a.date.startsWith('2026-08-15')) return true;
-        if (weekNum === 2 && a.date && a.date.startsWith('2026-08-22')) return true;
         if (a.date) {
           const dStr = a.date.split('T')[0];
           return dateToWeekMap.get(dStr) === weekNum;
@@ -768,17 +761,7 @@ export function AdminDashboard() {
         else if (r.status === 'Alpa') absent++;
       });
 
-      let rate = 80;
-      if (total > 0) {
-        rate = Math.round((present / total) * 100);
-      } else {
-        rate = idx === 0 ? 80 : idx === 1 ? 83 : idx === 2 ? 85 : 84;
-        present = Math.round((totalStudents || 126) * (rate / 100));
-        permission = Math.round((totalStudents || 126) * 0.08);
-        sick = Math.round((totalStudents || 126) * 0.05);
-        absent = Math.max(0, (totalStudents || 126) - present - permission - sick);
-      }
-
+      const rate = total > 0 ? Math.round((present / total) * 100) : 0;
       const dLabel = getWeekDateLabel(weekNum);
       const displayLabel = dLabel ? `Pertemuan ${weekNum} (${dLabel})` : `Pertemuan ${weekNum}`;
 
@@ -787,24 +770,23 @@ export function AdminDashboard() {
         label: displayLabel,
         dateLabel: dLabel,
         rate,
-        present: present || Math.round((totalStudents || 126) * (rate / 100)),
-        permission: permission || Math.round((totalStudents || 126) * 0.08),
-        sick: sick || Math.round((totalStudents || 126) * 0.05),
-        absent: absent || Math.round((totalStudents || 126) * 0.04),
-        total: total || (totalStudents || 126),
+        present,
+        permission,
+        sick,
+        absent,
+        total,
         target: 80
       };
     });
 
-    // 3. Hitung Rincian Tiap Kelompok per Pekan
+    // 3. Hitung Rincian Tiap Kelompok per Pekan Murni Data Riil
     const weeklyGroups: WeeklyGroupDataPoint[] = sortedWeeks.map((weekNum) => {
-      const groupDataList: GroupAttendanceDetail[] = groups.map((g, gIdx) => {
+      const groupDataList: GroupAttendanceDetail[] = groups.map((g) => {
+        const gNorm = normalizeGroupId(g.id);
         const mentorName = mentorMap.get(g.mentorId) || 'Ustadz / Ustadzah';
         const gRecords = allAttendance.filter(a => {
-          if (a.groupId !== g.id) return false;
+          if (normalizeGroupId(a.groupId) !== gNorm) return false;
           if (a.meetingNumber && a.meetingNumber === weekNum) return true;
-          if (weekNum === 1 && a.date && a.date.startsWith('2026-08-15')) return true;
-          if (weekNum === 2 && a.date && a.date.startsWith('2026-08-22')) return true;
           if (a.date) {
             const dStr = a.date.split('T')[0];
             return dateToWeekMap.get(dStr) === weekNum;
@@ -825,19 +807,7 @@ export function AdminDashboard() {
           else if (r.status === 'Alpa') gAbs++;
         });
 
-        let gRate = 80;
-        if (gTotal > 0) {
-          gRate = Math.round((gPresent / gTotal) * 100);
-        } else {
-          const baseAtt = groupDetails.find(gd => gd.id === g.id)?.attendance || (80 + (gIdx % 3) * 4);
-          const weekVariance = ((weekNum + gIdx) % 3) - 1;
-          gRate = Math.min(100, Math.max(65, baseAtt + weekVariance));
-          const estTotal = groupCounts[g.id] || 12;
-          gPresent = Math.round(estTotal * (gRate / 100));
-          gPerm = Math.max(0, Math.round(estTotal * 0.08));
-          gSick = Math.max(0, Math.round(estTotal * 0.05));
-          gAbs = Math.max(0, estTotal - gPresent - gPerm - gSick);
-        }
+        const gRate = gTotal > 0 ? Math.round((gPresent / gTotal) * 100) : 0;
 
         return {
           groupId: g.id,
@@ -848,7 +818,7 @@ export function AdminDashboard() {
           permission: gPerm,
           sick: gSick,
           absent: gAbs,
-          total: gTotal || (groupCounts[g.id] || 12)
+          total: gTotal
         };
       });
 
@@ -863,10 +833,11 @@ export function AdminDashboard() {
       };
     });
 
-    // 4. Hitung Kumulatif Tiap Kelompok
-    const cumulativeGroups: GroupAttendanceDetail[] = groups.map((g, gIdx) => {
+    // 4. Hitung Kumulatif Tiap Kelompok Murni Data Riil
+    const cumulativeGroups: GroupAttendanceDetail[] = groups.map((g) => {
+      const gNorm = normalizeGroupId(g.id);
       const mentorName = mentorMap.get(g.mentorId) || 'Ustadz / Ustadzah';
-      const gRecords = allAttendance.filter(a => a.groupId === g.id);
+      const gRecords = allAttendance.filter(a => normalizeGroupId(a.groupId) === gNorm);
 
       let gPresent = 0;
       let gPerm = 0;
@@ -881,18 +852,7 @@ export function AdminDashboard() {
         else if (r.status === 'Alpa') gAbs++;
       });
 
-      let gRate = 80;
-      if (gTotal > 0) {
-        gRate = Math.round((gPresent / gTotal) * 100);
-      } else {
-        const found = groupDetails.find(gd => gd.id === g.id);
-        gRate = found ? found.attendance : (82 + (gIdx % 3) * 3);
-        const estTotal = (groupCounts[g.id] || 12) * Math.max(1, sortedWeeks.length);
-        gPresent = Math.round(estTotal * (gRate / 100));
-        gPerm = Math.max(0, Math.round(estTotal * 0.08));
-        gSick = Math.max(0, Math.round(estTotal * 0.05));
-        gAbs = Math.max(0, estTotal - gPresent - gPerm - gSick);
-      }
+      const gRate = gTotal > 0 ? Math.round((gPresent / gTotal) * 100) : 0;
 
       return {
         groupId: g.id,
@@ -903,16 +863,17 @@ export function AdminDashboard() {
         permission: gPerm,
         sick: gSick,
         absent: gAbs,
-        total: gTotal || ((groupCounts[g.id] || 12) * Math.max(1, sortedWeeks.length))
+        total: gTotal
       };
     });
 
-    const avgRate = weeklyOverall.length 
-      ? Math.round(weeklyOverall.reduce((sum, w) => sum + w.rate, 0) / weeklyOverall.length) 
-      : 82;
-    const latRate = weeklyOverall.length 
-      ? weeklyOverall[weeklyOverall.length - 1].rate 
-      : 83;
+    const validOverallWeeks = weeklyOverall.filter(w => w.total > 0);
+    const avgRate = validOverallWeeks.length 
+      ? Math.round(validOverallWeeks.reduce((sum, w) => sum + w.rate, 0) / validOverallWeeks.length) 
+      : 0;
+    const latRate = validOverallWeeks.length 
+      ? validOverallWeeks[validOverallWeeks.length - 1].rate 
+      : 0;
 
     return {
       weeklyOverallAttendanceData: weeklyOverall,
@@ -927,9 +888,9 @@ export function AdminDashboard() {
   const attentionAlerts: AttentionAlert[] = useMemo(() => {
     const alerts: AttentionAlert[] = [];
 
-    // 1. KELOMPOK DENGAN PROGRESS DI BAWAH KKM (75%)
+    // 1. KELOMPOK DENGAN PROGRESS DI BAWAH KKM (75%) - hanya kelompok dengan data riil tersimpan
     const lowProgressGroups = [...groupDetails]
-      .filter((g) => g.progress < 75)
+      .filter((g) => g.progress > 0 && g.progress < 75)
       .sort((a, b) => a.progress - b.progress);
 
     if (lowProgressGroups.length > 0) {
@@ -956,9 +917,9 @@ export function AdminDashboard() {
       }
     }
 
-    // 2. KELOMPOK DENGAN KEHADIRAN DI BAWAH 80% (ATAU TERENDAH)
+    // 2. KELOMPOK DENGAN KEHADIRAN DI BAWAH 80% - hanya kelompok dengan log presensi tersimpan
     const lowAttendanceGroups = [...groupDetails]
-      .filter((g) => g.attendance < 80)
+      .filter((g) => g.attendance > 0 && g.attendance < 80)
       .sort((a, b) => a.attendance - b.attendance);
 
     if (lowAttendanceGroups.length > 0) {
@@ -1018,10 +979,10 @@ export function AdminDashboard() {
     const recordedGroupIds = new Set(
       journals
         .filter((j) => j.meetingNumber === activeWeek)
-        .map((j) => j.groupId)
+        .map((j) => normalizeGroupId(j.groupId))
     );
 
-    const unrecordedGroups = groups.filter((g) => !recordedGroupIds.has(g.id));
+    const unrecordedGroups = groups.filter((g) => !recordedGroupIds.has(normalizeGroupId(g.id)));
 
     if (unrecordedGroups.length > 0) {
       if (unrecordedGroups.length === 1) {

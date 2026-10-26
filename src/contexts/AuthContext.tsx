@@ -1,8 +1,9 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../services/firebase';
 import { mockMentors } from '../services/mockData';
+import { getStoredSchoolConfig } from '../services/schoolConfig';
 
 interface AuthContextType {
   currentUser: User | null;
@@ -31,6 +32,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let isMounted = true;
 
+    // Listener untuk pembaruan profil instan
+    const handleProfileUpdated = (e: any) => {
+      const detail = e.detail;
+      if (!detail) return;
+      setUserData((prev: any) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          name: detail.name || prev.name,
+          signature: detail.signature !== undefined ? detail.signature : prev.signature,
+          nip: detail.nip !== undefined ? detail.nip : prev.nip,
+        };
+      });
+    };
+    window.addEventListener('user_profile_updated', handleProfileUpdated);
+
     // Safety timeout: ensure loading state never hangs indefinitely
     const timeoutId = setTimeout(() => {
       if (isMounted) {
@@ -48,7 +65,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // Check if admin (hardcoded admin email or fetch from users collection)
           if (emailLower === 'admin@smpn102.sch.id' || emailLower.startsWith('admin@')) {
             setUserRole('admin');
-            setUserData({ name: 'Administrator', email: user.email, role: 'admin' });
+            const schoolCfg = getStoredSchoolConfig();
+            setUserData({ 
+              name: schoolCfg.coordinatorName || 'Administrator', 
+              email: user.email, 
+              role: 'admin',
+              nip: schoolCfg.coordinatorNip || '',
+              signature: schoolCfg.coordinatorSignature || ''
+            });
           } else {
             // Check mock mentors first as immediate fallback
             const matchedMentor = mockMentors.find(m => m.email.toLowerCase() === emailLower);
@@ -61,14 +85,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             const defaultMentorName = username.startsWith('alumni') ? `Kak Alumni ${alumniNum}` : `Ustadz/ah ${username.charAt(0).toUpperCase() + username.slice(1)}`;
 
             try {
+              // Cek dokumen di collection mentors terlebih dahulu untuk mendapatkan nama dan tanda tangan kustom
+              let mentorDocData: any = null;
+              try {
+                const mentorDocRef = doc(db, 'mentors', `m${alumniNum}`);
+                const mentorSnap = await getDoc(mentorDocRef);
+                if (mentorSnap.exists()) {
+                  mentorDocData = mentorSnap.data();
+                }
+              } catch {}
+
               const q = query(collection(db, 'users'), where('email', '==', user.email));
               const snapshot = await getDocs(q);
               if (!snapshot.empty) {
                 const data = snapshot.docs[0].data() as any;
-                const uData = { id: snapshot.docs[0].id, ...data };
+                const uData = { 
+                  id: snapshot.docs[0].id, 
+                  ...data,
+                  name: mentorDocData?.name || data.name || defaultMentorName,
+                  signature: mentorDocData?.signature || data.signature || ''
+                };
                 if (!uData.groupId) uData.groupId = defaultGroupId;
                 setUserData(uData);
                 setUserRole(uData?.role || 'mentor');
+              } else if (mentorDocData) {
+                setUserData({
+                  id: `m${alumniNum}`,
+                  name: mentorDocData.name || (matchedMentor ? matchedMentor.name : defaultMentorName),
+                  email: user.email,
+                  role: 'mentor',
+                  groupId: defaultGroupId,
+                  signature: mentorDocData.signature || ''
+                });
+                setUserRole('mentor');
               } else if (matchedMentor) {
                 setUserData({ ...matchedMentor, role: 'mentor' });
                 setUserRole('mentor');
@@ -79,7 +128,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                   name: defaultMentorName,
                   email: user.email,
                   role: 'mentor',
-                  groupId: defaultGroupId
+                  groupId: defaultGroupId,
+                  signature: ''
                 });
                 setUserRole('mentor');
               }
@@ -94,7 +144,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                   name: defaultMentorName,
                   email: user.email,
                   role: 'mentor',
-                  groupId: defaultGroupId
+                  groupId: defaultGroupId,
+                  signature: ''
                 });
                 setUserRole('mentor');
               }
@@ -118,6 +169,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       isMounted = false;
       clearTimeout(timeoutId);
+      window.removeEventListener('user_profile_updated', handleProfileUpdated);
       unsubscribe();
     };
   }, []);

@@ -28,6 +28,7 @@ import {
 import { format } from 'date-fns';
 import { id as localeId } from 'date-fns/locale';
 import { getStoredSchoolConfig } from '../../services/schoolConfig';
+import { sortStudents, extractClassComponents } from '../../utils/studentUtils';
 
 interface BatchOfficialReportModalProps {
   isOpen: boolean;
@@ -131,12 +132,17 @@ export function BatchOfficialReportModal({
 
   // Unique Classes and Groups list
   const classes = useMemo(() => {
-    return Array.from(new Set(students.map((s) => s.class).filter(Boolean))).sort();
+    return Array.from(new Set(students.map((s) => s.class).filter(Boolean))).sort((a, b) => {
+      const classA = extractClassComponents(a);
+      const classB = extractClassComponents(b);
+      if (classA.gradeNumber !== classB.gradeNumber) return classA.gradeNumber - classB.gradeNumber;
+      return classA.section.localeCompare(classB.section, 'id');
+    });
   }, [students]);
 
   // Filtered Students List
   const candidateStudents = useMemo(() => {
-    return students.filter((s) => {
+    const list = students.filter((s) => {
       const matchGroup = selectedGroupFilter === 'all' || s.groupId === selectedGroupFilter;
       const matchClass = selectedClassFilter === 'all' || s.class === selectedClassFilter;
       const matchSearch = searchQuery.trim() === '' || 
@@ -144,6 +150,7 @@ export function BatchOfficialReportModal({
         (s.nis && s.nis.includes(searchQuery.trim()));
       return matchGroup && matchClass && matchSearch;
     });
+    return sortStudents(list);
   }, [students, selectedGroupFilter, selectedClassFilter, searchQuery]);
 
   // Sync selectedStudentIds when candidate list changes

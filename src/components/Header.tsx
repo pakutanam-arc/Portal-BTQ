@@ -15,7 +15,8 @@ import {
   ExternalLink,
   Send,
   ChevronRight,
-  Sparkles
+  Sparkles,
+  PenTool
 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
@@ -32,6 +33,7 @@ import {
 } from '../services/db';
 import { PWAInstallButton } from './pwa/PWAInstallButton';
 import { NetworkStatusIndicator } from './network/NetworkStatusIndicator';
+import { UserProfileModal } from './modals/UserProfileModal';
 
 const routeNames: Record<string, string> = {
   '/': 'Dashboard',
@@ -78,6 +80,7 @@ export function Header() {
   
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isBroadcastOpen, setIsBroadcastOpen] = useState(false);
   const [notifTab, setNotifTab] = useState<'all' | 'unread'>('all');
   
@@ -208,12 +211,14 @@ export function Header() {
   };
 
   return (
-    <header className="flex-1 bg-white flex items-center justify-between px-4 lg:px-8 w-full shrink-0 h-full relative">
+    <header className="flex-1 bg-white flex items-center justify-between px-2 sm:px-4 lg:px-8 w-full shrink-0 h-full relative">
       {/* Left Section: Breadcrumb */}
-      <div className="flex items-center gap-2 text-xs font-semibold">
-        <span className="text-[#0362D0] font-bold hidden sm:inline">Portal BTQ</span>
-        <ChevronRight className="icon-sm text-slate-400 hidden sm:inline" />
-        <h2 className="text-sm sm:text-base font-extrabold text-[#172033] tracking-tight">{currentPathName}</h2>
+      <div className="flex items-center gap-1.5 sm:gap-2 text-xs font-semibold min-w-0 pr-1">
+        <span className="text-[#0362D0] font-bold hidden md:inline shrink-0">Portal BTQ</span>
+        <ChevronRight className="icon-sm text-slate-400 hidden md:inline shrink-0" />
+        <h2 className="text-xs sm:text-sm md:text-base font-extrabold text-[#172033] tracking-tight truncate max-w-[120px] xs:max-w-[160px] sm:max-w-none" title={currentPathName}>
+          {currentPathName}
+        </h2>
       </div>
 
       {/* Middle Section: Search Bar */}
@@ -229,7 +234,7 @@ export function Header() {
       </div>
 
       {/* Right Section: Notification, Academic Year, Profile */}
-      <div className="flex items-center gap-2 sm:gap-2.5 lg:gap-3 ml-auto">
+      <div className="flex items-center gap-1.5 sm:gap-2.5 lg:gap-3 ml-auto shrink-0">
         {/* Network Connectivity Status Indicator (Online/Offline) */}
         <NetworkStatusIndicator />
 
@@ -441,10 +446,21 @@ export function Header() {
                   <p className="text-[10px] text-[#950415] font-bold">{roleDisplay}</p>
                   <p className="text-[10px] text-slate-500 mt-0.5 truncate">{currentUser?.email || ''}</p>
                 </div>
-                <div className="p-1.5">
+                <div className="p-1.5 space-y-1">
+                  <button 
+                    onClick={() => {
+                      setIsProfileOpen(false);
+                      setIsProfileModalOpen(true);
+                    }}
+                    className="btn btn-ghost !text-slate-700 hover:!bg-blue-50 hover:!text-[#0362D0] w-full justify-start action-icon-layout text-xs font-bold"
+                  >
+                    <PenTool className="icon-sm text-[#0362D0]" />
+                    Profil & Tanda Tangan
+                  </button>
+
                   <button 
                     onClick={handleLogout}
-                    className="btn btn-ghost !text-[#950415] hover:!bg-red-50 w-full justify-start action-icon-layout"
+                    className="btn btn-ghost !text-[#950415] hover:!bg-red-50 w-full justify-start action-icon-layout text-xs font-bold"
                   >
                     <LogOut className="icon-sm" />
                     Keluar Sistem
@@ -563,6 +579,12 @@ export function Header() {
           </div>
         </div>
       )}
+
+      {/* User Profile & Signature Modal */}
+      <UserProfileModal 
+        isOpen={isProfileModalOpen} 
+        onClose={() => setIsProfileModalOpen(false)} 
+      />
     </header>
   );
 }

@@ -35,7 +35,7 @@ import {
 } from '../services/db';
 import { OfficialReportModal } from '../components/reports/OfficialReportModal';
 import { BatchOfficialReportModal } from '../components/reports/BatchOfficialReportModal';
-import { getPublicStudentUrl } from '../utils/studentUtils';
+import { getPublicStudentUrl, sortStudents, extractClassComponents } from '../utils/studentUtils';
 import { useNavigate } from 'react-router-dom';
 
 export function Reports() {
@@ -67,11 +67,12 @@ export function Reports() {
           getGroups(),
           getMentors()
         ]);
-        setStudents(stList);
+        const sorted = sortStudents(stList);
+        setStudents(sorted);
         setGroups(grList);
         setMentors(mList);
-        if (stList.length > 0) {
-          setSelectedStudentId(stList[0].id);
+        if (sorted.length > 0) {
+          setSelectedStudentId(sorted[0].id);
         }
       } catch (err) {
         console.error('Failed to load students for reports:', err);
@@ -80,16 +81,32 @@ export function Reports() {
       }
     }
     loadData();
+
+    const handleProfileUpdate = () => {
+      loadData();
+    };
+    window.addEventListener('user_profile_updated', handleProfileUpdate);
+    return () => {
+      window.removeEventListener('user_profile_updated', handleProfileUpdate);
+    };
   }, []);
 
   const selectedStudent = students.find((s) => s.id === selectedStudentId) || null;
   const selectedStudentGroup = selectedStudent ? groups.find((g) => g.id === selectedStudent.groupId) : null;
   const selectedStudentMentor = selectedStudentGroup ? mentors.find((m) => m.id === selectedStudentGroup.mentorId) : null;
 
-  const classes = Array.from(new Set(students.map((s) => s.class).filter(Boolean))).sort();
-  const filteredStudents = selectedClassFilter === 'all' 
-    ? students 
-    : students.filter((s) => s.class === selectedClassFilter);
+  const classes = Array.from(new Set(students.map((s) => s.class).filter(Boolean))).sort((a, b) => {
+    const classA = extractClassComponents(a);
+    const classB = extractClassComponents(b);
+    if (classA.gradeNumber !== classB.gradeNumber) return classA.gradeNumber - classB.gradeNumber;
+    return classA.section.localeCompare(classB.section, 'id');
+  });
+
+  const filteredStudents = sortStudents(
+    selectedClassFilter === 'all' 
+      ? students 
+      : students.filter((s) => s.class === selectedClassFilter)
+  );
 
   // Helper to trigger browser CSV download
   const downloadCSV = (filename: string, csvContent: string) => {

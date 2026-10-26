@@ -42,7 +42,7 @@ import {
   Mentor,
   StudentAbsenceAlert
 } from '../services/db';
-import { getPublicStudentUrl } from '../utils/studentUtils';
+import { getPublicStudentUrl, sortStudents } from '../utils/studentUtils';
 import { useAuth } from '../contexts/AuthContext';
 import { StudentIdCard } from '../components/cards/StudentIdCard';
 import { StudentTableSkeleton } from '../components/students/StudentTableSkeleton';
@@ -133,8 +133,7 @@ export function Students() {
         finalStudents = allStudents.filter(s => groupIds.includes(s.groupId));
       }
       
-      finalStudents.sort((a, b) => a.name.localeCompare(b.name));
-      setStudents(finalStudents);
+      setStudents(sortStudents(finalStudents));
       setLoading(false);
     } catch (error) {
       console.error("Error loading students data:", error);
@@ -813,8 +812,8 @@ export function Students() {
 
       {/* Modal Tambah / Edit Santri */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white rounded-3xl max-w-md w-full border border-slate-100 shadow-2xl p-6 space-y-5 animate-in fade-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-md w-full max-h-[90vh] flex flex-col border border-slate-100 shadow-2xl p-5 sm:p-6 space-y-4 sm:space-y-5 animate-in fade-in zoom-in-95 duration-150 overflow-y-auto">
             <div className="flex justify-between items-center border-b border-slate-100 pb-4">
               <h3 className="text-lg font-black text-[#172033]">
                 {editingStudent ? 'Edit Data Santri' : 'Tambah Santri Baru'}

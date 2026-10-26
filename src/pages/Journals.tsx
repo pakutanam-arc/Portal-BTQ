@@ -12,6 +12,7 @@ import {
   Trash2, 
   FileText, 
   AlertCircle, 
+  AlertTriangle,
   CheckCircle2, 
   Users, 
   ChevronRight, 
@@ -57,6 +58,8 @@ export function Journals() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [editingJournalId, setEditingJournalId] = useState<string | null>(null);
+  const [journalToDelete, setJournalToDelete] = useState<TeachingJournal | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Form Fields
   const [formData, setFormData] = useState<{
@@ -199,15 +202,19 @@ export function Journals() {
     setIsModalOpen(true);
   };
 
-  const handleDelete = async (journalId: string) => {
-    if (!window.confirm("Apakah Anda yakin ingin menghapus catatan jurnal ini?")) return;
+  const handleConfirmDelete = async () => {
+    if (!journalToDelete?.id) return;
+    setIsDeleting(true);
     try {
-      await deleteTeachingJournal(journalId);
-      setJournals(prev => prev.filter(j => j.id !== journalId));
+      await deleteTeachingJournal(journalToDelete.id);
+      setJournals(prev => prev.filter(j => j.id !== journalToDelete.id));
       showToast("Catatan jurnal berhasil dihapus");
+      setJournalToDelete(null);
     } catch (e) {
       console.error(e);
       showToast("Gagal menghapus jurnal", "error");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -399,7 +406,7 @@ export function Journals() {
                         <Edit3 size={15} />
                       </button>
                       <button 
-                        onClick={() => journal.id && handleDelete(journal.id)}
+                        onClick={() => setJournalToDelete(journal)}
                         className="p-1.5 text-slate-400 hover:text-[#950415] hover:bg-[#950415]/10 rounded-xl transition-colors cursor-pointer"
                         title="Hapus Jurnal"
                       >
@@ -673,6 +680,70 @@ export function Journals() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* Modal Dialog Konfirmasi Hapus Jurnal In-App */}
+      {journalToDelete && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[#172033]/60 backdrop-blur-xs p-4 animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 animate-in zoom-in-95">
+            <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-100 text-rose-600 flex items-center justify-center mb-4 shadow-xs">
+              <Trash2 size={24} />
+            </div>
+
+            <h3 className="text-base font-black text-[#172033] mb-1">
+              Hapus Catatan Jurnal Mengajar?
+            </h3>
+            
+            <p className="text-xs text-slate-500 mb-4 leading-relaxed font-medium">
+              Anda akan menghapus riwayat KBM jurnal pertemuan berikut dari sistem:
+            </p>
+
+            <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 mb-4 space-y-1.5 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400 font-bold">Kelompok:</span>
+                <span className="font-extrabold text-[#172033]">{journalToDelete.groupName || 'Kelompok Binaan'}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400 font-bold">Pertemuan:</span>
+                <span className="font-bold text-[#0362D0]">Ke-{journalToDelete.meetingNumber || 1} ({journalToDelete.date})</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400 font-bold">Materi:</span>
+                <span className="font-bold text-slate-700 truncate max-w-[200px]">{journalToDelete.materialTaught}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400 font-bold">Mentor:</span>
+                <span className="font-bold text-slate-700">{journalToDelete.mentorName || 'Mentor'}</span>
+              </div>
+            </div>
+
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-[11px] leading-relaxed flex items-start gap-2 mb-5 font-medium">
+              <AlertTriangle size={15} className="shrink-0 text-amber-600 mt-0.5" />
+              <span>
+                <strong>Peringatan:</strong> Catatan jurnal yang dihapus tidak dapat dipulihkan kembali.
+              </span>
+            </div>
+
+            <div className="flex flex-col-reverse sm:flex-row items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setJournalToDelete(null)}
+                disabled={isDeleting}
+                className="w-full sm:w-auto px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-50 rounded-xl transition-colors cursor-pointer disabled:opacity-50 text-center"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                disabled={isDeleting}
+                className="w-full sm:w-auto px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-md cursor-pointer disabled:opacity-50"
+              >
+                <Trash2 size={14} />
+                {isDeleting ? 'Menghapus...' : 'Hapus Jurnal'}
+              </button>
+            </div>
           </div>
         </div>
       )}

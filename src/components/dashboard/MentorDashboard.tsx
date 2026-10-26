@@ -45,10 +45,13 @@ import { theme } from '../../theme';
 import { 
   StudentProgressChartModal, 
   StudentWithStats, 
-  SessionHistoryItem 
+  SessionHistoryItem,
+  StudentAttendanceHistoryItem
 } from './StudentProgressChartModal';
 import { AttendanceHistoryWidget } from './AttendanceHistoryWidget';
 import { useDebounce } from '../../hooks/useDebounce';
+import { sortStudents } from '../../utils/studentUtils';
+import { normalizeGroupId } from '../../services/db/groups';
 
 // Mini grafik sparkline nilai per tahap untuk baris tabel
 function SparklineProgress({ history, score }: { history: SessionHistoryItem[]; score?: number }) {
@@ -174,6 +177,75 @@ function TrendBadge({ trend, diff, score }: { trend: 'Meningkat' | 'Menurun' | '
   );
 }
 
+// Mini visualisasi sparkline grafik batang presensi santri per pertemuan KBM untuk baris tabel & kartu mobile
+function AttendanceMiniSparkline({ 
+  history, 
+  rate 
+}: { 
+  history?: StudentAttendanceHistoryItem[]; 
+  rate: number; 
+}) {
+  if (!history || history.length === 0) {
+    return <span className="text-slate-400 text-xs font-semibold">-</span>;
+  }
+
+  const items = history;
+
+  const badgeColor = rate >= 85 
+    ? 'text-emerald-700 bg-emerald-50 border-emerald-200' 
+    : rate >= 75 
+    ? 'text-amber-700 bg-amber-50 border-amber-200' 
+    : 'text-rose-700 bg-rose-50 border-rose-200';
+
+  return (
+    <div 
+      className="inline-flex items-center gap-2" 
+      title={`Riwayat Presensi: ${items.map(i => `P${i.meetingNumber}: ${i.status}`).join(' | ')} (${rate}%)`}
+    >
+      {/* Persentase Kehadiran Tebal */}
+      <span className={`text-[11px] font-black px-2 py-1 rounded-lg border shadow-2xs shrink-0 ${badgeColor}`}>
+        {rate}%
+      </span>
+
+      {/* Sparkline Batang Vertikal Mikro Per Pertemuan (P1, P2, P3, P4) */}
+      <div className="flex items-end gap-1 h-9 pt-1 pb-0.5">
+        {items.map((item, idx) => {
+          const isHadir = item.status === 'Hadir';
+          const isIzin = item.status === 'Izin';
+          const isSakit = item.status === 'Sakit';
+          
+          // Height and color based on status
+          const barHeight = isHadir ? 'h-5' : (isIzin || isSakit) ? 'h-3.5' : 'h-2';
+          const barColor = isHadir 
+            ? 'bg-emerald-500 hover:bg-emerald-600' 
+            : isIzin 
+            ? 'bg-amber-500 hover:bg-amber-600' 
+            : isSakit 
+            ? 'bg-blue-500 hover:bg-blue-600' 
+            : 'bg-rose-500 hover:bg-rose-600';
+
+          return (
+            <div 
+              key={idx} 
+              className="flex flex-col items-center gap-0.5 group cursor-pointer"
+              title={`Pertemuan ${item.meetingNumber}: ${item.status}${item.notes ? ` (${item.notes})` : ''}`}
+            >
+              {/* Batang Vertikal Mikro */}
+              <div className="w-2.5 h-5 flex items-end justify-center bg-slate-100 rounded-t-sm overflow-hidden p-0.5">
+                <div className={`w-full ${barHeight} ${barColor} rounded-t-xs transition-all duration-150`} />
+              </div>
+              {/* Label Pertemuan */}
+              <span className="text-[8px] font-extrabold text-slate-400 group-hover:text-slate-700 leading-none">
+                P{item.meetingNumber}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function MentorDashboard() {
   const { currentUser, userData } = useAuth();
 
@@ -229,15 +301,18 @@ export function MentorDashboard() {
         setMentorGroup(targetGroup);
 
         if (targetGroup) {
-          // Fetch students ONLY for this mentor's group
-          const [groupStudents, allProg, journalsRes, groupAttendance] = await Promise.all([
+          // Fetch students ONLY for this mentor's group with full record limits & fresh data
+          const [groupStudentsRaw, allProg, journalsRes, groupAttendance] = await Promise.all([
             getStudentsByGroup(targetGroup.id),
-            getStudentProgressByGroup(targetGroup.id),
-            getTeachingJournals(targetGroup.id, 5),
-            getStudentAttendanceByGroup(targetGroup.id, 20)
+            getStudentProgressByGroup(targetGroup.id, 500, true),
+            getTeachingJournals(targetGroup.id, 50),
+            getStudentAttendanceByGroup(targetGroup.id, 500, true)
           ]);
 
           if (!isMounted) return;
+
+          // Urutkan siswa secara natural: Angka Kelas -> Huruf Kelas -> Nama Santri (A-Z)
+          const groupStudents = sortStudents(groupStudentsRaw);
 
           setRecentAttendances(groupAttendance || []);
           setJournals(journalsRes.data || []);
@@ -248,9 +323,11 @@ export function MentorDashboard() {
           const prefix = isGrade3 ? 'g3' : (assignedGrade.id === 'grade2' ? 'g2' : 'g1');
 
           // Kumpulkan riwayat capaian per santri untuk SEMUA tahap yang pernah dijalani
+          const studentIds = new Set(groupStudents.map(s => s.id));
+          const normTargetGroupId = normalizeGroupId(targetGroup.id);
           const studentProgressMap = new Map<string, StudentProgress[]>();
           allProg
-            .filter(p => p.groupId === targetGroup.id)
+            .filter(p => studentIds.has(p.studentId) || normalizeGroupId(p.groupId) === normTargetGroupId)
             .forEach(p => {
               const list = studentProgressMap.get(p.studentId) || [];
               list.push(p);
@@ -268,47 +345,12 @@ export function MentorDashboard() {
               return new Date(a.date).getTime() - new Date(b.date).getTime();
             });
 
-            // Baseline fallback jika belum ada data di db
-            let validHistory: StudentProgress[] = sortedRaw;
-            if (validHistory.length === 0) {
-              const studentNum = idx + 1;
-              const trendType = (studentNum % 5 === 0) ? 'menurun' : (studentNum % 4 === 0) ? 'konsisten' : 'meningkat';
-              const s1 = 70 + (studentNum % 14);
-              const s2 = trendType === 'menurun' ? s1 - 3 : trendType === 'konsisten' ? s1 : s1 + 5;
-
-              validHistory = [
-                {
-                  studentId: s.id,
-                  groupId: targetGroup.id,
-                  sessionId: `${prefix}-s1`,
-                  semester: 1,
-                  meetingNumber: 1,
-                  date: '2026-08-15',
-                  reading: isGrade3 ? s1 : 0,
-                  tajwid: Math.max(60, s1 - 2),
-                  writing: Math.min(95, s1 + 1),
-                  memorization: isGrade3 ? s1 : 0,
-                  total: isGrade3 ? s1 : Math.round((Math.max(60, s1 - 2) + Math.min(95, s1 + 1)) / 2),
-                },
-                {
-                  studentId: s.id,
-                  groupId: targetGroup.id,
-                  sessionId: `${prefix}-s2`,
-                  semester: 1,
-                  meetingNumber: 2,
-                  date: '2026-08-22',
-                  reading: isGrade3 ? s2 : 0,
-                  tajwid: Math.max(60, s2 - 2),
-                  writing: Math.min(95, s2 + 1),
-                  memorization: isGrade3 ? s2 : 0,
-                  total: isGrade3 ? s2 : Math.round((Math.max(60, s2 - 2) + Math.min(95, s2 + 1)) / 2),
-                }
-              ];
-            }
+            // Murni data riil dari Firestore tanpa angka rekaan
+            const validHistory: StudentProgress[] = sortedRaw;
 
             // Format ke item riwayat sesi
             const sessionHistory: SessionHistoryItem[] = validHistory.map((rec, sIdx) => {
-              const sNum = parseInt(rec.sessionId?.match(/\d+$/)?.[0] || String(sIdx + 1), 10);
+              const sNum = rec.meetingNumber || parseInt(rec.sessionId?.match(/\d+$/)?.[0] || String(sIdx + 1), 10);
               const matchedSession = masterSessions.find(
                 ms => ms.gradeId === assignedGrade.id && ms.sessionNumber === sNum
               );
@@ -334,32 +376,49 @@ export function MentorDashboard() {
               };
             });
 
-            const latestSession = sessionHistory[sessionHistory.length - 1];
+            const hasProgress = sessionHistory.length > 0;
+            const latestSession = hasProgress ? sessionHistory[sessionHistory.length - 1] : null;
             const prevSession = sessionHistory.length > 1 ? sessionHistory[sessionHistory.length - 2] : null;
-            const score = latestSession ? latestSession.total : 75;
-            const trendDiff = prevSession ? (latestSession.total - prevSession.total) : 0;
+            const score: number = latestSession ? latestSession.total : 0;
+            const trendDiff = prevSession && latestSession ? (latestSession.total - prevSession.total) : 0;
             const trend: 'Meningkat' | 'Menurun' | 'Konsisten' = 
               trendDiff > 0 ? 'Meningkat' : trendDiff < 0 ? 'Menurun' : 'Konsisten';
 
             let statusCat: 'Sangat Baik' | 'Baik' | 'Perlu Bimbingan' = 'Baik';
-            if (score >= 85) {
-              statusCat = 'Sangat Baik';
-            } else if (score >= 75) {
-              statusCat = 'Baik';
-            } else {
-              statusCat = 'Perlu Bimbingan';
+            if (hasProgress) {
+              if (score >= 85) {
+                statusCat = 'Sangat Baik';
+              } else if (score >= 75) {
+                statusCat = 'Baik';
+              } else {
+                statusCat = 'Perlu Bimbingan';
+              }
             }
 
-            // Hitung persentase kehadiran nyata dari data presensi santri
+            // Hitung persentase kehadiran nyata murni dari data Firestore
             const sAttRecords = (groupAttendance || []).filter(a => a.studentId === s.id);
-            let att = 85;
-            if (sAttRecords.length > 0) {
-              const hadirCount = sAttRecords.filter(a => a.status === 'Hadir').length;
-              att = Math.round((hadirCount / sAttRecords.length) * 100);
+            const sortedAtt = [...sAttRecords].sort((a, b) => {
+              if (a.meetingNumber && b.meetingNumber) return a.meetingNumber - b.meetingNumber;
+              return new Date(a.date).getTime() - new Date(b.date).getTime();
+            });
+
+            const attendanceHistory: StudentAttendanceHistoryItem[] = sortedAtt.map((rec, aIdx) => ({
+              meetingNumber: rec.meetingNumber || (aIdx + 1),
+              date: rec.date || '',
+              status: (rec.status === 'Hadir' || rec.status === 'Izin' || rec.status === 'Sakit' || rec.status === 'Alpa')
+                ? rec.status
+                : 'Hadir',
+              notes: rec.notes || ''
+            }));
+
+            let att = 0;
+            if (attendanceHistory.length > 0) {
+              const hadirCount = attendanceHistory.filter(a => a.status === 'Hadir').length;
+              att = Math.round((hadirCount / attendanceHistory.length) * 100);
             }
 
-            // Capaian materi sesi terkini berdasarkan silabus
-            let currentStageText = `P${latestSession?.sessionNumber || 2}: ${assignedGrade.programName}`;
+            // Capaian materi sesi terkini berdasarkan silabus riil
+            let currentStageText = hasProgress ? `P${latestSession?.sessionNumber}: ${assignedGrade.programName}` : 'Belum Diinput';
             if (latestSession) {
               if (isGrade3) {
                 currentStageText = latestSession.memorizedSurah 
@@ -376,6 +435,7 @@ export function MentorDashboard() {
               currentStage: currentStageText,
               progressScore: score,
               attendanceRate: att,
+              attendanceHistory,
               statusCategory: statusCat,
               sessionHistory,
               trend,
@@ -384,7 +444,8 @@ export function MentorDashboard() {
             };
           });
 
-          setStudents(mappedStudents);
+          // Pastikan urutan santri selalu natural: Angka Kelas -> Huruf Kelas -> Nama Santri (A-Z)
+          setStudents(sortStudents(mappedStudents));
         }
       } catch (err) {
         console.error("Error loading mentor dashboard:", err);
@@ -395,18 +456,26 @@ export function MentorDashboard() {
 
     loadMentorDashboardData();
 
-    // Dengarkan event pembaruan presensi agar otomatis sinkron saat sesi/pekan baru diinput
-    const handleAttendanceUpdated = () => {
+    // Dengarkan event pembaruan presensi, progress, jurnal, & profil agar otomatis sinkron realtime
+    const handleDataUpdated = () => {
       loadMentorDashboardData();
     };
 
-    window.addEventListener('attendance-updated', handleAttendanceUpdated);
-    window.addEventListener('storage', handleAttendanceUpdated);
+    window.addEventListener('attendance-updated', handleDataUpdated);
+    window.addEventListener('progress-updated', handleDataUpdated);
+    window.addEventListener('journal-updated', handleDataUpdated);
+    window.addEventListener('db-cache-invalidated', handleDataUpdated);
+    window.addEventListener('user_profile_updated', handleDataUpdated);
+    window.addEventListener('storage', handleDataUpdated);
 
     return () => {
       isMounted = false;
-      window.removeEventListener('attendance-updated', handleAttendanceUpdated);
-      window.removeEventListener('storage', handleAttendanceUpdated);
+      window.removeEventListener('attendance-updated', handleDataUpdated);
+      window.removeEventListener('progress-updated', handleDataUpdated);
+      window.removeEventListener('journal-updated', handleDataUpdated);
+      window.removeEventListener('db-cache-invalidated', handleDataUpdated);
+      window.removeEventListener('user_profile_updated', handleDataUpdated);
+      window.removeEventListener('storage', handleDataUpdated);
     };
   }, [currentUser, userData]);
 
@@ -471,15 +540,19 @@ export function MentorDashboard() {
       };
     }
 
-    const totalAtt = students.reduce((acc, s) => acc + s.attendanceRate, 0);
-    const totalProg = students.reduce((acc, s) => acc + s.progressScore, 0);
-    const ready = students.filter(s => s.progressScore >= 85).length;
-    const attention = students.filter(s => s.statusCategory === 'Perlu Bimbingan').length;
+    const studentsWithAtt = students.filter(s => (s.attendanceHistory || []).length > 0);
+    const totalAtt = studentsWithAtt.reduce((acc, s) => acc + s.attendanceRate, 0);
+    const studentsWithProg = students.filter(s => s.sessionHistory && s.sessionHistory.length > 0);
+    const totalProg = studentsWithProg.reduce((acc, s) => acc + s.progressScore, 0);
+    const ready = studentsWithProg.filter(s => s.progressScore >= 85).length;
+    const attention = studentsWithProg.filter(s => s.statusCategory === 'Perlu Bimbingan').length;
 
     return {
       totalStudents: total,
-      avgAttendance: Math.round(totalAtt / total),
-      avgProgress: Math.round(totalProg / total),
+      avgAttendance: studentsWithAtt.length > 0 ? Math.round(totalAtt / studentsWithAtt.length) : 0,
+      avgProgress: studentsWithProg.length > 0 ? Math.round(totalProg / studentsWithProg.length) : 0,
+      hasAttendanceData: studentsWithAtt.length > 0,
+      hasProgressData: studentsWithProg.length > 0,
       readyForExam: ready,
       needAttention: attention
     };
@@ -491,7 +564,8 @@ export function MentorDashboard() {
     let baik = 0;       // Nilai 75 - 84
     let perluBimbingan = 0; // Nilai < 75
 
-    students.forEach((s) => {
+    const studentsWithProg = students.filter(s => s.sessionHistory && s.sessionHistory.length > 0);
+    studentsWithProg.forEach((s) => {
       if (s.progressScore >= 85) {
         sangatBaik++;
       } else if (s.progressScore >= 75) {
@@ -513,7 +587,8 @@ export function MentorDashboard() {
     let meningkat = 0;
     let konsisten = 0;
     let menurun = 0;
-    students.forEach(s => {
+    const studentsWithTrend = students.filter(s => s.sessionHistory && s.sessionHistory.length > 1);
+    studentsWithTrend.forEach(s => {
       if (s.trend === 'Meningkat') meningkat++;
       else if (s.trend === 'Menurun') menurun++;
       else konsisten++;
@@ -524,12 +599,13 @@ export function MentorDashboard() {
   // Filtered students in this group (berdasarkan kata kunci, kualitas, dan tren)
   const filteredStudents = useMemo(() => {
     const q = debouncedSearchQuery.trim().toLowerCase();
-    return students.filter(s => {
+    const res = students.filter(s => {
       const matchSearch = !q || s.name.toLowerCase().includes(q) || s.class.toLowerCase().includes(q) || (s.nis && s.nis.includes(q));
       const matchStatus = statusFilter === 'ALL' || s.statusCategory === statusFilter;
       const matchTrend = trendFilter === 'ALL' || s.trend === trendFilter;
       return matchSearch && matchStatus && matchTrend;
     });
+    return sortStudents(res);
   }, [students, debouncedSearchQuery, statusFilter, trendFilter]);
 
   // Indonesian Date Formatting
@@ -545,27 +621,29 @@ export function MentorDashboard() {
 
   // Dynamic Mentor Name for Alumni 1 - 10
   const mentorDisplayName = useMemo(() => {
-    // 1. Check email pattern first (e.g. alumni1@smpn102.sch.id -> Alumni 1)
+    // 1. Prioritaskan nama yang telah disimpan di profil (mentorProfile / userData)
+    const customName = (userData?.name || mentorProfile?.name || '').trim();
+    if (customName && !customName.match(/^(?:kak\s+)?alumni\s*\d+$/i) && customName !== 'User' && customName !== 'Pengguna') {
+      return customName;
+    }
+
+    if (customName) {
+      return customName;
+    }
+
+    // 2. Check email pattern (e.g. alumni1@smpn102.sch.id -> Kak Alumni 1)
     const email = currentUser?.email || userData?.email || '';
     const emailMatch = email.toLowerCase().match(/alumni\s*(\d+)/i);
     if (emailMatch) {
-      return `Alumni ${emailMatch[1]}`;
-    }
-
-    // 2. Check mentorProfile name or userData name (e.g. "Kak Alumni 1" or "Alumni 1")
-    const raw = mentorProfile?.name || userData?.name || currentUser?.displayName || '';
-    const stripped = raw.trim();
-    const matchAlumni = stripped.match(/(?:kak\s+)?alumni\s*(\d+)/i);
-    if (matchAlumni) {
-      return `Alumni ${matchAlumni[1]}`;
+      return `Kak Alumni ${emailMatch[1]}`;
     }
 
     // 3. Match from group number
     if (groupNumber >= 1 && groupNumber <= 10) {
-      return `Alumni ${groupNumber}`;
+      return `Kak Alumni ${groupNumber}`;
     }
 
-    return stripped.replace(/^(kak|ustadz|ustadzah|ustadz\/ah)\s+/i, '').trim() || 'Alumni 1';
+    return 'Kak Alumni';
   }, [mentorProfile, userData, currentUser, groupNumber]);
 
   const groupTitle = `Kelompok ${groupNumber}`;
@@ -756,10 +834,10 @@ export function MentorDashboard() {
           </div>
           <div className="mt-3">
             <p className="text-2xl sm:text-3xl font-black text-[#172033] tracking-tight leading-none">
-              {stats.avgAttendance}%
+              {stats.hasAttendanceData ? `${stats.avgAttendance}%` : '-'}
             </p>
             <p className="text-[10px] text-slate-400 font-semibold mt-1">
-              Rata-rata presensi santri
+              {stats.hasAttendanceData ? 'Rata-rata presensi santri' : 'Belum ada presensi'}
             </p>
           </div>
           <div className="mt-2.5 pt-2 border-t border-slate-50 text-[9px] font-bold text-slate-500">
@@ -779,10 +857,10 @@ export function MentorDashboard() {
           </div>
           <div className="mt-3">
             <p className="text-2xl sm:text-3xl font-black text-[#172033] tracking-tight leading-none">
-              {stats.avgProgress}%
+              {stats.hasProgressData ? `${stats.avgProgress}%` : '-'}
             </p>
             <p className="text-[10px] text-slate-400 font-semibold mt-1">
-              Ketercapaian materi jilid
+              {stats.hasProgressData ? 'Ketercapaian materi jilid' : 'Belum diinput mentor'}
             </p>
           </div>
           <div className="mt-2.5 pt-2 border-t border-slate-50 text-[9px] font-bold text-[#C99A2E]">
@@ -1145,7 +1223,7 @@ export function MentorDashboard() {
                       <th className="py-3 px-3">Materi Sesi</th>
                       <th className="py-3 px-3">Nilai Kualitas</th>
                       <th className="py-3 px-3">Tren Sesi (P1 → P2 → P3)</th>
-                      <th className="py-3 px-3 text-center">Kehadiran</th>
+                      <th className="py-3 px-3 text-center">Kehadiran (P1-P4)</th>
                       <th className="py-3 px-4 text-right">Aksi</th>
                     </tr>
                   </thead>
@@ -1174,9 +1252,13 @@ export function MentorDashboard() {
                           </td>
                           <td className="py-3 px-3 whitespace-nowrap">
                             <div className="flex items-center gap-2 whitespace-nowrap">
-                              <span className="text-xs font-black text-[#172033]">{s.progressScore}</span>
-                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase border whitespace-nowrap ${badgeStyle}`}>
-                                {s.statusCategory}
+                              <span className="text-xs font-black text-[#172033]">
+                                {s.sessionHistory && s.sessionHistory.length > 0 ? s.progressScore : '-'}
+                              </span>
+                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase border whitespace-nowrap ${
+                                s.sessionHistory && s.sessionHistory.length > 0 ? badgeStyle : 'bg-slate-100 text-slate-500 border-slate-200'
+                              }`}>
+                                {s.sessionHistory && s.sessionHistory.length > 0 ? s.statusCategory : 'Belum Ada Nilai'}
                               </span>
                             </div>
                           </td>
@@ -1186,11 +1268,13 @@ export function MentorDashboard() {
                               <TrendBadge trend={s.trend} diff={s.trendDiff} score={s.progressScore} />
                             </div>
                           </td>
-                          <td className="py-3 px-3 text-center font-black text-[#0362D0] whitespace-nowrap">{s.attendanceRate}%</td>
+                          <td className="py-3 px-3 text-center whitespace-nowrap">
+                            <AttendanceMiniSparkline history={s.attendanceHistory} rate={s.attendanceRate} />
+                          </td>
                           <td className="py-3 px-4 text-right whitespace-nowrap">
                             <button
                               onClick={() => setSelectedStudentForChart(s)}
-                              title="Buka grafik detail capaian santri per tahap"
+                              title="Buka grafik detail capaian & presensi santri"
                               className="px-2.5 py-1 bg-[#0362D0]/10 hover:bg-[#0362D0] text-[#0362D0] hover:text-white rounded-lg text-xs font-bold transition-all inline-flex items-center gap-1.5"
                             >
                               <LineChartIcon size={13} />
@@ -1229,22 +1313,35 @@ export function MentorDashboard() {
                           <h4 className="font-extrabold text-[#172033] text-xs sm:text-sm">{s.name}</h4>
                           <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Kelas {s.class} • NIS: {s.nis || '-'}</p>
                         </div>
-                        <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase border ${badgeStyle}`}>
-                          {s.statusCategory}
+                        <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase border ${
+                          s.sessionHistory && s.sessionHistory.length > 0 ? badgeStyle : 'bg-slate-100 text-slate-500 border-slate-200'
+                        }`}>
+                          {s.sessionHistory && s.sessionHistory.length > 0 ? s.statusCategory : 'Belum Ada Nilai'}
                         </span>
                       </div>
 
                       <div className="bg-slate-50 p-2 rounded-lg text-xs font-bold text-[#172033] mb-2.5 border border-slate-100 flex justify-between items-center">
                         <span>Materi: {s.currentStage}</span>
-                        <span className="text-[#0362D0] font-black">Nilai: {s.progressScore}</span>
+                        <span className="text-[#0362D0] font-black">
+                          Nilai: {s.sessionHistory && s.sessionHistory.length > 0 ? s.progressScore : '-'}
+                        </span>
                       </div>
 
-                      {/* Sparkline & Trend in Mobile Card */}
-                      <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-50 border border-slate-100 mb-2.5">
-                        <div className="flex items-center gap-2">
+                      {/* Visual Grafik Capaian Nilai & Riwayat Kehadiran di Kartu Mobile */}
+                      <div className="grid grid-cols-2 gap-2 p-2.5 rounded-lg bg-slate-50 border border-slate-100 mb-2.5">
+                        <div className="flex flex-col items-center justify-between border-r border-slate-200/80 pr-2">
+                          <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-tight mb-1">Tren Capaian</span>
                           <SparklineProgress history={s.sessionHistory} score={s.progressScore} />
+                          <div className="mt-1">
+                            <TrendBadge trend={s.trend} diff={s.trendDiff} score={s.progressScore} />
+                          </div>
                         </div>
-                        <TrendBadge trend={s.trend} diff={s.trendDiff} score={s.progressScore} />
+
+                        <div className="flex flex-col items-center justify-between pl-2">
+                          <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-tight mb-1">Kehadiran KBM</span>
+                          <AttendanceMiniSparkline history={s.attendanceHistory} rate={s.attendanceRate} />
+                          <span className="text-[9px] font-bold text-slate-400 mt-1">Pekan 1 s/d 4</span>
+                        </div>
                       </div>
 
                       <div className="pt-1">
@@ -1253,7 +1350,7 @@ export function MentorDashboard() {
                           className="w-full py-2 bg-[#0362D0]/10 hover:bg-[#0362D0]/20 text-[#0362D0] rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors border border-[#0362D0]/20"
                         >
                           <LineChartIcon size={14} />
-                          <span>Grafik Perkembangan</span>
+                          <span>Grafik Nilai & Presensi</span>
                         </button>
                       </div>
                     </div>

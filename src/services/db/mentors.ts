@@ -31,7 +31,8 @@ export async function getMentors(forceFresh = false): Promise<Mentor[]> {
             name: data.name || (mapEntry ? mapEntry.name : 'Mentor'),
             email: data.email || (mapEntry ? mapEntry.newEmail : 'mentor@smpn102.sch.id'),
             role: 'mentor',
-            status: 'Aktif'
+            status: 'Aktif',
+            signature: data.signature || (mapEntry as any)?.signature || ''
           };
         });
       }
@@ -47,26 +48,63 @@ export async function getMentors(forceFresh = false): Promise<Mentor[]> {
  * Memperbarui nama tampilan mentor di Firestore tanpa mengubah akun/user login
  */
 export async function updateMentorName(mentorId: string, newName: string): Promise<void> {
-  const trimmed = newName.trim();
+  return updateMentorProfile(mentorId, { name: newName });
+}
+
+/**
+ * Memperbarui nama dan tanda tangan digital mentor di Firestore
+ */
+export async function updateMentorProfile(
+  mentorId: string, 
+  updates: { name: string; signature?: string; email?: string }
+): Promise<void> {
+  const trimmed = updates.name.trim();
   if (!trimmed) {
     throw new Error('Nama mentor tidak boleh kosong');
   }
 
   try {
     const docRef = doc(db, 'mentors', mentorId);
-    await setDoc(docRef, {
+    const payload: Partial<Mentor> & { updatedAt: string } = {
       name: trimmed,
       updatedAt: new Date().toISOString()
-    }, { merge: true });
+    };
+    if (updates.signature !== undefined) {
+      payload.signature = updates.signature;
+    }
+    if (updates.email) {
+      payload.email = updates.email;
+    }
+
+    await setDoc(docRef, payload, { merge: true });
+
+    // Update juga di users jika ada
+    try {
+      const userRef = doc(db, 'users', mentorId);
+      await setDoc(userRef, {
+        name: trimmed,
+        signature: updates.signature || '',
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+    } catch {}
 
     // Invalidate caches agar perubahan langsung muncul di seluruh antarmuka
     invalidateDbCache('mentors');
     invalidateDbCache('groups');
 
+    // Dispatch event browser agar antarmuka aktif langsung bereaksi
+    window.dispatchEvent(new CustomEvent('user_profile_updated', {
+      detail: {
+        mentorId,
+        name: trimmed,
+        signature: updates.signature || ''
+      }
+    }));
+
     await logSystemActivity(
       'mentor',
       'Pembaruan Profil Mentor',
-      `Nama mentor ID "${mentorId}" diperbarui menjadi "${trimmed}". Akun user tetap aman.`
+      `Profil mentor ID "${mentorId}" (${trimmed}) dan tanda tangan digital berhasil diperbarui.`
     );
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, `mentors/${mentorId}`);

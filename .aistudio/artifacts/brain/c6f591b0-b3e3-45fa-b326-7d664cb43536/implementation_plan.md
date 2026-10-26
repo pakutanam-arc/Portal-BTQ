@@ -1,48 +1,122 @@
-# Rencana Perbaikan: Koreksi Jadwal Pertemuan Kalender Akademik (Sabtu BTQ)
+# System Implementation Plan: Smart Natural Student Sorting & Default Score Rules
 
-## Penyebab Masalah (Root Cause Analysis)
-Pada tangkapan layar yang Anda kirimkan, sesi pertemuan (P4, P5, P6, P7) muncul di kolom **Jumat** (tanggal 4, 11, 18, 25 September) bukannya di kolom **Sabtu (BTQ)** (tanggal 5, 12, 19, 26 September).
+Provide consistent, natural alphanumeric student sorting across all application views: primary sorting by grade number (e.g., 7 < 8 < 9), secondary sorting by class section/letter (e.g., 9A < 9B < 9C), and tertiary sorting alphabetically by student name (A-Z). Update baseline default initial score fallbacks from 80 to 0.
 
-Penyebab utamanya adalah **Timezone Shift (Pergeseran Zona Waktu)**:
-1. Objek tanggal dibuat pada tengah malam waktu lokal Indonesia/WIB (`2026-09-05 00:00:00 GMT+0700`).
-2. Kode pemetaan di `src/services/academicCalendar.ts` menggunakan method `.toISOString().split('T')[0]`.
-3. Method `.toISOString()` mengonversi waktu lokal ke format **UTC (GMT+0)**, sehingga mundur 7 jam menjadi `2026-09-04 17:00:00.000Z` (pukul 17:00 hari Jumat sebelumnya).
-4. Hasil pemotongan string tanggal menjadi `'2026-09-04'` (hari Jumat), yang menyebabkan komponen kalender menempatkan kartu pertemuan di hari Jumat tanggal 4, bukan Sabtu tanggal 5. Hal serupa terjadi untuk P5 (11 Sep), P6 (18 Sep), dan P7 (25 Sep).
+## User Review & Critical Decisions
 
----
+> [!IMPORTANT]
+> The following rules were confirmed:
+> 1. **Global Scope Sorting**: Applied across all student lists, including Kelola Santri, Rapor Santri, Rekap Absensi, and Admin/Mentor Dashboard tables.
+> 2. **Natural Grade & Section Parsing**: Smart extraction handles format variations (e.g., "7A", "Kelas 8B", "9 C", "VIII A") by parsing the numeric grade first, then the sub-class suffix letter, and finally student name.
+> 3. **Default Score baseline**: All unassessed or fallback student score entries (reading, tajwid, writing, memorization, and overall total) now default to `0` instead of `80`.
 
-## Rencana Perbaikan yang Diusulkan
-
-### 1. Perbaikan Algoritma Tanggal Pertemuan (`src/services/academicCalendar.ts`)
-- Ganti kalkulasi tanggal berbasis timestamp UTC (`toISOString()`) dengan kalkulasi tanggal berbasis kalender lokal (`getFullYear()`, `getMonth()`, `getDate()`).
-- Gunakan penambahan hari lokal kalender (`new Date(baseYear, baseMonth, baseDay + weekOffset * 7)`).
-- Menghasilkan string tanggal `YYYY-MM-DD` yang selalu konsisten dengan tanggal Sabtu riil di kalender Masehi:
-  - Pertemuan 1: Sabtu, 15 Agustus 2026 (`2026-08-15`)
-  - Pertemuan 2: Sabtu, 22 Agustus 2026 (`2026-08-22`)
-  - Pertemuan 3: Sabtu, 29 Agustus 2026 (`2026-08-29`)
-  - Pertemuan 4: Sabtu, 05 September 2026 (`2026-09-05`)
-  - Pertemuan 5: Sabtu, 12 September 2026 (`2026-09-12`)
-  - Pertemuan 6: Sabtu, 19 September 2026 (`2026-09-19`)
-  - Pertemuan 7: Sabtu, 26 September 2026 (`2026-09-26`)
-  - Dan seterusnya hingga Pertemuan 16 (Sabtu, 28 November 2026).
-
-### 2. Standarisasi Grid Kalender (`src/pages/AcademicCalendar.tsx`)
-- Perbarui pembentukan string tanggal pada `calendarGrid`:
-  - Padding hari bulan sebelumnya (previous month padding).
-  - Hari bulan berjalan (current month days).
-  - Padding hari bulan berikutnya (next month padding).
-- Pastikan seluruh cell tanggal menggunakan format lokal murni `YYYY-MM-DD` tanpa konversi `toISOString()` yang rentan terhadap offset zona waktu UTC+7.
-
-### 3. Penyelarasan Dashboard & Komponen Terkait (`src/components/dashboard/AdminDashboard.tsx`)
-- Pastikan helper tanggal Sabtu terakhir (`lastSaturdayStr`) dan `todayStr` menggunakan format tanggal lokal agar kartu ringkasan presensi mingguan selalu presisi merujuk ke hari Sabtu.
+- **Confirmed Decision 1**: Apply sorting across all views (Students management, Reports sheet/modal, Attendance, Progress, and Dashboard panels).
+- **Confirmed Decision 2**: Use smart natural sorting: Grade number (7 < 8 < 9) -> Class section letter (A < B < C) -> Student name (A-Z).
+- **Confirmed Decision 3**: Baseline default score for new or unentered records is set to `0`.
 
 ---
 
-## Rencana Verifikasi
-1. Periksa tampilan halaman Kalender Akademik (`/calendar`) pada bulan September 2026:
-   - Pastikan P4 berada di kolom **Sabtu (BTQ)** tanggal 5 September.
-   - Pastikan P5 berada di kolom **Sabtu (BTQ)** tanggal 12 September.
-   - Pastikan P6 berada di kolom **Sabtu (BTQ)** tanggal 19 September.
-   - Pastikan P7 berada di kolom **Sabtu (BTQ)** tanggal 26 September.
-   - Pastikan kolom **Jumat** bersih tanpa kartu pertemuan BTQ.
-2. Jalankan `lint_applet` dan `compile_applet` untuk memastikan tidak ada kesalahan kompilasi.
+## 1. Overview & Core Concept
+
+Currently, student lists are sorted either arbitrarily by insertion order or purely by student name. This implementation introduces a unified helper (`sortStudents` / `compareStudentsByClassAndName`) in `src/utils/studentUtils.ts` that enforces:
+- **Primary key**: Grade Number (numeric extraction: 7 < 8 < 9).
+- **Secondary key**: Class Section Suffix (alphabetic letter: A < B < C).
+- **Tertiary key**: Student Name (locale-aware Indonesian alphabetic comparison: A-Z).
+
+---
+
+## 2. User Experience & Visual Design
+
+- **Predictable Ordering**: Mentors and admins will see student lists sorted logically by grade (7 -> 8 -> 9), by class group (7A -> 7B -> 8A -> 9A -> 9C), and then by name within each class.
+- **Consistent Navigation**: Seamless user experience across student management tables, attendance inputs, batch report printing, and progress tracking.
+
+---
+
+## 3. Key Product Decisions & Trade-Offs
+
+- **Decision 1**: Centralized Utility in `studentUtils.ts`.
+  - *Chosen Approach*: Implement `extractClassComponents(className)` and `compareStudentsByClassAndName(a, b)` in `src/utils/studentUtils.ts` and use it across all list views.
+  - *Why*: Guarantees single source of truth for sorting behavior and eliminates duplicate sorting logic.
+  - *Alternatives Considered*: Independent sorting in each page (rejected: prone to drift and inconsistencies).
+
+- **Decision 2**: Robust Class Parsing with Roman Numerals Support.
+  - *Chosen Approach*: Regex-based parser that converts standard numbers ("7", "8", "9") and Roman numerals ("VII", "VIII", "IX") into numeric grade numbers, while extracting sub-class letters ("A", "B", "C").
+  - *Why*: Gracefully handles user variations in inputting class names.
+
+---
+
+## 4. Technical Architecture & Data Strategy
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    src/utils/studentUtils.ts                    │
+│  - extractClassComponents(className) => { gradeNum, section }   │
+│  - compareStudentsByClassAndName(studentA, studentB) => number  │
+│  - sortStudents(studentsList) => sortedArray                    │
+└─────────────────────────────────┬───────────────────────────────┘
+                                  │
+       ┌──────────────────────────┼──────────────────────────┐
+       ▼                          ▼                          ▼
+┌──────────────┐         ┌─────────────────┐        ┌──────────────────┐
+│ Students.tsx │         │   Reports.tsx   │        │ Dashboard Panels │
+│ (Management) │         │  (Rapor Sheet)  │        │ (Admin & Mentor) │
+└──────────────┘         └─────────────────┘        └──────────────────┘
+```
+
+### Data Structures & Comparison Logic
+```typescript
+interface ClassComponents {
+  gradeNumber: number; // e.g., 7, 8, 9 (0 if unparsed)
+  section: string;     // e.g., "A", "B", "C"
+  rawClass: string;
+}
+
+export function extractClassComponents(className?: string): ClassComponents {
+  if (!className) return { gradeNumber: 999, section: '', rawClass: '' };
+  const str = className.trim();
+  
+  // Convert Roman numerals to numbers if present
+  let normalized = str
+    .replace(/\bVII\b/i, '7')
+    .replace(/\bVIII\b/i, '8')
+    .replace(/\bIX\b/i, '9');
+    
+  const match = normalized.match(/(\d+)\s*([a-zA-Z]*)/);
+  if (match) {
+    return {
+      gradeNumber: parseInt(match[1], 10),
+      section: (match[2] || '').toUpperCase(),
+      rawClass: str
+    };
+  }
+  return { gradeNumber: 999, section: str.toUpperCase(), rawClass: str };
+}
+
+export function compareStudentsByClassAndName(
+  a: { className?: string; name: string },
+  b: { className?: string; name: string }
+): number {
+  const classA = extractClassComponents(a.className);
+  const classB = extractClassComponents(b.className);
+
+  if (classA.gradeNumber !== classB.gradeNumber) {
+    return classA.gradeNumber - classB.gradeNumber;
+  }
+
+  const sectionCmp = classA.section.localeCompare(classB.section, 'id');
+  if (sectionCmp !== 0) return sectionCmp;
+
+  return a.name.localeCompare(b.name, 'id', { sensitivity: 'base' });
+}
+```
+
+---
+
+## 5. Affected Files & Execution Strategy
+
+1. **`src/utils/studentUtils.ts`**: Add `extractClassComponents`, `compareStudentsByClassAndName`, and `sortStudents`.
+2. **`src/pages/Students.tsx`**: Apply `sortStudents` when displaying student table & filters.
+3. **`src/pages/Reports.tsx` / `BatchOfficialReportModal.tsx` / `OfficialReportSheet.tsx`**: Apply `sortStudents` for single and batch report generation.
+4. **`src/pages/StudentAttendance.tsx` / `Progress.tsx` / `LiveSession.tsx`**: Sort active student lists prior to rendering attendance and progress forms.
+5. **`src/components/dashboard/AdminDashboard.tsx` & `GroupSummaryTable.tsx`**: Sort group student summaries consistently.
+6. **Verification**: Execute `lint_applet` and `compile_applet` to ensure full build integrity.

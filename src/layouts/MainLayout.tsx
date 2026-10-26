@@ -22,7 +22,7 @@ export function MainLayout() {
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-h-screen w-full relative lg:pl-64 pb-16 lg:pb-0 print:pl-0 print:pb-0 print:min-h-0 print:block">
+      <div className="flex-1 flex flex-col min-h-screen w-full relative lg:pl-64 pb-24 lg:pb-0 print:pl-0 print:pb-0 print:min-h-0 print:block">
         
         {/* Offline & Connectivity Ambient Top Bar */}
         <NetworkStatusBar />
@@ -32,9 +32,9 @@ export function MainLayout() {
           {/* Subtle Maroon & Gold Accent Line Under Navbar */}
           <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-[#0362D0] via-[#C99A2E] to-[#950415]" />
           
-          <div className="flex items-center lg:hidden pl-4 shrink-0">
-            <div className="flex items-center gap-3 pr-2 py-2">
-              <div className="w-9 h-9 rounded-xl overflow-hidden shrink-0 ring-1 ring-[#C99A2E]/50 bg-white p-0.5 shadow-sm">
+          <div className="flex items-center lg:hidden pl-3 sm:pl-4 shrink-0">
+            <div className="flex items-center gap-2 sm:gap-2.5 pr-1 py-2">
+              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl overflow-hidden shrink-0 ring-1 ring-[#C99A2E]/50 bg-white p-0.5 shadow-sm">
                 <img 
                   src={APP_LOGO} 
                   alt="Logo SMPN 102" 
@@ -42,9 +42,9 @@ export function MainLayout() {
                   referrerPolicy="no-referrer" 
                 />
               </div>
-              <div className="flex flex-col justify-center">
-                <span className="font-bold text-sm text-[#172033] mb-0.5">{APP_NAME}</span>
-                <span className="text-xs text-[#C99A2E] font-medium truncate">{APP_SUBTITLE}</span>
+              <div className="hidden xs:flex flex-col justify-center">
+                <span className="font-extrabold text-xs sm:text-sm text-[#172033] leading-tight">{APP_NAME}</span>
+                <span className="text-[10px] text-[#C99A2E] font-bold truncate hidden sm:inline">{APP_SUBTITLE}</span>
               </div>
             </div>
           </div>

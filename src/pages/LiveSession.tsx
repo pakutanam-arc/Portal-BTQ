@@ -1,7 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { theme } from '../theme';
-import { Calendar, Save, Loader2, BookOpen, Users, UserCheck, AlertCircle, MessageSquare, MessageCircle, CheckCircle, ChevronRight, Award, ChevronDown, Hash, CheckSquare, Edit3, PlusCircle, Camera, Sliders, Search, CheckCircle2, Sparkles, Check, X, CalendarOff } from 'lucide-react';
+import { 
+  Calendar, Save, Loader2, BookOpen, Users, UserCheck, AlertCircle, 
+  MessageSquare, MessageCircle, CheckCircle, ChevronRight, Award, ChevronDown, 
+  Hash, CheckSquare, Edit3, PlusCircle, Camera, Sliders, Search, CheckCircle2, 
+  Sparkles, Check, X, CalendarOff, UserPlus, UserMinus, Trash2, ShieldAlert
+} from 'lucide-react';
 import { Select } from '../components/ui/Select';
 import { Input } from '../components/ui/Input';
 import { cn } from '../utils/cn';
@@ -10,6 +15,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { CurriculumSyncAlert } from '../components/CurriculumSyncAlert';
 import { StudentScoreDrawer } from '../components/session/StudentScoreDrawer';
 import { StudentTableSkeleton } from '../components/students/StudentTableSkeleton';
+import { StudentActionModal } from '../components/students/StudentActionModal';
+import { sortStudents } from '../utils/studentUtils';
 
 const QRScanner = React.lazy(() => import('../components/QRScanner').then(m => ({ default: m.QRScanner })));
 import { 
@@ -22,8 +29,13 @@ import {
   getTeachingJournals,
   saveStudentAttendance,
   saveStudentProgress,
+  saveMultipleStudentProgress,
   saveTeachingJournal,
   createNotification,
+  addStudent,
+  deleteStudent,
+  deactivateStudent,
+  activateStudent,
   Group, 
   Student, 
   Mentor,
@@ -93,6 +105,23 @@ export function LiveSession() {
 
   // Scanner state
   const [showScanner, setShowScanner] = useState(false);
+
+  // States for Mentor Add & Manage/Delete Student
+  const [isAddStudentOpen, setIsAddStudentOpen] = useState(false);
+  const [newStudentForm, setNewStudentForm] = useState<{
+    name: string;
+    nis: string;
+    class: string;
+    gender: 'L' | 'P';
+  }>({
+    name: '',
+    nis: '',
+    class: '7A',
+    gender: 'L',
+  });
+  const [isSubmittingStudent, setIsSubmittingStudent] = useState(false);
+  const [actionStudent, setActionStudent] = useState<Student | null>(null);
+  const [isActionLoading, setIsActionLoading] = useState(false);
 
   const isMentor = userRole === 'mentor' && currentUser?.email !== 'admin@smpn102.sch.id';
 
@@ -278,7 +307,8 @@ export function LiveSession() {
       if (!selectedGroup) return;
       setLoading(true);
       try {
-        const stds = await getStudentsByGroup(selectedGroup);
+        const rawStds = await getStudentsByGroup(selectedGroup);
+        const stds = sortStudents(rawStds);
         setStudents(stds);
         
         // 1. Load Attendance for Meeting Number & Date (Default 'Alpa' for new unrecorded meetings)
@@ -299,10 +329,10 @@ export function LiveSession() {
           const attStatus = newAtt[s.id]?.status || 'Alpa';
 
           // Preserve any saved or baseline values for restoration when student is marked Hadir
-          const savedR = (pr?.reading && pr.reading > 0) ? pr.reading : 80;
-          const savedT = (pr?.tajwid && pr.tajwid > 0) ? pr.tajwid : 80;
-          const savedW = (pr?.writing && pr.writing > 0) ? pr.writing : 80;
-          const savedM = currentGradeId === 'grade3' ? ((pr?.memorization && pr.memorization > 0) ? pr.memorization : 80) : 0;
+          const savedR = (pr?.reading && pr.reading > 0) ? pr.reading : 0;
+          const savedT = (pr?.tajwid && pr.tajwid > 0) ? pr.tajwid : 0;
+          const savedW = (pr?.writing && pr.writing > 0) ? pr.writing : 0;
+          const savedM = currentGradeId === 'grade3' ? ((pr?.memorization && pr.memorization > 0) ? pr.memorization : 0) : 0;
 
           if (attStatus !== 'Hadir') {
             // Absent students (default Alpa/Izin/Sakit) automatically receive 0 progress scores for this meeting
@@ -319,13 +349,13 @@ export function LiveSession() {
               _savedMemorization: savedM,
             } as any;
           } else {
-            // Present students load saved progress or default base score 80
+            // Present students load saved progress or default base score 0
             newProg[s.id] = pr || { 
               reading: savedR, 
               tajwid: savedT, 
               memorization: savedM, 
               writing: savedW,
-              total: 80,
+              total: 0,
               _savedReading: savedR,
               _savedTajwid: savedT,
               _savedWriting: savedW,
@@ -352,10 +382,10 @@ export function LiveSession() {
       const current = (prev[studentId] || {}) as any;
       if (status !== 'Hadir') {
         // Cache current non-zero scores before zeroing out
-        const savedR = (current.reading && current.reading > 0) ? current.reading : (current._savedReading || 80);
-        const savedT = (current.tajwid && current.tajwid > 0) ? current.tajwid : (current._savedTajwid || 80);
-        const savedW = (current.writing && current.writing > 0) ? current.writing : (current._savedWriting || 80);
-        const savedM = (current.memorization && current.memorization > 0) ? current.memorization : (current._savedMemorization || (currentGradeId === 'grade3' ? 80 : 0));
+        const savedR = (current.reading && current.reading > 0) ? current.reading : (current._savedReading || 0);
+        const savedT = (current.tajwid && current.tajwid > 0) ? current.tajwid : (current._savedTajwid || 0);
+        const savedW = (current.writing && current.writing > 0) ? current.writing : (current._savedWriting || 0);
+        const savedM = (current.memorization && current.memorization > 0) ? current.memorization : (current._savedMemorization || 0);
 
         // Automatically zero out progress for absent students in this meeting
         return {
@@ -374,19 +404,19 @@ export function LiveSession() {
           }
         };
       } else {
-        // Restore previous scores or standard base score (80) if returning to Hadir
-        const r = (current.reading && current.reading > 0) ? current.reading : (current._savedReading || 80);
-        const t = (current.tajwid && current.tajwid > 0) ? current.tajwid : (current._savedTajwid || 80);
-        const w = (current.writing && current.writing > 0) ? current.writing : (current._savedWriting || 80);
+        // Restore previous scores or standard base score (0) if returning to Hadir
+        const r = (current.reading && current.reading > 0) ? current.reading : (current._savedReading || 0);
+        const t = (current.tajwid && current.tajwid > 0) ? current.tajwid : (current._savedTajwid || 0);
+        const w = (current.writing && current.writing > 0) ? current.writing : (current._savedWriting || 0);
         const m = currentGradeId === 'grade3' 
-          ? ((current.memorization && current.memorization > 0) ? current.memorization : (current._savedMemorization || 80)) 
+          ? ((current.memorization && current.memorization > 0) ? current.memorization : (current._savedMemorization || 0)) 
           : 0;
         
         const scores: number[] = [];
         if (currentGradeId === 'grade3' && r > 0) scores.push(r);
         if (t > 0) scores.push(t);
         if (w > 0) scores.push(w);
-        const calculatedTotal = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 80;
+        const calculatedTotal = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
 
         return {
           ...prev,
@@ -446,10 +476,10 @@ export function LiveSession() {
       students.forEach(s => {
         const current = (nextProg[s.id] || {}) as any;
         if (status !== 'Hadir') {
-          const savedR = (current.reading && current.reading > 0) ? current.reading : (current._savedReading || 80);
-          const savedT = (current.tajwid && current.tajwid > 0) ? current.tajwid : (current._savedTajwid || 80);
-          const savedW = (current.writing && current.writing > 0) ? current.writing : (current._savedWriting || 80);
-          const savedM = (current.memorization && current.memorization > 0) ? current.memorization : (current._savedMemorization || (currentGradeId === 'grade3' ? 80 : 0));
+          const savedR = (current.reading && current.reading > 0) ? current.reading : (current._savedReading || 0);
+          const savedT = (current.tajwid && current.tajwid > 0) ? current.tajwid : (current._savedTajwid || 0);
+          const savedW = (current.writing && current.writing > 0) ? current.writing : (current._savedWriting || 0);
+          const savedM = (current.memorization && current.memorization > 0) ? current.memorization : (current._savedMemorization || 0);
 
           nextProg[s.id] = {
             ...current,
@@ -464,18 +494,18 @@ export function LiveSession() {
             _savedMemorization: savedM,
           };
         } else {
-          const r = (current.reading && current.reading > 0) ? current.reading : (current._savedReading || 80);
-          const t = (current.tajwid && current.tajwid > 0) ? current.tajwid : (current._savedTajwid || 80);
-          const w = (current.writing && current.writing > 0) ? current.writing : (current._savedWriting || 80);
+          const r = (current.reading && current.reading > 0) ? current.reading : (current._savedReading || 0);
+          const t = (current.tajwid && current.tajwid > 0) ? current.tajwid : (current._savedTajwid || 0);
+          const w = (current.writing && current.writing > 0) ? current.writing : (current._savedWriting || 0);
           const m = currentGradeId === 'grade3' 
-            ? ((current.memorization && current.memorization > 0) ? current.memorization : (current._savedMemorization || 80)) 
+            ? ((current.memorization && current.memorization > 0) ? current.memorization : (current._savedMemorization || 0)) 
             : 0;
           
           const scores: number[] = [];
           if (currentGradeId === 'grade3' && r > 0) scores.push(r);
           if (t > 0) scores.push(t);
           if (w > 0) scores.push(w);
-          const calculatedTotal = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 80;
+          const calculatedTotal = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
 
           nextProg[s.id] = {
             ...current,
@@ -547,18 +577,18 @@ export function LiveSession() {
         setProgress(prev => {
           const nextProg = { ...prev };
           const current = (nextProg[scannedId] || {}) as any;
-          const r = (current.reading && current.reading > 0) ? current.reading : (current._savedReading || 80);
-          const t = (current.tajwid && current.tajwid > 0) ? current.tajwid : (current._savedTajwid || 80);
-          const w = (current.writing && current.writing > 0) ? current.writing : (current._savedWriting || 80);
+          const r = (current.reading && current.reading > 0) ? current.reading : (current._savedReading || 0);
+          const t = (current.tajwid && current.tajwid > 0) ? current.tajwid : (current._savedTajwid || 0);
+          const w = (current.writing && current.writing > 0) ? current.writing : (current._savedWriting || 0);
           const m = currentGradeId === 'grade3' 
-            ? ((current.memorization && current.memorization > 0) ? current.memorization : (current._savedMemorization || 80)) 
+            ? ((current.memorization && current.memorization > 0) ? current.memorization : (current._savedMemorization || 0)) 
             : 0;
           
           const scores: number[] = [];
           if (currentGradeId === 'grade3' && r > 0) scores.push(r);
           if (t > 0) scores.push(t);
           if (w > 0) scores.push(w);
-          const calculatedTotal = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 80;
+          const calculatedTotal = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
 
           nextProg[scannedId] = {
             ...current,
@@ -629,7 +659,7 @@ export function LiveSession() {
     setSaving(true);
     
     try {
-      // 1. Save Attendance (synced with meetingNumber)
+      // 1. Prepare Attendance (synced with meetingNumber)
       const attToSave = students.map(s => ({
         studentId: s.id,
         groupId: selectedGroup,
@@ -638,14 +668,14 @@ export function LiveSession() {
         status: attendance[s.id]?.status || 'Alpa',
         notes: attendance[s.id]?.notes || ''
       }));
-      await saveStudentAttendance(attToSave);
       
-      // 2. Save Progress for each selected Tahap (synced with meetingNumber)
+      // 2. Prepare Progress for each selected Tahap (synced with meetingNumber)
+      const progsToSave: StudentProgress[] = [];
       for (const sessId of selectedSessionIds) {
         for (const s of students) {
           const p = progress[s.id];
           if (p) {
-            const record = {
+            progsToSave.push({
               id: p.id,
               studentId: s.id,
               groupId: selectedGroup,
@@ -659,13 +689,12 @@ export function LiveSession() {
               memorization: p.memorization || 0,
               writing: p.writing || 0,
               total: p.total || 0,
-            };
-            await saveStudentProgress(record);
+            });
           }
         }
       }
 
-      // 3. Construct multi-stage title & Save Journal (Update if editing, create if new)
+      // 3. Construct multi-stage title & Prepare Journal (Update if editing, create if new)
       const mentorName = userData?.name || currentUser?.displayName || 'Mentor';
       const selectedTahapObjects = availableSessions.filter(s => selectedSessionIds.includes(s.id));
       const sessionTitleStr = selectedTahapObjects.map(s => `Tahap ${s.sessionNumber}: ${s.topic}`).join(' & ');
@@ -687,7 +716,13 @@ export function LiveSession() {
         nextPlan: journalNextPlan,
         createdAt: new Date().toISOString()
       };
-      await saveTeachingJournal(journalObj);
+
+      // 4. Execute atomic batch writes concurrently for instant save (reduced from 80+ roundtrips to 3)
+      await Promise.all([
+        saveStudentAttendance(attToSave),
+        saveMultipleStudentProgress(progsToSave),
+        saveTeachingJournal(journalObj)
+      ]);
       
       // Reload stats to reflect changes in meeting list
       await loadGroupJournalStats();
@@ -711,6 +746,13 @@ export function LiveSession() {
         message: isEdit ? `Perubahan Pertemuan Ke-${meetingNumber} Berhasil Diperbarui!` : `Pertemuan Ke-${meetingNumber} Berhasil Disimpan!`,
         description: `Absensi, Progress & Jurnal tercatat.` 
       });
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('attendance-updated'));
+        window.dispatchEvent(new CustomEvent('progress-updated'));
+        window.dispatchEvent(new CustomEvent('journal-updated'));
+        window.dispatchEvent(new CustomEvent('db-cache-invalidated', { detail: { keyPrefix: '' } }));
+      }
       
     } catch (error) {
       console.error("Error saving live session:", error);
@@ -738,6 +780,171 @@ export function LiveSession() {
 
     const encoded = encodeURIComponent(text);
     window.open(`https://api.whatsapp.com/send?text=${encoded}`, '_blank');
+  };
+
+  // Helper reload students after CRUD operations in LiveSession
+  const reloadSessionStudents = async () => {
+    if (!selectedGroup) return;
+    const stds = await getStudentsByGroup(selectedGroup, true);
+    const sorted = sortStudents(stds);
+    setStudents(sorted);
+    return sorted;
+  };
+
+  const handleAddStudent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedGroup) {
+      setToast({ show: true, type: 'error', message: 'Pilih kelompok terlebih dahulu' });
+      return;
+    }
+    const trimmedName = newStudentForm.name.trim();
+    if (!trimmedName) return;
+
+    setIsSubmittingStudent(true);
+    try {
+      const generatedNis = newStudentForm.nis.trim() || `102${String(Math.floor(1000 + Math.random() * 9000))}`;
+      const newId = await addStudent({
+        name: trimmedName,
+        nis: generatedNis,
+        class: newStudentForm.class,
+        gender: newStudentForm.gender,
+        groupId: selectedGroup,
+        status: 'Aktif'
+      });
+
+      // Default attendance to 'Hadir' and initial progress
+      setAttendance(prev => ({
+        ...prev,
+        [newId]: { status: 'Hadir', notes: '' }
+      }));
+
+      setProgress(prev => ({
+        ...prev,
+        [newId]: {
+          reading: 80,
+          tajwid: 80,
+          writing: 80,
+          memorization: currentGradeId === 'grade3' ? 80 : 0,
+          total: 80
+        }
+      }));
+
+      await reloadSessionStudents();
+
+      setToast({
+        show: true,
+        type: 'success',
+        message: 'Santri Baru Berhasil Ditambahkan',
+        description: `Santri "${trimmedName}" telah terdaftar ke kelompok ini dan tersinkronisasi ke Firebase.`
+      });
+
+      // Reset form
+      setNewStudentForm({
+        name: '',
+        nis: '',
+        class: '7A',
+        gender: 'L'
+      });
+      setIsAddStudentOpen(false);
+    } catch (err: any) {
+      console.error("Error adding student in live session:", err);
+      setToast({
+        show: true,
+        type: 'error',
+        message: 'Gagal Menambahkan Santri',
+        description: err?.message || 'Terjadi kendala saat menyimpan santri ke database cloud Firestore.'
+      });
+    } finally {
+      setIsSubmittingStudent(false);
+    }
+  };
+
+  const handleDeactivateStudent = async (student: Student) => {
+    setIsActionLoading(true);
+    try {
+      await deactivateStudent(student.id);
+      await reloadSessionStudents();
+      setActionStudent(null);
+      setToast({
+        show: true,
+        type: 'success',
+        message: 'Santri Berhasil Dinonaktifkan',
+        description: `Santri "${student.name}" telah dinonaktifkan dan disembunyikan dari sesi mengajar ini. Data tersinkron ke Firebase.`
+      });
+    } catch (err: any) {
+      console.error("Error deactivating student:", err);
+      setToast({
+        show: true,
+        type: 'error',
+        message: 'Gagal Menonaktifkan Santri',
+        description: err?.message || 'Terjadi kesalahan saat memperbarui status santri di Firebase.'
+      });
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
+  const handleActivateStudent = async (student: Student) => {
+    setIsActionLoading(true);
+    try {
+      await activateStudent(student.id);
+      await reloadSessionStudents();
+      setActionStudent(null);
+      setToast({
+        show: true,
+        type: 'success',
+        message: 'Santri Berhasil Diaktifkan Kembali',
+        description: `Santri "${student.name}" telah diaktifkan kembali di kelompok ini.`
+      });
+    } catch (err: any) {
+      console.error("Error activating student:", err);
+      setToast({
+        show: true,
+        type: 'error',
+        message: 'Gagal Mengaktifkan Santri',
+        description: err?.message || 'Terjadi kesalahan saat memperbarui status santri di Firebase.'
+      });
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
+  const handlePermanentDeleteStudent = async (student: Student) => {
+    setIsActionLoading(true);
+    try {
+      await deleteStudent(student.id);
+      
+      // Clean local attendance and progress states
+      setAttendance(prev => {
+        const next = { ...prev };
+        delete next[student.id];
+        return next;
+      });
+      setProgress(prev => {
+        const next = { ...prev };
+        delete next[student.id];
+        return next;
+      });
+
+      await reloadSessionStudents();
+      setActionStudent(null);
+      setToast({
+        show: true,
+        type: 'success',
+        message: 'Santri Berhasil Dihapus Permanen',
+        description: `Data santri "${student.name}" telah dihapus permanen dari database Firebase.`
+      });
+    } catch (err: any) {
+      console.error("Error deleting student:", err);
+      setToast({
+        show: true,
+        type: 'error',
+        message: 'Gagal Menghapus Santri',
+        description: err?.message || 'Terjadi kesalahan saat menghapus data santri dari Firebase.'
+      });
+    } finally {
+      setIsActionLoading(false);
+    }
   };
 
   const selectedTahapObjects = availableSessions.filter(s => selectedSessionIds.includes(s.id));
@@ -1012,6 +1219,17 @@ export function LiveSession() {
                 />
               </div>
 
+              {/* Tombol Tambah Santri Kelompok Binaan */}
+              <button
+                type="button"
+                onClick={() => setIsAddStudentOpen(true)}
+                className="px-3.5 py-2 bg-[#0362D0] hover:bg-[#0250AA] text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs hover:shadow-sm"
+                title="Tambah santri baru khusus ke kelompok binaan ini"
+              >
+                <PlusCircle size={15} />
+                <span className="whitespace-nowrap">Tambah Santri</span>
+              </button>
+
               <button 
                 onClick={() => setShowScanner(true)} 
                 className="px-3.5 py-2 bg-[#172033] text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition-colors cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
@@ -1042,10 +1260,18 @@ export function LiveSession() {
           ) : students.length === 0 ? (
             <div className="p-16 text-center text-slate-500">
               <Users size={40} className="mx-auto mb-3 text-slate-300" />
-              <h4 className="text-base font-extrabold text-[#172033]">Tidak ada santri di kelompok ini</h4>
+              <h4 className="text-base font-extrabold text-[#172033]">Belum ada santri di kelompok ini</h4>
               <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-                Silakan pilih kelompok lain atau tambahkan data santri di menu Data Siswa.
+                Silakan tambahkan santri binaan baru untuk kelompok ini langsung dari sesi mengajar.
               </p>
+              <button
+                type="button"
+                onClick={() => setIsAddStudentOpen(true)}
+                className="mt-4 px-4 py-2.5 bg-[#0362D0] hover:bg-[#0250AA] text-white rounded-xl text-xs font-bold transition-all inline-flex items-center gap-2 shadow-xs cursor-pointer"
+              >
+                <PlusCircle size={15} />
+                <span>+ Tambah Santri Pertama</span>
+              </button>
             </div>
           ) : (
             <div className="p-4 sm:p-5 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -1101,13 +1327,24 @@ export function LiveSession() {
                           </div>
                         </div>
 
-                        <button
-                          onClick={() => handleSendWA(student, currentStatus, p)}
-                          className="p-2 shrink-0 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-xl transition-colors cursor-pointer"
-                          title="Kirim Laporan WA ke Wali Santri"
-                        >
-                          <MessageCircle size={15} />
-                        </button>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            onClick={() => handleSendWA(student, currentStatus, p)}
+                            className="p-2 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-xl transition-colors cursor-pointer"
+                            title="Kirim Laporan WA ke Wali Santri"
+                          >
+                            <MessageCircle size={15} />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setActionStudent(student)}
+                            className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
+                            title="Kelola / Hapus Santri dari Kelompok Ini"
+                          >
+                            <UserMinus size={15} />
+                          </button>
+                        </div>
                       </div>
 
                       {/* Segmented Control for Attendance */}
@@ -1148,21 +1385,21 @@ export function LiveSession() {
                             {currentGradeId === 'grade3' && (
                               <div className="p-1 bg-slate-50 rounded-lg border border-slate-100">
                                 <span className="text-[9px] text-slate-400 font-bold block">Baca</span>
-                                <span className="text-xs font-black text-[#0362D0]">{p.reading ?? 80}</span>
+                                <span className="text-xs font-black text-[#0362D0]">{p.reading ?? 0}</span>
                               </div>
                             )}
                             <div className="p-1 bg-slate-50 rounded-lg border border-slate-100">
                               <span className="text-[9px] text-slate-400 font-bold block">Tajwid</span>
-                              <span className="text-xs font-black text-[#C99A2E]">{p.tajwid ?? 80}</span>
+                              <span className="text-xs font-black text-[#C99A2E]">{p.tajwid ?? 0}</span>
                             </div>
                             <div className="p-1 bg-slate-50 rounded-lg border border-slate-100">
                               <span className="text-[9px] text-slate-400 font-bold block">Tulis</span>
-                              <span className="text-xs font-black text-slate-700">{p.writing ?? 80}</span>
+                              <span className="text-xs font-black text-slate-700">{p.writing ?? 0}</span>
                             </div>
                             {currentGradeId === 'grade3' && (
                               <div className="p-1 bg-slate-50 rounded-lg border border-slate-100">
                                 <span className="text-[9px] text-slate-400 font-bold block">Hafal</span>
-                                <span className="text-xs font-black text-emerald-700">{p.memorization ?? 80}</span>
+                                <span className="text-xs font-black text-emerald-700">{p.memorization ?? 0}</span>
                               </div>
                             )}
                           </div>
@@ -1279,8 +1516,8 @@ export function LiveSession() {
         </motion.div>
       </AnimatePresence>
 
-      {/* Floating Save Action */}
-      <div className="sticky bottom-4 z-40 bg-white/90 backdrop-blur-xl border border-slate-100 p-4 rounded-3xl shadow-xl flex flex-col sm:flex-row items-center justify-between gap-4">
+      {/* Floating Save Action (Positioned safely above mobile BottomNav) */}
+      <div className="sticky bottom-20 sm:bottom-4 z-40 bg-white/95 backdrop-blur-xl border border-slate-100 p-3.5 sm:p-4 rounded-3xl shadow-xl flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4">
         <div className="text-xs font-bold text-slate-600 text-center sm:text-left">
           {editingJournalId ? (
             <span className="text-orange-700 font-extrabold flex items-center gap-1.5">
@@ -1329,6 +1566,180 @@ export function LiveSession() {
             onClose={() => setShowScanner(false)} 
           />
         </React.Suspense>
+      )}
+
+      {/* Student Action Modal (Nonaktifkan & Hapus Permanen) */}
+      <StudentActionModal
+        isOpen={Boolean(actionStudent)}
+        onClose={() => setActionStudent(null)}
+        student={actionStudent}
+        group={currentGroupObj}
+        onDeactivate={handleDeactivateStudent}
+        onActivate={handleActivateStudent}
+        onPermanentDelete={handlePermanentDeleteStudent}
+        isLoading={isActionLoading}
+      />
+
+      {/* Modal Tambah Santri Baru Khusus Kelompok Binaan */}
+      {isAddStudentOpen && (
+        <div 
+          className="fixed inset-0 z-[120] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150"
+          onClick={() => !isSubmittingStudent && setIsAddStudentOpen(false)}
+        >
+          <div 
+            className="bg-white rounded-3xl max-w-lg w-full border border-slate-100 shadow-2xl p-6 space-y-5 max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex justify-between items-center border-b border-slate-100 pb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-[#0362D0]/10 text-[#0362D0] rounded-xl border border-[#0362D0]/20">
+                  <UserPlus size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-[#172033]">
+                    Tambah Santri Kelompok
+                  </h3>
+                  <p className="text-xs text-slate-500 font-medium">
+                    Santri baru akan tersimpan langsung ke database cloud Firestore
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => !isSubmittingStudent && setIsAddStudentOpen(false)}
+                disabled={isSubmittingStudent}
+                className="p-1.5 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleAddStudent} className="space-y-4">
+              {/* Kelompok Info Box (Terkunci) */}
+              <div className="p-3 bg-slate-50 border border-slate-200/70 rounded-2xl flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-black uppercase text-slate-400 block tracking-wider">
+                    Kelompok Binaan
+                  </span>
+                  <span className="text-xs font-extrabold text-[#172033]">
+                    {currentGroupObj?.name || 'Kelompok Binaan'}
+                  </span>
+                </div>
+                <span className="px-2.5 py-1 bg-[#0362D0]/10 text-[#0362D0] text-[10px] font-black rounded-lg border border-[#0362D0]/20">
+                  Terkunci Khusus Kelompok Ini
+                </span>
+              </div>
+
+              {/* Nama Lengkap */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700 block">
+                  Nama Lengkap Santri <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Contoh: Muhammad Fatih"
+                  value={newStudentForm.name}
+                  onChange={(e) => setNewStudentForm(prev => ({ ...prev, name: e.target.value }))}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-[#172033] placeholder:text-slate-400 focus:bg-white focus:border-[#0362D0] focus:ring-1 focus:ring-[#0362D0] outline-none"
+                  autoFocus
+                />
+              </div>
+
+              {/* NIS & Jenis Kelamin */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700 block">
+                    NIS (Nomor Induk Siswa)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Contoh: 102948 (Otomatis bila kosong)"
+                    value={newStudentForm.nis}
+                    onChange={(e) => setNewStudentForm(prev => ({ ...prev, nis: e.target.value }))}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-[#172033] placeholder:text-slate-400 focus:bg-white focus:border-[#0362D0] focus:ring-1 focus:ring-[#0362D0] outline-none"
+                  />
+                  <span className="text-[10px] text-slate-400 font-medium block">
+                    Kosongkan jika ingin dibuatkan otomatis
+                  </span>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700 block">
+                    Jenis Kelamin <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    value={newStudentForm.gender}
+                    onChange={(e) => setNewStudentForm(prev => ({ ...prev, gender: e.target.value as 'L' | 'P' }))}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-[#172033] focus:bg-white focus:border-[#0362D0] focus:ring-1 focus:ring-[#0362D0] outline-none cursor-pointer"
+                  >
+                    <option value="L">Laki-laki (Ikhwan)</option>
+                    <option value="P">Perempuan (Akhwat)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Kelas */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700 block">
+                  Kelas SMPN 102 <span className="text-rose-500">*</span>
+                </label>
+                <select
+                  value={newStudentForm.class}
+                  onChange={(e) => setNewStudentForm(prev => ({ ...prev, class: e.target.value }))}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-[#172033] focus:bg-white focus:border-[#0362D0] focus:ring-1 focus:ring-[#0362D0] outline-none cursor-pointer"
+                >
+                  <optgroup label="Kelas 7">
+                    {['7A','7B','7C','7D','7E','7F','7G','7H'].map(c => (
+                      <option key={c} value={c}>Kelas {c}</option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="Kelas 8">
+                    {['8A','8B','8C','8D','8E','8F','8G','8H'].map(c => (
+                      <option key={c} value={c}>Kelas {c}</option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="Kelas 9">
+                    {['9A','9B','9C','9D','9E','9F','9G','9H'].map(c => (
+                      <option key={c} value={c}>Kelas {c}</option>
+                    ))}
+                  </optgroup>
+                </select>
+              </div>
+
+              {/* Actions */}
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setIsAddStudentOpen(false)}
+                  disabled={isSubmittingStudent}
+                  className="px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingStudent || !newStudentForm.name.trim()}
+                  className="px-5 py-2.5 bg-[#0362D0] hover:bg-[#0250AA] disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-2 cursor-pointer"
+                >
+                  {isSubmittingStudent ? (
+                    <>
+                      <Loader2 size={14} className="animate-spin" />
+                      <span>Menyimpan ke Cloud...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check size={14} />
+                      <span>Simpan & Tambahkan ke Sesi</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );

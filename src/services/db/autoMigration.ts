@@ -67,6 +67,11 @@ export async function runMigration(force = false): Promise<boolean> {
       const existingStatus = await checkMigrationStatus();
       if (existingStatus && existingStatus.seeded) {
         console.log('[Migration] Firestore database already fully migrated (Status: Seeded).');
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.setItem('sibtq_auto_migrated_v2', 'true');
+          } catch {}
+        }
         return true;
       }
     }
@@ -218,19 +223,7 @@ export async function runMigration(force = false): Promise<boolean> {
       console.log(`[Migration] Migrated ${defaultSeedJournals.length} teaching journals.`);
     }
 
-    // 7. Migrasi Sertifikasi & Audit Logs
-    if (defaultSeedCertifications && defaultSeedCertifications.length > 0) {
-      const certBatch = writeBatch(db);
-      for (const cert of defaultSeedCertifications) {
-        const certRef = doc(db, 'certifications', cert.id);
-        certBatch.set(certRef, {
-          ...cert,
-          updatedAt: new Date().toISOString(),
-        }, { merge: true });
-      }
-      await certBatch.commit();
-    }
-
+    // 7. Audit Logs Awal
     if (initialSeedAuditLogs && initialSeedAuditLogs.length > 0) {
       const auditBatch = writeBatch(db);
       for (const log of initialSeedAuditLogs) {
@@ -273,8 +266,18 @@ export async function runMigration(force = false): Promise<boolean> {
  * Inisialisasi migrasi otomatis saat aplikasi pertama kali dijalankan
  */
 export function initAutoMigration(): Promise<boolean> {
+  if (typeof window !== 'undefined' && localStorage.getItem('sibtq_auto_migrated_v2') === 'true') {
+    return Promise.resolve(true);
+  }
   if (!migrationPromise) {
-    migrationPromise = runMigration(false);
+    migrationPromise = runMigration(false).then((res) => {
+      if (res && typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('sibtq_auto_migrated_v2', 'true');
+        } catch {}
+      }
+      return res;
+    });
   }
   return migrationPromise;
 }

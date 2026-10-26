@@ -389,154 +389,160 @@ export default function AcademicCalendar() {
           </div>
 
           {/* Google Calendar Connection Status & Quick Sync */}
-          <div className="flex flex-wrap items-center gap-2.5 bg-slate-50 p-2.5 rounded-xl border border-slate-200 self-start lg:self-auto">
-            {/* Google Groups Info & Config Button */}
-            <button
-              type="button"
-              onClick={() => setGoogleGroupsModalOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 text-xs font-bold transition-colors shadow-2xs cursor-pointer"
-              title="Atur email Google Groups dan proteksi limitasi API"
-            >
-              <Users size={14} className="text-[#0362D0]" />
-              <span className="truncate max-w-[170px]">{gcalConfig.groupEmail}</span>
-              <ShieldCheck size={13} className="text-emerald-600" />
-            </button>
-
-            {isGCalConnected ? (
-              <>
-                <div className="flex items-center gap-2 px-2 text-xs text-slate-700">
-                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                  <span className="font-semibold truncate max-w-[130px]">
-                    {gcalUser?.email || 'Google Calendar Terhubung'}
-                  </span>
-                </div>
-                
-                {/* Sync Buttons */}
-                <div className="inline-flex items-center rounded-lg shadow-xs">
-                  <button
-                    type="button"
-                    onClick={() => handleSyncAllToGoogle(false)}
-                    disabled={isSyncing}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-l-lg bg-[#0362D0] hover:bg-[#024ea7] text-white text-xs font-bold transition-colors disabled:opacity-50 cursor-pointer"
-                    title="Sinkronkan dengan proteksi Smart Diff (hanya kirim yang berubah demi menghemat kuota API)"
-                  >
-                    <RefreshCw size={13} className={isSyncing ? "animate-spin" : ""} />
-                    {isSyncing ? 'Memproses...' : 'Sinkronkan (Smart Diff)'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleSyncAllToGoogle(true)}
-                    disabled={isSyncing}
-                    className="px-2 py-1.5 rounded-r-lg bg-[#024ea7] hover:bg-[#023c82] border-l border-blue-400 text-white text-xs font-bold transition-colors disabled:opacity-50 cursor-pointer"
-                    title="Paksa sinkronisasi ulang seluruh 16 sesi ke Google Calendar"
-                  >
-                    Paksa
-                  </button>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleDisconnectGoogle}
-                  className="text-xs text-slate-500 hover:text-rose-600 px-2 py-1 transition-colors cursor-pointer"
-                  title="Putuskan koneksi Google Calendar"
-                >
-                  Putus
-                </button>
-              </>
-            ) : (
+          {isAdmin && (
+            <div className="flex flex-wrap items-center gap-2.5 bg-slate-50 p-2.5 rounded-xl border border-slate-200 self-start lg:self-auto">
+              {/* Google Groups Info & Config Button */}
               <button
                 type="button"
-                onClick={handleConnectGoogle}
-                className="gsi-material-button inline-flex items-center gap-2.5 px-3.5 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-lg text-xs font-bold shadow-xs transition-colors cursor-pointer"
+                onClick={() => setGoogleGroupsModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 text-xs font-bold transition-colors shadow-2xs cursor-pointer"
+                title="Atur email Google Groups dan proteksi limitasi API"
               >
-                <svg className="w-4 h-4 shrink-0" viewBox="0 0 48 48">
-                  <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path>
-                  <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path>
-                  <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path>
-                  <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path>
-                </svg>
-                <span>Hubungkan Google Calendar</span>
+                <Users size={14} className="text-[#0362D0]" />
+                <span className="truncate max-w-[170px]">{gcalConfig.groupEmail}</span>
+                <ShieldCheck size={13} className="text-emerald-600" />
               </button>
-            )}
 
-            <a
-              href="https://calendar.google.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-xs font-semibold text-slate-600 hover:text-[#0362D0] px-2 py-1 rounded-md hover:bg-slate-100 transition-colors"
-            >
-              Buka Google Calendar <ExternalLink size={12} />
-            </a>
-          </div>
+              {isGCalConnected ? (
+                <>
+                  <div className="flex items-center gap-2 px-2 text-xs text-slate-700">
+                    <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="font-semibold truncate max-w-[130px]">
+                      {gcalUser?.email || 'Google Calendar Terhubung'}
+                    </span>
+                  </div>
+                  
+                  {/* Sync Buttons */}
+                  <div className="inline-flex items-center rounded-lg shadow-xs">
+                    <button
+                      type="button"
+                      onClick={() => handleSyncAllToGoogle(false)}
+                      disabled={isSyncing}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-l-lg bg-[#0362D0] hover:bg-[#024ea7] text-white text-xs font-bold transition-colors disabled:opacity-50 cursor-pointer"
+                      title="Sinkronkan dengan proteksi Smart Diff (hanya kirim yang berubah demi menghemat kuota API)"
+                    >
+                      <RefreshCw size={13} className={isSyncing ? "animate-spin" : ""} />
+                      {isSyncing ? 'Memproses...' : 'Sinkronkan (Smart Diff)'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSyncAllToGoogle(true)}
+                      disabled={isSyncing}
+                      className="px-2 py-1.5 rounded-r-lg bg-[#024ea7] hover:bg-[#023c82] border-l border-blue-400 text-white text-xs font-bold transition-colors disabled:opacity-50 cursor-pointer"
+                      title="Paksa sinkronisasi ulang seluruh 16 sesi ke Google Calendar"
+                    >
+                      Paksa
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleDisconnectGoogle}
+                    className="text-xs text-slate-500 hover:text-rose-600 px-2 py-1 transition-colors cursor-pointer"
+                    title="Putuskan koneksi Google Calendar"
+                  >
+                    Putus
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleConnectGoogle}
+                  className="gsi-material-button inline-flex items-center gap-2.5 px-3.5 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-lg text-xs font-bold shadow-xs transition-colors cursor-pointer"
+                >
+                  <svg className="w-4 h-4 shrink-0" viewBox="0 0 48 48">
+                    <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path>
+                    <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path>
+                    <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path>
+                    <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path>
+                  </svg>
+                  <span>Hubungkan Google Calendar</span>
+                </button>
+              )}
+
+              <a
+                href="https://calendar.google.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-xs font-semibold text-slate-600 hover:text-[#0362D0] px-2 py-1 rounded-md hover:bg-slate-100 transition-colors"
+              >
+                Buka Google Calendar <ExternalLink size={12} />
+              </a>
+            </div>
+          )}
         </div>
 
         {/* API Safety & Google Groups Badge Banner */}
-        <div className="mt-3.5 pt-3.5 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2.5 text-xs">
-          <div className="flex flex-wrap items-center gap-2 text-slate-600">
-            <span className="font-bold text-slate-700 flex items-center gap-1.5">
-              <Mail size={13} className="text-[#0362D0]" /> Distribusi Otomatis:
-            </span>
-            <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-900 border border-blue-200 font-mono text-[11px] font-semibold">
-              {gcalConfig.groupEmail}
-            </span>
-            <span className="text-slate-400">•</span>
-            <span className="text-slate-500 text-[11px]">
-              Menghubungkan email seluruh mentor dan siswa tanpa batasan limit API
-            </span>
-          </div>
+        {isAdmin && (
+          <>
+            <div className="mt-3.5 pt-3.5 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2.5 text-xs">
+              <div className="flex flex-wrap items-center gap-2 text-slate-600">
+                <span className="font-bold text-slate-700 flex items-center gap-1.5">
+                  <Mail size={13} className="text-[#0362D0]" /> Distribusi Otomatis:
+                </span>
+                <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-900 border border-blue-200 font-mono text-[11px] font-semibold">
+                  {gcalConfig.groupEmail}
+                </span>
+                <span className="text-slate-400">•</span>
+                <span className="text-slate-500 text-[11px]">
+                  Menghubungkan email seluruh mentor dan siswa tanpa batasan limit API
+                </span>
+              </div>
 
-          <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-[11px] font-semibold">
-              <ShieldCheck size={12} className="text-emerald-600" /> Proteksi API: Smart Diff & Backoff Aktif
-            </span>
-            <button
-              type="button"
-              onClick={() => setGoogleGroupsModalOpen(true)}
-              className="text-[#0362D0] hover:text-[#024ea7] font-bold text-xs underline cursor-pointer"
-            >
-              Kelola Pengaturan
-            </button>
-          </div>
-        </div>
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-[11px] font-semibold">
+                  <ShieldCheck size={12} className="text-emerald-600" /> Proteksi API: Smart Diff & Backoff Aktif
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setGoogleGroupsModalOpen(true)}
+                  className="text-[#0362D0] hover:text-[#024ea7] font-bold text-xs underline cursor-pointer"
+                >
+                  Kelola Pengaturan
+                </button>
+              </div>
+            </div>
 
-        {/* Sync Feedback Message */}
-        {syncFeedback && (
-          <div className={`mt-4 p-3 rounded-xl border flex items-center justify-between gap-3 text-xs font-medium animate-in fade-in ${
-            syncFeedback.type === 'success' 
-              ? 'bg-emerald-50 border-emerald-200 text-emerald-800' 
-              : 'bg-rose-50 border-rose-200 text-rose-800'
-          }`}>
-            <div className="flex items-center gap-2">
-              {syncFeedback.type === 'success' ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
-              <span>{syncFeedback.message}</span>
-            </div>
-            <button 
-              type="button" 
-              onClick={() => setSyncFeedback(null)} 
-              className="text-slate-400 hover:text-slate-700 cursor-pointer"
-            >
-              <X size={14} />
-            </button>
-          </div>
-        )}
+            {/* Sync Feedback Message */}
+            {syncFeedback && (
+              <div className={`mt-4 p-3 rounded-xl border flex items-center justify-between gap-3 text-xs font-medium animate-in fade-in ${
+                syncFeedback.type === 'success' 
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-800' 
+                  : 'bg-rose-50 border-rose-200 text-rose-800'
+              }`}>
+                <div className="flex items-center gap-2">
+                  {syncFeedback.type === 'success' ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+                  <span>{syncFeedback.message}</span>
+                </div>
+                <button 
+                  type="button" 
+                  onClick={() => setSyncFeedback(null)} 
+                  className="text-slate-400 hover:text-slate-700 cursor-pointer"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            )}
 
-        {/* Sync Progress Bar */}
-        {syncProgress && (
-          <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-xl space-y-1.5">
-            <div className="flex justify-between text-xs font-semibold text-blue-900">
-              <span>Menyinkronkan: {syncProgress.label}</span>
-              <span>
-                {syncProgress.current} / {syncProgress.total} Sesi
-                {syncProgress.skipped !== undefined && syncProgress.skipped > 0 ? ` (${syncProgress.skipped} dilewati via Smart Diff)` : ''}
-              </span>
-            </div>
-            <div className="w-full bg-blue-200 rounded-full h-2 overflow-hidden">
-              <div 
-                className="bg-[#0362D0] h-2 rounded-full transition-all duration-300" 
-                style={{ width: `${(syncProgress.current / syncProgress.total) * 100}%` }}
-              />
-            </div>
-          </div>
+            {/* Sync Progress Bar */}
+            {syncProgress && (
+              <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-xl space-y-1.5">
+                <div className="flex justify-between text-xs font-semibold text-blue-900">
+                  <span>Menyinkronkan: {syncProgress.label}</span>
+                  <span>
+                    {syncProgress.current} / {syncProgress.total} Sesi
+                    {syncProgress.skipped !== undefined && syncProgress.skipped > 0 ? ` (${syncProgress.skipped} dilewati via Smart Diff)` : ''}
+                  </span>
+                </div>
+                <div className="w-full bg-blue-200 rounded-full h-2 overflow-hidden">
+                  <div 
+                    className="bg-[#0362D0] h-2 rounded-full transition-all duration-300" 
+                    style={{ width: `${(syncProgress.current / syncProgress.total) * 100}%` }}
+                  />
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -661,16 +667,17 @@ export default function AcademicCalendar() {
       {viewMode === 'month' && (
         <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
           {/* Day Names Header (Senin - Minggu) */}
-          <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50/80 text-center text-xs font-bold text-slate-600 py-3">
-            <div>Senin</div>
-            <div>Selasa</div>
-            <div>Rabu</div>
-            <div>Kamis</div>
-            <div>Jumat</div>
-            <div className="text-[#0362D0] font-black bg-blue-50/70 py-0.5 rounded-md mx-1">
-              Sabtu (BTQ)
+          <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50/80 text-center text-xs font-bold text-slate-600 py-2 sm:py-3 select-none">
+            <div><span className="sm:hidden">Sen</span><span className="hidden sm:inline">Senin</span></div>
+            <div><span className="sm:hidden">Sel</span><span className="hidden sm:inline">Selasa</span></div>
+            <div><span className="sm:hidden">Rab</span><span className="hidden sm:inline">Rabu</span></div>
+            <div><span className="sm:hidden">Kam</span><span className="hidden sm:inline">Kamis</span></div>
+            <div><span className="sm:hidden">Jum</span><span className="hidden sm:inline">Jumat</span></div>
+            <div className="text-[#0362D0] font-black bg-blue-50/70 py-0.5 rounded-md mx-0.5 sm:mx-1">
+              <span className="sm:hidden">Sab</span>
+              <span className="hidden sm:inline">Sabtu (BTQ)</span>
             </div>
-            <div>Minggu</div>
+            <div><span className="sm:hidden">Min</span><span className="hidden sm:inline">Minggu</span></div>
           </div>
 
           {/* Calendar 7xN Grid Cells */}
@@ -706,7 +713,7 @@ export default function AcademicCalendar() {
                       });
                     }
                   }}
-                  className={`min-h-[105px] sm:min-h-[125px] p-1.5 sm:p-2 transition-all flex flex-col justify-between relative group ${
+                  className={`min-h-[85px] sm:min-h-[125px] p-1 sm:p-2 transition-all flex flex-col justify-between relative group ${
                     day.isCurrentMonth ? 'bg-white' : 'bg-slate-50/60'
                   } ${day.isSaturday && day.isCurrentMonth ? 'bg-blue-50/20' : ''} ${
                     hasMeeting ? 'cursor-pointer hover:bg-slate-50/80' : ''
@@ -715,7 +722,7 @@ export default function AcademicCalendar() {
                   {/* Date Number Badge */}
                   <div className="flex items-center justify-between">
                     <span
-                      className={`text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full ${
+                      className={`text-xs font-bold w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center rounded-full ${
                         day.isToday
                           ? 'bg-[#0362D0] text-white shadow-xs'
                           : day.isCurrentMonth
@@ -730,7 +737,7 @@ export default function AcademicCalendar() {
 
                     {/* Quick action button for Saturday */}
                     {day.isSaturday && day.isCurrentMonth && (
-                      <span className="text-[10px] font-semibold text-blue-600 bg-blue-100/60 px-1.5 py-0.5 rounded">
+                      <span className="text-[9px] sm:text-[10px] font-semibold text-blue-600 bg-blue-100/60 px-1 sm:px-1.5 py-0.5 rounded">
                         07:00
                       </span>
                     )}
@@ -738,10 +745,10 @@ export default function AcademicCalendar() {
 
                   {/* Event Chip */}
                   {hasMeeting && passesFilter && (
-                    <div className="mt-1 space-y-1">
+                    <div className="mt-0.5 sm:mt-1 space-y-1">
                       {isHoliday ? (
                         <div 
-                          className="px-2 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-[11px] font-bold shadow-2xs hover:bg-amber-100 transition-colors"
+                          className="px-1.5 sm:px-2 py-1 sm:py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-[10px] sm:text-[11px] font-bold shadow-2xs hover:bg-amber-100 transition-colors"
                           title={meeting.title}
                         >
                           <div className="flex items-center gap-1 text-amber-700">
@@ -751,7 +758,7 @@ export default function AcademicCalendar() {
                         </div>
                       ) : (
                         <div
-                          className={`px-2 py-1.5 rounded-lg border text-[11px] font-bold shadow-2xs transition-all ${
+                          className={`px-1.5 sm:px-2 py-1 sm:py-1.5 rounded-lg border text-[10px] sm:text-[11px] font-bold shadow-2xs transition-all ${
                             meeting.status === 'completed'
                               ? 'bg-emerald-50 border-emerald-200 text-emerald-900 hover:bg-emerald-100'
                               : meeting.status === 'ongoing'
@@ -769,7 +776,7 @@ export default function AcademicCalendar() {
                               </span>
                             )}
                           </div>
-                          <div className="flex items-center justify-between text-[10px] font-semibold opacity-75 mt-0.5">
+                          <div className="hidden sm:flex items-center justify-between text-[10px] font-semibold opacity-75 mt-0.5">
                             <span>07:00 - 08:30 WIB</span>
                             <span>{meeting.status === 'completed' ? '✓ Hadir' : meeting.status === 'ongoing' ? '● Aktif' : 'Akan Datang'}</span>
                           </div>

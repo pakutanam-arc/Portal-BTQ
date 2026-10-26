@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   X, 
   TrendingUp, 
@@ -11,7 +11,11 @@ import {
   AlertCircle, 
   ChevronRight,
   Sparkles,
-  Info
+  Info,
+  UserCheck,
+  Clock,
+  MessageSquare,
+  AlertTriangle
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { 
@@ -24,7 +28,10 @@ import {
   CartesianGrid, 
   Tooltip, 
   ReferenceLine, 
-  Legend 
+  Legend,
+  BarChart,
+  Bar,
+  Cell
 } from 'recharts';
 import { Grade } from '../../services/curriculumData';
 
@@ -44,6 +51,13 @@ export interface SessionHistoryItem {
   status: 'Meningkat' | 'Menurun' | 'Konsisten';
 }
 
+export interface StudentAttendanceHistoryItem {
+  meetingNumber: number;
+  date: string;
+  status: 'Hadir' | 'Izin' | 'Sakit' | 'Alpa';
+  notes?: string;
+}
+
 export interface StudentWithStats {
   id: string;
   name: string;
@@ -55,6 +69,7 @@ export interface StudentWithStats {
   currentStage: string;
   progressScore: number;
   attendanceRate: number;
+  attendanceHistory?: StudentAttendanceHistoryItem[];
   statusCategory: 'Sangat Baik' | 'Baik' | 'Perlu Bimbingan';
   sessionHistory: SessionHistoryItem[];
   trend: 'Meningkat' | 'Menurun' | 'Konsisten';
@@ -76,6 +91,8 @@ export function StudentProgressChartModal({
   groupName 
 }: StudentProgressChartModalProps) {
   if (!student) return null;
+
+  const [activeTab, setActiveTab] = useState<'progress' | 'attendance'>('progress');
 
   const isGrade3 = targetGrade.id === 'grade3';
   const history = student.sessionHistory || [];
@@ -99,90 +116,151 @@ export function StudentProgressChartModal({
     date: item.date,
   }));
 
+  // Attendance history formatting murni data riil
+  const attendanceHistory: StudentAttendanceHistoryItem[] = student.attendanceHistory || [];
+
+  const hadirCount = attendanceHistory.filter(a => a.status === 'Hadir').length;
+  const izinCount = attendanceHistory.filter(a => a.status === 'Izin').length;
+  const sakitCount = attendanceHistory.filter(a => a.status === 'Sakit').length;
+  const alpaCount = attendanceHistory.filter(a => a.status === 'Alpa').length;
+
+  const attendanceChartData = attendanceHistory.map((item) => ({
+    name: `P${item.meetingNumber}`,
+    meetingNumber: item.meetingNumber,
+    date: item.date,
+    status: item.status,
+    notes: item.notes || '-',
+    score: item.status === 'Hadir' ? 100 : item.status === 'Izin' ? 65 : item.status === 'Sakit' ? 65 : 25,
+  }));
+
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto"
+      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto"
       onClick={onClose}
     >
       <div 
-        className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden my-6 transition-all"
+        className="relative w-full max-w-[calc(100vw-16px)] sm:max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden my-4 sm:my-6 transition-all"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex justify-between items-start p-5 border-b border-transparent shadow-sm bg-slate-50">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
+        <div className="flex justify-between items-start p-3.5 sm:p-5 border-b border-transparent shadow-sm bg-slate-50 gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-1">
               <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-[#0362D0]/10 text-[#0362D0] border border-[#0362D0]/20">
                 {targetGrade.programName}
               </span>
-              <span className="text-xs font-semibold text-slate-500">
+              <span className="text-xs font-semibold text-slate-500 truncate">
                 {groupName || 'Halaqah'} • Kelas {student.class}
               </span>
             </div>
-            <h3 className="text-lg font-black text-[#172033] tracking-tight">
+            <h3 className="text-base sm:text-lg font-black text-[#172033] tracking-tight truncate">
               {student.name}
             </h3>
-            <p className="text-xs text-slate-500 font-medium">
-              NIS: {student.nis || '-'} • Riwayat perkembangan nilai kualitas tiap tahap
+            <p className="text-[11px] sm:text-xs text-slate-500 font-medium truncate">
+              NIS: {student.nis || '-'} • Riwayat perkembangan & presensi halaqah
             </p>
           </div>
 
           <button
             onClick={onClose}
             aria-label="Tutup modal"
-            className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 transition-colors"
+            className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 transition-colors shrink-0"
           >
             <X size={20} />
           </button>
         </div>
 
-        <div className="p-5 space-y-5 max-h-[calc(85vh-120px)] overflow-y-auto">
-          {/* KPI Mini Badges */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+        {/* Tab Switcher: Grafik Nilai vs Grafik Kehadiran */}
+        <div className="flex border-b border-slate-200 bg-slate-100/70 p-1 sm:p-1.5 gap-1 overflow-x-auto w-full">
+          <button
+            type="button"
+            onClick={() => setActiveTab('progress')}
+            className={`flex-1 py-2 px-2.5 sm:px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
+              activeTab === 'progress'
+                ? 'bg-white text-[#0362D0] shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+            }`}
+          >
+            <BookOpen size={15} />
+            <span>Grafik Nilai</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('attendance')}
+            className={`flex-1 py-2 px-2.5 sm:px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
+              activeTab === 'attendance'
+                ? 'bg-white text-[#0362D0] shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+            }`}
+          >
+            <UserCheck size={15} />
+            <span>Grafik Kehadiran</span>
+            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${
+              student.attendanceRate >= 80 ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+            }`}>
+              {student.attendanceRate}%
+            </span>
+          </button>
+        </div>
+
+        <div className="p-3 sm:p-5 space-y-4 sm:space-y-5 max-h-[calc(85vh-120px)] overflow-y-auto overflow-x-hidden w-full max-w-full">
+          {activeTab === 'progress' ? (
+            <div className="space-y-4 sm:space-y-5 w-full">
+              {/* KPI Mini Badges */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2.5">
             {/* Skor Terkini */}
-            <div className="p-3 bg-white rounded-xl border border-transparent shadow-sm shadow-2xs">
-              <span className="text-[10px] text-slate-400 font-bold uppercase block">Nilai Terkini (T{student.latestSessionNumber})</span>
-              <div className="flex items-baseline gap-1.5 mt-1">
-                <span className="text-2xl font-black text-[#172033]">{student.progressScore}</span>
+            <div className="p-2.5 sm:p-3 bg-white rounded-xl border border-slate-100 shadow-xs">
+              <span className="text-[10px] text-slate-400 font-bold uppercase block truncate">Nilai Terkini (T{student.latestSessionNumber})</span>
+              <div className="flex items-baseline gap-1 mt-1">
+                <span className="text-xl sm:text-2xl font-black text-[#172033]">
+                  {history.length > 0 ? student.progressScore : '-'}
+                </span>
                 <span className="text-[10px] font-bold text-slate-500">/ 100</span>
               </div>
               <span className={`inline-block mt-1 px-1.5 py-0.5 rounded text-[9px] font-black uppercase border ${
-                student.statusCategory === 'Sangat Baik' 
+                history.length === 0
+                  ? 'bg-slate-100 text-slate-500 border-slate-200'
+                  : student.statusCategory === 'Sangat Baik' 
                   ? 'bg-[#0362D0]/10 text-[#0362D0] border-[#0362D0]/20'
                   : student.statusCategory === 'Baik'
                   ? 'bg-[#C99A2E]/10 text-[#C99A2E] border-[#C99A2E]/20'
                   : 'bg-[#950415]/10 text-[#950415] border-[#950415]/20'
               }`}>
-                {student.statusCategory}
+                {history.length > 0 ? student.statusCategory : 'Belum Ada Nilai'}
               </span>
             </div>
 
             {/* Status Tren Tahap */}
-            <div className="p-3 bg-white rounded-xl border border-transparent shadow-sm shadow-2xs">
-              <span className="text-[10px] text-slate-400 font-bold uppercase block">Status Tren</span>
+            <div className="p-2.5 sm:p-3 bg-white rounded-xl border border-slate-100 shadow-xs">
+              <span className="text-[10px] text-slate-400 font-bold uppercase block truncate">Status Tren</span>
               <div className="flex items-center gap-1.5 mt-2">
-                {student.trend === 'Meningkat' ? (
+                {history.length < 2 ? (
+                  <div className="min-w-0">
+                    <span className="text-xs font-bold text-slate-400 block truncate">—</span>
+                    <span className="text-[10px] text-slate-400 block truncate">Perlu &gt;1 sesi</span>
+                  </div>
+                ) : student.trend === 'Meningkat' ? (
                   <>
-                    <TrendingUp size={20} className="text-emerald-600 shrink-0" />
-                    <div>
-                      <span className="text-xs font-black text-emerald-600 block">Meningkat</span>
-                      <span className="text-[10px] text-emerald-700 font-bold">+{Math.abs(student.trendDiff)} poin</span>
+                    <TrendingUp size={18} className="text-emerald-600 shrink-0" />
+                    <div className="min-w-0">
+                      <span className="text-xs font-black text-emerald-600 block truncate">Meningkat</span>
+                      <span className="text-[10px] text-emerald-700 font-bold block truncate">+{Math.abs(student.trendDiff)} poin</span>
                     </div>
                   </>
                 ) : student.trend === 'Menurun' ? (
                   <>
-                    <TrendingDown size={20} className="text-rose-600 shrink-0" />
-                    <div>
-                      <span className="text-xs font-black text-rose-600 block">Menurun</span>
-                      <span className="text-[10px] text-rose-700 font-bold">-{Math.abs(student.trendDiff)} poin</span>
+                    <TrendingDown size={18} className="text-rose-600 shrink-0" />
+                    <div className="min-w-0">
+                      <span className="text-xs font-black text-rose-600 block truncate">Menurun</span>
+                      <span className="text-[10px] text-rose-700 font-bold block truncate">-{Math.abs(student.trendDiff)} poin</span>
                     </div>
                   </>
                 ) : (
                   <>
-                    <Minus size={20} className={student.progressScore >= 75 ? "text-amber-600 shrink-0" : "text-slate-600 shrink-0"} />
-                    <div>
-                      <span className={`text-xs font-black block ${student.progressScore >= 75 ? "text-amber-600" : "text-slate-700"}`}>Konsisten</span>
-                      <span className={`text-[10px] font-bold ${student.progressScore >= 75 ? "text-amber-700" : "text-slate-500"}`}>Stabil</span>
+                    <Minus size={18} className={student.progressScore >= 75 ? "text-amber-600 shrink-0" : "text-slate-600 shrink-0"} />
+                    <div className="min-w-0">
+                      <span className={`text-xs font-black block truncate ${student.progressScore >= 75 ? "text-amber-600" : "text-slate-700"}`}>Konsisten</span>
+                      <span className={`text-[10px] font-bold block truncate ${student.progressScore >= 75 ? "text-amber-700" : "text-slate-500"}`}>Stabil</span>
                     </div>
                   </>
                 )}
@@ -190,41 +268,45 @@ export function StudentProgressChartModal({
             </div>
 
             {/* Total Perubahan (T1 ke T Terkini) */}
-            <div className="p-3 bg-white rounded-xl border border-transparent shadow-sm shadow-2xs">
-              <span className="text-[10px] text-slate-400 font-bold uppercase block">Pertumbuhan Total</span>
-              <p className={`text-xl font-black mt-1 ${
-                overallDiff > 0 ? 'text-emerald-600' : overallDiff < 0 ? 'text-rose-600' : 'text-slate-700'
+            <div className="p-2.5 sm:p-3 bg-white rounded-xl border border-slate-100 shadow-xs">
+              <span className="text-[10px] text-slate-400 font-bold uppercase block truncate">Pertumbuhan</span>
+              <p className={`text-lg sm:text-xl font-black mt-1 ${
+                history.length < 2 ? 'text-slate-400' : overallDiff > 0 ? 'text-emerald-600' : overallDiff < 0 ? 'text-rose-600' : 'text-slate-700'
               }`}>
-                {overallDiff > 0 ? `+${overallDiff}` : overallDiff} poin
+                {history.length < 2 ? '-' : overallDiff > 0 ? `+${overallDiff} poin` : `${overallDiff} poin`}
               </p>
-              <span className="text-[10px] text-slate-400 font-semibold block mt-0.5">
-                Sejak Tahap 1
+              <span className="text-[10px] text-slate-400 font-semibold block mt-0.5 truncate">
+                {history.length < 2 ? 'Belum ada data' : 'Sejak Tahap 1'}
               </span>
             </div>
 
             {/* Standar Ketuntasan (KKM 75) */}
-            <div className="p-3 bg-white rounded-xl border border-transparent shadow-sm shadow-2xs">
-              <span className="text-[10px] text-slate-400 font-bold uppercase block">Ketuntasan (KKM 75)</span>
-              <p className="text-xl font-black mt-1 text-[#172033]">
-                {student.progressScore >= 75 ? (
-                  <span className="text-emerald-600 flex items-center gap-1 text-sm font-black">
-                    <CheckCircle2 size={16} /> Tuntas
+            <div className="p-2.5 sm:p-3 bg-white rounded-xl border border-slate-100 shadow-xs">
+              <span className="text-[10px] text-slate-400 font-bold uppercase block truncate">KKM 75</span>
+              <div className="mt-1">
+                {history.length === 0 ? (
+                  <span className="text-slate-400 text-xs sm:text-sm font-semibold">
+                    Belum Dinilai
+                  </span>
+                ) : student.progressScore >= 75 ? (
+                  <span className="text-emerald-600 flex items-center gap-1 text-xs sm:text-sm font-black">
+                    <CheckCircle2 size={15} /> Tuntas
                   </span>
                 ) : (
-                  <span className="text-[#950415] flex items-center gap-1 text-sm font-black">
-                    <AlertCircle size={16} /> Perlu Remidi
+                  <span className="text-[#950415] flex items-center gap-1 text-xs sm:text-sm font-black">
+                    <AlertCircle size={15} /> Remidi
                   </span>
                 )}
-              </p>
-              <span className="text-[10px] text-slate-400 font-semibold block mt-0.5">
-                Presensi: {student.attendanceRate}%
+              </div>
+              <span className="text-[10px] text-slate-400 font-semibold block mt-0.5 truncate">
+                {attendanceHistory.length > 0 ? `Hadir: ${student.attendanceRate}%` : 'Presensi: -'}
               </span>
             </div>
           </div>
 
           {/* Area / Line Chart Perkembangan */}
-          <div className="bg-slate-50 p-4 rounded-xl border border-transparent shadow-sm">
-            <div className="flex justify-between items-center mb-3">
+          <div className="bg-slate-50 p-3 sm:p-4 rounded-xl border border-slate-200/80 shadow-2xs w-full max-w-full overflow-hidden">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
               <div>
                 <h4 className="text-xs font-black text-[#172033]">
                   Grafik Nilai Kualitas per Tahap
@@ -234,9 +316,9 @@ export function StudentProgressChartModal({
                 </p>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 text-[10px] font-bold">
+              <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold">
                 <span className="flex items-center gap-1 text-[#0362D0]">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#0362D0]" /> Nilai Rata-Rata
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#0362D0]" /> Rata-Rata
                 </span>
                 {isGrade3 && (
                   <span className="flex items-center gap-1 text-[#0284c7]">
@@ -256,34 +338,40 @@ export function StudentProgressChartModal({
                 )}
               </div>
             </div>
-
-            <div className="h-64 w-full">
+            {chartData.length === 0 ? (
+              <div className="h-56 sm:h-64 w-full flex flex-col items-center justify-center text-center p-6 bg-white rounded-xl border border-dashed border-slate-200">
+                <AlertCircle className="w-8 h-8 text-slate-300 mb-2" />
+                <p className="text-xs font-bold text-slate-600">Belum Ada Catatan Progres</p>
+                <p className="text-[11px] text-slate-400 mt-0.5">Nilai belum diinput oleh mentor di database Firestore.</p>
+              </div>
+            ) : (
+            <div className="h-56 sm:h-64 w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
                   <defs>
                     <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#0362D0" stopOpacity={0.25}/>
                       <stop offset="95%" stopColor="#0362D0" stopOpacity={0.0}/>
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                   <XAxis 
                     dataKey="name" 
-                    tick={{ fontSize: 11, fill: '#64748b', fontWeight: 600 }}
-                    axisLine={{ stroke: '#f1f5f9' }}
+                    tick={{ fontSize: 10, fill: '#64748b', fontWeight: 600 }}
+                    axisLine={{ stroke: '#cbd5e1' }}
                     tickLine={false}
                   />
                   <YAxis 
                     domain={[50, 100]} 
                     tick={{ fontSize: 10, fill: '#64748b' }}
-                    axisLine={{ stroke: '#f1f5f9' }}
+                    axisLine={{ stroke: '#cbd5e1' }}
                     tickLine={false}
                   />
                   <ReferenceLine 
                     y={75} 
                     stroke="#ef4444" 
                     strokeDasharray="4 4" 
-                    label={{ value: 'KKM 75', fill: '#ef4444', fontSize: 10, position: 'right' }} 
+                    label={{ value: 'KKM 75', fill: '#ef4444', fontSize: 9, position: 'right' }} 
                   />
                   <Tooltip 
                     content={({ active, payload, label }) => {
@@ -373,17 +461,18 @@ export function StudentProgressChartModal({
                 </AreaChart>
               </ResponsiveContainer>
             </div>
+            )}
           </div>
 
           {/* Tabel Rekapitulasi Rincian Tiap Tahap */}
-          <div>
+          <div className="w-full">
             <h4 className="text-xs font-black text-[#172033] mb-2">
               Rekapitulasi Capaian per Tahap
             </h4>
-            <div className="border border-transparent shadow-sm rounded-xl overflow-hidden">
-              <table className="w-full text-left text-xs">
+            <div className="w-full overflow-x-auto rounded-xl border border-slate-200 shadow-2xs scrollbar-thin">
+              <table className="w-full text-left text-xs min-w-[550px] border-collapse">
                 <thead>
-                  <tr className="bg-slate-50 text-[10px] font-extrabold uppercase tracking-wider text-slate-500 border-b border-transparent shadow-sm">
+                  <tr className="bg-slate-50 text-[10px] font-extrabold uppercase tracking-wider text-slate-500 border-b border-slate-200">
                     <th className="py-2.5 px-3">Sesi Tahap</th>
                     <th className="py-2.5 px-3">{isGrade3 ? 'Target Kurikulum' : 'Materi / Halaman'}</th>
                     {isGrade3 && <th className="py-2.5 px-2 text-center">Membaca</th>}
@@ -446,7 +535,7 @@ export function StudentProgressChartModal({
           </div>
 
           {/* Analisis & Rekomendasi Pedagogis Mentor */}
-          <div className="p-3.5 bg-blue-50/70 border border-blue-200/80 rounded-xl">
+          <div className="p-3 sm:p-3.5 bg-blue-50/70 border border-blue-200/80 rounded-xl">
             <div className="flex items-start gap-2.5">
               <Info size={16} className="text-[#0362D0] shrink-0 mt-0.5" />
               <div>
@@ -471,14 +560,286 @@ export function StudentProgressChartModal({
               </div>
             </div>
           </div>
+        </div>
+      ) : (
+        /* TAB KEHADIRAN & PRESENSI PEKAN KBM */
+        <div className="space-y-4 sm:space-y-5 w-full">
+          {/* 4 KPI Mini Badges Kehadiran */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2.5">
+            {/* Tingkat Kehadiran */}
+            <div className="p-2.5 sm:p-3 bg-white rounded-xl border border-slate-100 shadow-xs">
+              <span className="text-[10px] text-slate-400 font-bold uppercase block truncate">Persentase Hadir</span>
+              <div className="flex items-baseline gap-1 mt-1">
+                <span className={`text-xl sm:text-2xl font-black ${
+                  student.attendanceRate >= 85 ? 'text-emerald-600' : student.attendanceRate >= 75 ? 'text-amber-600' : 'text-rose-600'
+                }`}>
+                  {student.attendanceRate}%
+                </span>
+              </div>
+              <span className={`inline-block mt-1 px-1.5 py-0.5 rounded text-[9px] font-black uppercase border ${
+                student.attendanceRate >= 85 
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  : student.attendanceRate >= 75
+                  ? 'bg-amber-50 text-amber-700 border-amber-200'
+                  : 'bg-rose-50 text-rose-700 border-rose-200'
+              }`}>
+                {student.attendanceRate >= 85 ? 'Sangat Rajin' : student.attendanceRate >= 75 ? 'Cukup Tertib' : 'Perlu Perhatian'}
+              </span>
+            </div>
+
+            {/* Total Pertemuan Hadir */}
+            <div className="p-2.5 sm:p-3 bg-white rounded-xl border border-slate-100 shadow-xs">
+              <span className="text-[10px] text-slate-400 font-bold uppercase block truncate">Total Hadir</span>
+              <p className="text-xl sm:text-2xl font-black text-[#172033] mt-1">
+                {hadirCount} <span className="text-xs font-bold text-slate-400">/ {attendanceHistory.length}</span>
+              </p>
+              <span className="text-[10px] text-emerald-600 font-bold block mt-0.5 truncate">
+                Pertemuan KBM
+              </span>
+            </div>
+
+            {/* Izin & Sakit */}
+            <div className="p-2.5 sm:p-3 bg-white rounded-xl border border-slate-100 shadow-xs">
+              <span className="text-[10px] text-slate-400 font-bold uppercase block truncate">Izin & Sakit</span>
+              <p className="text-xl sm:text-2xl font-black text-amber-600 mt-1">
+                {izinCount + sakitCount} <span className="text-xs font-bold text-slate-400">kali</span>
+              </p>
+              <span className="text-[10px] text-slate-500 font-semibold block mt-0.5 truncate">
+                Izin: {izinCount} • Sakit: {sakitCount}
+              </span>
+            </div>
+
+            {/* Alpa / Tanpa Keterangan */}
+            <div className="p-2.5 sm:p-3 bg-white rounded-xl border border-slate-100 shadow-xs">
+              <span className="text-[10px] text-slate-400 font-bold uppercase block truncate">Alpa</span>
+              <p className={`text-xl sm:text-2xl font-black mt-1 ${alpaCount > 0 ? 'text-rose-600' : 'text-slate-700'}`}>
+                {alpaCount} <span className="text-xs font-bold text-slate-400">kali</span>
+              </p>
+              <span className={`text-[10px] font-bold block mt-0.5 truncate ${alpaCount > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                {alpaCount > 0 ? 'Perlu konfirmasi' : 'Nihil alpa'}
+              </span>
+            </div>
+          </div>
+
+          {/* Visualisasi Grafik Batang / Bar Presensi Per Pertemuan Pekan KBM */}
+          <div className="bg-white p-3 sm:p-4 rounded-xl border border-slate-100 shadow-xs w-full max-w-full overflow-hidden">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+              <div>
+                <h4 className="text-xs font-black text-[#172033]">
+                  Grafik Status Kehadiran per Pertemuan Pekan KBM
+                </h4>
+                <p className="text-[11px] text-slate-500 font-medium">
+                  Riwayat visual status kehadiran santri pada setiap pekan halaqah
+                </p>
+              </div>
+
+              {/* Status Legend Pill Indicators */}
+              <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-bold">
+                <span className="inline-flex items-center gap-1 text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span> Hadir
+                </span>
+                <span className="inline-flex items-center gap-1 text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
+                  <span className="w-2 h-2 rounded-full bg-amber-500"></span> Izin
+                </span>
+                <span className="inline-flex items-center gap-1 text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
+                  <span className="w-2 h-2 rounded-full bg-blue-500"></span> Sakit
+                </span>
+                <span className="inline-flex items-center gap-1 text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200">
+                  <span className="w-2 h-2 rounded-full bg-rose-500"></span> Alpa
+                </span>
+              </div>
+            </div>
+
+            <div className="h-[200px] w-full pt-2">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={attendanceChartData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis 
+                    dataKey="name" 
+                    tick={{ fontSize: 10, fontWeight: 'bold', fill: '#475569' }} 
+                    axisLine={{ stroke: '#e2e8f0' }}
+                    tickLine={false}
+                  />
+                  <YAxis 
+                    domain={[0, 100]} 
+                    ticks={[25, 65, 100]}
+                    tickFormatter={(val) => val === 100 ? 'Hadir' : val === 65 ? 'Izin/Skt' : 'Alpa'}
+                    tick={{ fontSize: 9, fontWeight: 'bold', fill: '#64748b' }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <Tooltip 
+                    content={({ active, payload }) => {
+                      if (!active || !payload || !payload.length) return null;
+                      const data = payload[0].payload;
+                      const isHadir = data.status === 'Hadir';
+                      const isIzin = data.status === 'Izin';
+                      const isSakit = data.status === 'Sakit';
+                      const statusColor = isHadir 
+                        ? 'text-emerald-700 bg-emerald-50 border-emerald-200' 
+                        : isIzin 
+                        ? 'text-amber-700 bg-amber-50 border-amber-200' 
+                        : isSakit 
+                        ? 'text-blue-700 bg-blue-50 border-blue-200' 
+                        : 'text-rose-700 bg-rose-50 border-rose-200';
+
+                      return (
+                        <div className="bg-white p-3 rounded-xl shadow-xl border border-slate-200 text-xs min-w-[190px]">
+                          <div className="flex justify-between items-center mb-1.5 pb-1 border-b border-slate-100">
+                            <span className="font-extrabold text-[#172033]">Pertemuan {data.meetingNumber}</span>
+                            <span className="text-[10px] text-slate-500">{data.date}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 mb-1.5">
+                            <span className="text-[10px] text-slate-400 font-semibold">Status:</span>
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-black border ${statusColor}`}>
+                              {data.status}
+                            </span>
+                          </div>
+                          {data.notes && data.notes !== '-' && (
+                            <div className="text-[10px] text-slate-600 bg-slate-50 p-1.5 rounded-lg border border-slate-100">
+                              <span className="font-bold text-slate-500 block mb-0.5">Catatan:</span>
+                              {data.notes}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    }}
+                  />
+                  <Bar dataKey="score" radius={[6, 6, 0, 0]} maxBarSize={44}>
+                    {attendanceChartData.map((entry, index) => {
+                      const color = entry.status === 'Hadir' 
+                        ? '#10B981' 
+                        : entry.status === 'Izin' 
+                        ? '#F59E0B' 
+                        : entry.status === 'Sakit' 
+                        ? '#3B82F6' 
+                        : '#EF4444';
+                      return <Cell key={`cell-${index}`} fill={color} />;
+                    })}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Tabel Rekapitulasi Riwayat Pertemuan Presensi */}
+          <div className="bg-white rounded-xl border border-slate-100 shadow-xs overflow-hidden w-full">
+            <div className="p-3 sm:p-3.5 bg-slate-50/80 border-b border-slate-100 flex items-center justify-between gap-2">
+              <div>
+                <h4 className="text-xs font-black text-[#172033]">
+                  Rincian Riwayat Pertemuan Santri
+                </h4>
+                <p className="text-[11px] text-slate-500 font-medium">
+                  Daftar pertemuan KBM dan status presensi yang tercatat
+                </p>
+              </div>
+              <span className="text-[10px] sm:text-[11px] font-bold text-slate-600 bg-white px-2 py-0.5 sm:py-1 rounded-lg border border-slate-200 shrink-0">
+                {attendanceHistory.length} Pertemuan
+              </span>
+            </div>
+
+            <div className="w-full overflow-x-auto scrollbar-thin">
+              <table className="w-full text-left text-xs border-collapse min-w-[480px]">
+                <thead>
+                  <tr className="border-b border-slate-100 bg-slate-50/40 text-[10px] uppercase tracking-wider font-extrabold text-slate-400">
+                    <th className="py-2.5 px-3">Pekan / Pertemuan</th>
+                    <th className="py-2.5 px-3">Tanggal</th>
+                    <th className="py-2.5 px-3">Status Presensi</th>
+                    <th className="py-2.5 px-3">Catatan Mentor</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 font-medium">
+                  {attendanceHistory.map((item, idx) => {
+                    const isHadir = item.status === 'Hadir';
+                    const isIzin = item.status === 'Izin';
+                    const isSakit = item.status === 'Sakit';
+                    const badgeClass = isHadir
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      : isIzin
+                      ? 'bg-amber-50 text-amber-700 border-amber-200'
+                      : isSakit
+                      ? 'bg-blue-50 text-blue-700 border-blue-200'
+                      : 'bg-rose-50 text-rose-700 border-rose-200';
+
+                    return (
+                      <tr key={idx} className="hover:bg-slate-50/60 transition-colors">
+                        <td className="py-2.5 px-3 font-extrabold text-[#172033]">
+                          Pertemuan {item.meetingNumber}
+                        </td>
+                        <td className="py-2.5 px-3 text-slate-500">
+                          {item.date}
+                        </td>
+                        <td className="py-2.5 px-3">
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black border ${badgeClass}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${
+                              isHadir ? 'bg-emerald-500' : isIzin ? 'bg-amber-500' : isSakit ? 'bg-blue-500' : 'bg-rose-500'
+                            }`} />
+                            {item.status}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 text-slate-600 text-[11px]">
+                          {item.notes || '-'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Diagnosis & Rekomendasi Kedisiplinan Kehadiran Santri */}
+          <div className={`p-3 sm:p-3.5 rounded-xl border ${
+            alpaCount > 0 
+              ? 'bg-rose-50/70 border-rose-200/80' 
+              : student.attendanceRate >= 85 
+              ? 'bg-emerald-50/70 border-emerald-200/80' 
+              : 'bg-blue-50/70 border-blue-200/80'
+          }`}>
+            <div className="flex items-start gap-2.5">
+              {alpaCount > 0 ? (
+                <AlertTriangle size={16} className="text-rose-600 shrink-0 mt-0.5" />
+              ) : (
+                <Info size={16} className={student.attendanceRate >= 85 ? "text-emerald-700 shrink-0 mt-0.5" : "text-[#0362D0] shrink-0 mt-0.5"} />
+              )}
+              <div>
+                <h5 className={`text-xs font-black mb-0.5 ${
+                  alpaCount > 0 
+                    ? 'text-rose-700' 
+                    : student.attendanceRate >= 85 
+                    ? 'text-emerald-800' 
+                    : 'text-[#0362D0]'
+                }`}>
+                  Evaluasi Kedisiplinan & Presensi Kehadiran
+                </h5>
+                <p className="text-xs text-slate-700 leading-relaxed font-medium">
+                  {alpaCount > 0 ? (
+                    <>
+                      Santri tercatat memiliki <strong>{alpaCount} kali ketidakhadiran tanpa keterangan (Alpa)</strong>. Hal ini dapat menghambat kontinuitas target hafalan dan kelancaran jilid santri. Disarankan mentor segera mengonfirmasi alasan ketidakhadiran kepada wali kelas atau wali santri.
+                    </>
+                  ) : student.attendanceRate >= 85 ? (
+                    <>
+                      Santri menunjukkan <strong>tingkat istiqomah dan kedisiplinan yang sangat baik ({student.attendanceRate}%)</strong>. Kehadiran rutin ini berkorelasi positif dengan penguasaan makhraj dan kelancaran membaca Al-Qur'an santri. Pertahankan apresiasi positif kepada santri!
+                    </>
+                  ) : (
+                    <>
+                      Tingkat kehadiran santri berada pada angka <strong>{student.attendanceRate}%</strong> dengan catatan beberapa kali izin/sakit. Disarankan memberikan modul latihan mandiri di rumah atau sesi talaqqi singkat sebelum/sesudah jam halaqah agar santri tidak tertinggal materi silabus.
+                    </>
+                  )}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
         </div>
 
         {/* Footer Actions */}
-        <div className="flex justify-between items-center p-4 border-t border-transparent shadow-sm bg-white">
+        <div className="flex flex-col-reverse sm:flex-row justify-between items-center p-3 sm:p-4 border-t border-slate-100 bg-white gap-2">
           <button
             onClick={onClose}
-            className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors"
+            className="w-full sm:w-auto px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors text-center"
           >
             Tutup
           </button>
@@ -486,9 +847,9 @@ export function StudentProgressChartModal({
           <Link
             to="/session"
             onClick={onClose}
-            className="px-4 py-2 bg-[#0362D0] hover:bg-[#0362D0]/90 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition-colors shadow-xs"
+            className="w-full sm:w-auto px-4 py-2 bg-[#0362D0] hover:bg-[#0362D0]/90 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-colors shadow-xs"
           >
-            <span>Buka Lembar Sesi Mengajar</span>
+            <span>Buka Sesi Mengajar</span>
             <ChevronRight size={14} />
           </Link>
         </div>

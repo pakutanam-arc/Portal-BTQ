@@ -99,8 +99,7 @@ service cloud.firestore {
 
     // Student Certifications
     match /certifications/{certId} {
-      allow read: if true;
-      allow write: if (isUnseeded() || isSignedIn()) && isValidId(certId);
+      allow read, write: if isValidId(certId);
     }
 
     // Notifications

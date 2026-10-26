@@ -197,76 +197,110 @@ export function Settings() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Navigation Sidebar for Settings */}
-        <div className="lg:col-span-1 space-y-2">
-          <button 
-            onClick={() => setActiveTab('school')}
-            className={`w-full flex items-center gap-3 px-5 py-3.5 font-bold rounded-2xl border transition-all text-sm text-left cursor-pointer ${
-              activeTab === 'school' 
-                ? 'bg-[#172033] text-white border-[#172033] shadow-xs' 
-                : 'bg-white text-slate-600 border-slate-100 hover:bg-slate-50'
-            }`}
-          >
-            <Building2 size={18} className={activeTab === 'school' ? 'text-[#C99A2E]' : 'text-slate-400'} /> Pengaturan Sekolah & KKM
-          </button>
-          <button 
-            onClick={() => setActiveTab('mentors')}
-            className={`w-full flex items-center gap-3 px-5 py-3.5 font-bold rounded-2xl border transition-all text-sm text-left cursor-pointer ${
-              activeTab === 'mentors' 
-                ? 'bg-[#172033] text-white border-[#172033] shadow-xs' 
-                : 'bg-white text-slate-600 border-slate-100 hover:bg-slate-50'
-            }`}
-          >
-            <Users size={18} className={activeTab === 'mentors' ? 'text-[#C99A2E]' : 'text-slate-400'} /> Kelola Profil Mentor
-          </button>
-          <button 
-            onClick={() => setActiveTab('profile')}
-            className={`w-full flex items-center gap-3 px-5 py-3.5 font-bold rounded-2xl border transition-all text-sm text-left cursor-pointer ${
-              activeTab === 'profile' 
-                ? 'bg-[#172033] text-white border-[#172033] shadow-xs' 
-                : 'bg-white text-slate-600 border-slate-100 hover:bg-slate-50'
-            }`}
-          >
-            <User size={18} className={activeTab === 'profile' ? 'text-[#C99A2E]' : 'text-slate-400'} /> Profil Akun
-          </button>
-          <button 
-            onClick={() => setActiveTab('academic')}
-            className={`w-full flex items-center gap-3 px-5 py-3.5 font-bold rounded-2xl border transition-all text-sm text-left cursor-pointer ${
-              activeTab === 'academic' 
-                ? 'bg-[#172033] text-white border-[#172033] shadow-xs' 
-                : 'bg-white text-slate-600 border-slate-100 hover:bg-slate-50'
-            }`}
-          >
-            <Database size={18} className={activeTab === 'academic' ? 'text-[#C99A2E]' : 'text-slate-400'} /> Tahun Ajaran & Akademik
-          </button>
-          <button 
-            onClick={() => setActiveTab('security')}
-            className={`w-full flex items-center gap-3 px-5 py-3.5 font-bold rounded-2xl border transition-all text-sm text-left cursor-pointer ${
-              activeTab === 'security' 
-                ? 'bg-[#172033] text-white border-[#172033] shadow-xs' 
-                : 'bg-white text-slate-600 border-slate-100 hover:bg-slate-50'
-            }`}
-          >
-            <Shield size={18} className={activeTab === 'security' ? 'text-[#C99A2E]' : 'text-slate-400'} /> Keamanan & Password
-          </button>
-          <button 
-            onClick={() => setActiveTab('database')}
-            className={`w-full flex items-center justify-between px-5 py-3.5 font-bold rounded-2xl border transition-all text-sm text-left cursor-pointer ${
-              activeTab === 'database' 
-                ? 'bg-[#172033] text-white border-[#172033] shadow-xs' 
-                : 'bg-white text-slate-600 border-slate-100 hover:bg-slate-50'
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <Database size={18} className={activeTab === 'database' ? 'text-[#C99A2E]' : 'text-slate-400'} />
-              <span>Database & Cadangan Data</span>
-            </div>
-            {healthResult?.hasDiscrepancy ? (
-              <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping" />
-            ) : healthResult && !healthResult.hasDiscrepancy ? (
-              <span className="w-2 h-2 rounded-full bg-emerald-500" />
-            ) : null}
-          </button>
+        {/* Navigation Tabs for Settings: Horizontal scrollable on Mobile, Vertical Sidebar on Desktop */}
+        <div className="lg:col-span-1">
+          {/* Mobile Horizontal Tab Strip */}
+          <div className="flex lg:hidden items-center gap-2 overflow-x-auto pb-2 scrollbar-none -mx-1 px-1">
+            {[
+              { id: 'school', label: 'Sekolah & KKM', icon: Building2 },
+              { id: 'mentors', label: 'Profil Mentor', icon: Users },
+              { id: 'profile', label: 'Profil Akun', icon: User },
+              { id: 'academic', label: 'Tahun Ajaran', icon: Database },
+              { id: 'security', label: 'Keamanan', icon: Shield },
+              { id: 'database', label: 'Database & Sync', icon: Database, alert: healthResult?.hasDiscrepancy }
+            ].map(tab => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveTab(tab.id as any)}
+                  className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-bold text-xs whitespace-nowrap shrink-0 transition-all cursor-pointer border ${
+                    isActive
+                      ? 'bg-[#172033] text-white border-[#172033] shadow-xs'
+                      : 'bg-white text-slate-600 border-slate-200/80 hover:bg-slate-50'
+                  }`}
+                >
+                  <Icon size={14} className={isActive ? 'text-[#C99A2E]' : 'text-slate-400'} />
+                  <span>{tab.label}</span>
+                  {tab.alert && <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Desktop Vertical Sidebar */}
+          <div className="hidden lg:flex flex-col space-y-2">
+            <button 
+              onClick={() => setActiveTab('school')}
+              className={`w-full flex items-center gap-3 px-5 py-3.5 font-bold rounded-2xl border transition-all text-sm text-left cursor-pointer ${
+                activeTab === 'school' 
+                  ? 'bg-[#172033] text-white border-[#172033] shadow-xs' 
+                  : 'bg-white text-slate-600 border-slate-100 hover:bg-slate-50'
+              }`}
+            >
+              <Building2 size={18} className={activeTab === 'school' ? 'text-[#C99A2E]' : 'text-slate-400'} /> Pengaturan Sekolah & KKM
+            </button>
+            <button 
+              onClick={() => setActiveTab('mentors')}
+              className={`w-full flex items-center gap-3 px-5 py-3.5 font-bold rounded-2xl border transition-all text-sm text-left cursor-pointer ${
+                activeTab === 'mentors' 
+                  ? 'bg-[#172033] text-white border-[#172033] shadow-xs' 
+                  : 'bg-white text-slate-600 border-slate-100 hover:bg-slate-50'
+              }`}
+            >
+              <Users size={18} className={activeTab === 'mentors' ? 'text-[#C99A2E]' : 'text-slate-400'} /> Kelola Profil Mentor
+            </button>
+            <button 
+              onClick={() => setActiveTab('profile')}
+              className={`w-full flex items-center gap-3 px-5 py-3.5 font-bold rounded-2xl border transition-all text-sm text-left cursor-pointer ${
+                activeTab === 'profile' 
+                  ? 'bg-[#172033] text-white border-[#172033] shadow-xs' 
+                  : 'bg-white text-slate-600 border-slate-100 hover:bg-slate-50'
+              }`}
+            >
+              <User size={18} className={activeTab === 'profile' ? 'text-[#C99A2E]' : 'text-slate-400'} /> Profil Akun
+            </button>
+            <button 
+              onClick={() => setActiveTab('academic')}
+              className={`w-full flex items-center gap-3 px-5 py-3.5 font-bold rounded-2xl border transition-all text-sm text-left cursor-pointer ${
+                activeTab === 'academic' 
+                  ? 'bg-[#172033] text-white border-[#172033] shadow-xs' 
+                  : 'bg-white text-slate-600 border-slate-100 hover:bg-slate-50'
+              }`}
+            >
+              <Database size={18} className={activeTab === 'academic' ? 'text-[#C99A2E]' : 'text-slate-400'} /> Tahun Ajaran & Akademik
+            </button>
+            <button 
+              onClick={() => setActiveTab('security')}
+              className={`w-full flex items-center gap-3 px-5 py-3.5 font-bold rounded-2xl border transition-all text-sm text-left cursor-pointer ${
+                activeTab === 'security' 
+                  ? 'bg-[#172033] text-white border-[#172033] shadow-xs' 
+                  : 'bg-white text-slate-600 border-slate-100 hover:bg-slate-50'
+              }`}
+            >
+              <Shield size={18} className={activeTab === 'security' ? 'text-[#C99A2E]' : 'text-slate-400'} /> Keamanan & Password
+            </button>
+            <button 
+              onClick={() => setActiveTab('database')}
+              className={`w-full flex items-center justify-between px-5 py-3.5 font-bold rounded-2xl border transition-all text-sm text-left cursor-pointer ${
+                activeTab === 'database' 
+                  ? 'bg-[#172033] text-white border-[#172033] shadow-xs' 
+                  : 'bg-white text-slate-600 border-slate-100 hover:bg-slate-50'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <Database size={18} className={activeTab === 'database' ? 'text-[#C99A2E]' : 'text-slate-400'} />
+                <span>Database & Cadangan Data</span>
+              </div>
+              {healthResult?.hasDiscrepancy ? (
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping" />
+              ) : healthResult && !healthResult.hasDiscrepancy ? (
+                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              ) : null}
+            </button>
+          </div>
         </div>
 
         {/* Settings Content Area */}

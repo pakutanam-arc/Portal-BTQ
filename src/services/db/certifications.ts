@@ -14,6 +14,7 @@ import {
 import { db } from '../firebase';
 import { StudentCertification, OperationType, handleFirestoreError } from './types';
 import { logSystemActivity } from './auditLogs';
+import { invalidateDbCache } from '../cacheService';
 
 export async function getCertifications(
   groupId?: string,
@@ -75,13 +76,26 @@ export async function saveCertification(cert: StudentCertification): Promise<str
     `Sertifikasi "${cert.category}" diterbitkan untuk ${studentName}.`
   );
 
+  invalidateDbCache('certifications');
   return finalId;
 }
 
-export async function deleteCertification(certId: string): Promise<void> {
+export async function deleteCertification(certId: string, studentName?: string, category?: string): Promise<void> {
+  if (!certId) {
+    throw new Error('ID sertifikasi tidak valid untuk dihapus');
+  }
+
   try {
     await deleteDoc(doc(db, 'certifications', certId));
+    invalidateDbCache('certifications');
+    
+    await logSystemActivity(
+      'certification',
+      'Penghapusan Sertifikasi',
+      `Data sertifikasi "${category || 'Ujian/Sertifikasi'}" untuk santri ${studentName || 'Santri'} telah dihapus dari sistem.`
+    );
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, `certifications/${certId}`);
+    throw error;
   }
 }

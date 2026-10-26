@@ -409,12 +409,12 @@ export function AuditLogs() {
           </div>
 
           {/* Category Filter */}
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">
             <Filter size={16} className="text-slate-400 shrink-0 hidden sm:inline" />
             <select
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
-              className="bg-slate-50 border border-slate-200 rounded-2xl px-3 py-2.5 text-xs font-bold text-slate-700 focus:outline-none focus:border-[#0362D0]"
+              className="flex-1 sm:flex-none bg-slate-50 border border-slate-200 rounded-2xl px-3 py-2.5 text-xs font-bold text-slate-700 focus:outline-none focus:border-[#0362D0]"
             >
               <option value="all">Semua Kategori</option>
               <option value="sync">Sinkronisasi Kurikulum</option>
@@ -422,14 +422,14 @@ export function AuditLogs() {
               <option value="security">Keamanan & Akses</option>
               <option value="journal">Jurnal Mengajar</option>
               <option value="attendance">Presensi</option>
-              <option value="system">Sistem Umumd</option>
+              <option value="system">Sistem Umum</option>
             </select>
 
             {/* Severity Filter */}
             <select
               value={selectedSeverity}
               onChange={(e) => setSelectedSeverity(e.target.value)}
-              className="bg-slate-50 border border-slate-200 rounded-2xl px-3 py-2.5 text-xs font-bold text-slate-700 focus:outline-none focus:border-[#0362D0]"
+              className="flex-1 sm:flex-none bg-slate-50 border border-slate-200 rounded-2xl px-3 py-2.5 text-xs font-bold text-slate-700 focus:outline-none focus:border-[#0362D0]"
             >
               <option value="all">Tingkat: Semua</option>
               <option value="error">Error</option>
@@ -442,7 +442,7 @@ export function AuditLogs() {
             <select
               value={timeRange}
               onChange={(e) => setTimeRange(e.target.value)}
-              className="bg-slate-50 border border-slate-200 rounded-2xl px-3 py-2.5 text-xs font-bold text-slate-700 focus:outline-none focus:border-[#0362D0]"
+              className="flex-1 sm:flex-none bg-slate-50 border border-slate-200 rounded-2xl px-3 py-2.5 text-xs font-bold text-slate-700 focus:outline-none focus:border-[#0362D0]"
             >
               <option value="all">Waktu: Semua</option>
               <option value="24h">24 Jam Terakhir</option>
@@ -510,87 +510,148 @@ export function AuditLogs() {
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-[#172033] text-white text-[11px] uppercase tracking-wider font-extrabold">
-                  <th className="py-3.5 px-4">Waktu Audit</th>
-                  <th className="py-3.5 px-4">Aktor & Peran</th>
-                  <th className="py-3.5 px-4">Kategori & Tindakan</th>
-                  <th className="py-3.5 px-4">Tingkat</th>
-                  <th className="py-3.5 px-4">Detail Peristiwa / Log</th>
-                  <th className="py-3.5 px-4 text-center">Inspeksi</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
-                {filteredLogs.map((log) => {
-                  const dateObj = new Date(log.timestamp);
-                  const formattedTime = dateObj.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
-                  const formattedDate = dateObj.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+          <>
+            {/* Mobile Card View (md:hidden) */}
+            <div className="md:hidden divide-y divide-slate-100">
+              {filteredLogs.map((log) => {
+                const dateObj = new Date(log.timestamp);
+                const formattedTime = dateObj.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+                const formattedDate = dateObj.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
 
-                  return (
-                    <tr key={log.id} className="hover:bg-slate-50/80 transition-colors group">
-                      {/* Timestamp */}
-                      <td className="py-3.5 px-4 whitespace-nowrap font-medium text-slate-600">
-                        <div className="flex items-center gap-1.5 font-mono text-[11px] text-slate-800 font-bold">
-                          <Clock size={12} className="text-slate-400 shrink-0" />
-                          <span>{formattedTime}</span>
+                return (
+                  <div key={log.id} className="p-4 space-y-2.5 bg-white hover:bg-slate-50/50 transition-colors">
+                    {/* Top: Actor info + Severity */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        {getActorIcon(log.actorRole)}
+                        <div>
+                          <div className="font-extrabold text-[#172033] text-xs leading-tight line-clamp-1">{log.actor}</div>
+                          <span className="text-[10px] text-slate-500 capitalize">
+                            {log.actorRole === 'admin' ? 'Administrator' : log.actorRole === 'system' ? 'Sistem Otomatis' : 'Mentor'}
+                          </span>
                         </div>
-                        <div className="text-[10px] text-slate-400 pl-4">{formattedDate}</div>
-                      </td>
-
-                      {/* Actor */}
-                      <td className="py-3.5 px-4 whitespace-nowrap">
-                        <div className="flex items-center gap-2">
-                          {getActorIcon(log.actorRole)}
-                          <div>
-                            <div className="font-bold text-slate-900 truncate max-w-[160px]">{log.actor}</div>
-                            <span className="text-[10px] font-semibold text-slate-600 capitalize">
-                              {log.actorRole === 'admin' ? 'Administrator' : log.actorRole === 'system' ? 'Sistem Otomatis' : 'Mentor'}
-                            </span>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Category & Action */}
-                      <td className="py-3.5 px-4 whitespace-nowrap space-y-1">
-                        <div>{getCategoryBadge(log.category)}</div>
-                        <div className="font-mono text-[11px] font-bold text-slate-800 tracking-tight">{log.action}</div>
-                      </td>
-
-                      {/* Severity */}
-                      <td className="py-3.5 px-4 whitespace-nowrap">
+                      </div>
+                      <div className="shrink-0">
                         {getSeverityBadge(log.severity)}
-                      </td>
+                      </div>
+                    </div>
 
-                      {/* Details */}
-                      <td className="py-3.5 px-4 max-w-md">
-                        <p className="line-clamp-2 text-slate-700 font-medium leading-relaxed">
-                          {log.details}
-                        </p>
-                        {log.ipAddress && (
-                          <div className="text-[10px] font-mono text-slate-600 mt-0.5">
-                            IP: {log.ipAddress}
+                    {/* Middle: Category & Action */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {getCategoryBadge(log.category)}
+                      <span className="font-mono text-[11px] font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded-md">
+                        {log.action}
+                      </span>
+                    </div>
+
+                    {/* Detail text */}
+                    <p className="text-xs text-slate-600 font-medium leading-relaxed line-clamp-2">
+                      {log.details}
+                    </p>
+
+                    {/* Bottom: Timestamp & Inspeksi CTA */}
+                    <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-[11px] text-slate-400 font-medium">
+                      <div className="flex items-center gap-1 font-mono">
+                        <Clock size={11} />
+                        <span>{formattedDate}, {formattedTime}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedLog(log)}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-[#0362D0] hover:text-white text-slate-700 font-bold text-[11px] transition-colors cursor-pointer"
+                      >
+                        <Eye size={12} />
+                        <span>Inspeksi</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Desktop Table View (hidden md:block) */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-[#172033] text-white text-[11px] uppercase tracking-wider font-extrabold">
+                    <th className="py-3.5 px-4">Waktu Audit</th>
+                    <th className="py-3.5 px-4">Aktor & Peran</th>
+                    <th className="py-3.5 px-4">Kategori & Tindakan</th>
+                    <th className="py-3.5 px-4">Tingkat</th>
+                    <th className="py-3.5 px-4">Detail Peristiwa / Log</th>
+                    <th className="py-3.5 px-4 text-center">Inspeksi</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
+                  {filteredLogs.map((log) => {
+                    const dateObj = new Date(log.timestamp);
+                    const formattedTime = dateObj.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+                    const formattedDate = dateObj.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+
+                    return (
+                      <tr key={log.id} className="hover:bg-slate-50/80 transition-colors group">
+                        {/* Timestamp */}
+                        <td className="py-3.5 px-4 whitespace-nowrap font-medium text-slate-600">
+                          <div className="flex items-center gap-1.5 font-mono text-[11px] text-slate-800 font-bold">
+                            <Clock size={12} className="text-slate-400 shrink-0" />
+                            <span>{formattedTime}</span>
                           </div>
-                        )}
-                      </td>
+                          <div className="text-[10px] text-slate-400 pl-4">{formattedDate}</div>
+                        </td>
 
-                      {/* Action */}
-                      <td className="py-3.5 px-4 text-center whitespace-nowrap">
-                        <button
-                          onClick={() => setSelectedLog(log)}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-[#0362D0] hover:text-white text-slate-700 font-bold text-[11px] transition-all cursor-pointer"
-                        >
-                          <Eye size={13} />
-                          <span>Inspeksi</span>
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                        {/* Actor */}
+                        <td className="py-3.5 px-4 whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            {getActorIcon(log.actorRole)}
+                            <div>
+                              <div className="font-bold text-slate-900 truncate max-w-[160px]">{log.actor}</div>
+                              <span className="text-[10px] font-semibold text-slate-600 capitalize">
+                                {log.actorRole === 'admin' ? 'Administrator' : log.actorRole === 'system' ? 'Sistem Otomatis' : 'Mentor'}
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Category & Action */}
+                        <td className="py-3.5 px-4 whitespace-nowrap space-y-1">
+                          <div>{getCategoryBadge(log.category)}</div>
+                          <div className="font-mono text-[11px] font-bold text-slate-800 tracking-tight">{log.action}</div>
+                        </td>
+
+                        {/* Severity */}
+                        <td className="py-3.5 px-4 whitespace-nowrap">
+                          {getSeverityBadge(log.severity)}
+                        </td>
+
+                        {/* Details */}
+                        <td className="py-3.5 px-4 max-w-md">
+                          <p className="line-clamp-2 text-slate-700 font-medium leading-relaxed">
+                            {log.details}
+                          </p>
+                          {log.ipAddress && (
+                            <div className="text-[10px] font-mono text-slate-600 mt-0.5">
+                              IP: {log.ipAddress}
+                            </div>
+                          )}
+                        </td>
+
+                        {/* Action */}
+                        <td className="py-3.5 px-4 text-center whitespace-nowrap">
+                          <button
+                            onClick={() => setSelectedLog(log)}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-[#0362D0] hover:text-white text-slate-700 font-bold text-[11px] transition-all cursor-pointer"
+                          >
+                            <Eye size={13} />
+                            <span>Inspeksi</span>
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
 
         {/* Footer info */}
