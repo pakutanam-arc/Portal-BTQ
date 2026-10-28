@@ -27,6 +27,7 @@ import {
   Mail
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { ModalPortal } from '../components/ui/ModalPortal';
 import { 
   AcademicMeeting, 
   getSynchronizedMeetings, 
@@ -37,7 +38,9 @@ import {
 import { 
   getAcademicHolidays, 
   subscribeAcademicHolidays, 
-  AcademicHoliday 
+  AcademicHoliday,
+  getMeetingOverrides,
+  MeetingOverride
 } from '../services/db/calendar';
 import { 
   connectGoogleCalendar, 
@@ -70,6 +73,7 @@ export default function AcademicCalendar() {
 
   // Data State
   const [holidays, setHolidays] = useState<AcademicHoliday[]>([]);
+  const [overrides, setOverrides] = useState<MeetingOverride[]>([]);
   const [syncStatusMap, setSyncStatusMap] = useState<Record<string, { googleEventId: string; syncedAt: string; htmlLink?: string }>>({});
   
   // Google Calendar Auth & Sync State
@@ -94,6 +98,10 @@ export default function AcademicCalendar() {
       if (isMounted) setHolidays(data);
     });
 
+    getMeetingOverrides().then(data => {
+      if (isMounted) setOverrides(data);
+    });
+
     getCalendarSyncStatus().then(status => {
       if (isMounted) setSyncStatusMap(status);
     });
@@ -113,19 +121,26 @@ export default function AcademicCalendar() {
       }
     };
 
+    const handleCalendarUpdate = () => {
+      getAcademicHolidays(true).then(data => { if (isMounted) setHolidays(data); });
+      getMeetingOverrides(true).then(data => { if (isMounted) setOverrides(data); });
+    };
+
     window.addEventListener('gcal-auth-changed', handleAuthChange);
+    window.addEventListener('calendar-updated', handleCalendarUpdate);
 
     return () => {
       isMounted = false;
       unsubscribeHolidays();
       window.removeEventListener('gcal-auth-changed', handleAuthChange);
+      window.removeEventListener('calendar-updated', handleCalendarUpdate);
     };
   }, []);
 
-  // Synchronized meetings with holidays shifted
+  // Synchronized meetings with holidays shifted and overrides applied
   const allMeetings = useMemo(() => {
-    return getSynchronizedMeetings([], [], holidays);
-  }, [holidays]);
+    return getSynchronizedMeetings([], [], holidays, overrides);
+  }, [holidays, overrides]);
 
   // Current month details
   const year = currentDate.getFullYear();
@@ -957,12 +972,9 @@ export default function AcademicCalendar() {
 
       {/* DETAILED MEETING DRAWER / POPUP MODAL */}
       {selectedMeeting && (
-        <div 
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150"
-          onClick={() => setSelectedMeeting(null)}
-        >
+        <ModalPortal isOpen={!!selectedMeeting} onClose={() => setSelectedMeeting(null)}>
           <div 
-            className="bg-white rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl border border-slate-100 flex flex-col"
+            className="bg-white rounded-3xl max-w-lg w-full max-h-[calc(100dvh-3rem)] sm:max-h-[calc(100dvh-4rem)] overflow-hidden shadow-2xl border border-slate-100 flex flex-col my-auto"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}
@@ -1102,7 +1114,7 @@ export default function AcademicCalendar() {
               </div>
             </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
 
       {/* Holiday Configuration Modal */}
@@ -1115,10 +1127,13 @@ export default function AcademicCalendar() {
           }}
           meeting={activeHolidayMeeting}
           existingHoliday={holidays.find(h => h.date === activeHolidayMeeting.date)}
+          existingOverride={overrides.find(o => o.meetingNumber === activeHolidayMeeting.meetingNumber)}
           isAdmin={isAdmin}
           onHolidayUpdated={async () => {
             const freshHolidays = await getAcademicHolidays(true);
+            const freshOverrides = await getMeetingOverrides(true);
             setHolidays(freshHolidays);
+            setOverrides(freshOverrides);
           }}
         />
       )}

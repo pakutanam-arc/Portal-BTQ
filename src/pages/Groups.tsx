@@ -11,6 +11,7 @@ import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { theme } from '../theme';
 import { useDebounce } from '../hooks/useDebounce';
+import { ModalPortal } from '../components/ui/ModalPortal';
 
 export function Groups() {
   const { currentUser, userData, userRole } = useAuth();
@@ -357,8 +358,11 @@ export function Groups() {
 
       {/* Group Detail & Room Editor Modal */}
       {selectedGroup && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#172033]/60 backdrop-blur-xs p-4 animate-in fade-in">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 animate-in zoom-in-95 max-h-[90vh] flex flex-col">
+        <ModalPortal isOpen={!!selectedGroup} onClose={() => setSelectedGroup(null)}>
+          <div 
+            className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 animate-in zoom-in-95 max-h-[calc(100dvh-3rem)] sm:max-h-[calc(100dvh-4rem)] my-auto flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* Modal Header */}
             <div className="flex justify-between items-start pb-4 border-b border-slate-100">
               <div>
@@ -538,7 +542,7 @@ export function Groups() {
               </Button>
             </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
     </div>
   );

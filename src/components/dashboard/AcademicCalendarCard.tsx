@@ -14,7 +14,13 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { AcademicMeeting, getSynchronizedMeetings, formatFullDateID } from '../../services/academicCalendar';
-import { getAcademicHolidays, subscribeAcademicHolidays, AcademicHoliday } from '../../services/db/calendar';
+import { 
+  getAcademicHolidays, 
+  subscribeAcademicHolidays, 
+  AcademicHoliday,
+  getMeetingOverrides,
+  MeetingOverride
+} from '../../services/db/calendar';
 import { HolidayConfigModal } from './HolidayConfigModal';
 
 interface AcademicCalendarCardProps {
@@ -34,27 +40,39 @@ export const AcademicCalendarCard: React.FC<AcademicCalendarCardProps> = ({
 }) => {
   const [viewMode, setViewMode] = useState<'compact' | 'full'>('compact');
   const [holidays, setHolidays] = useState<AcademicHoliday[]>([]);
+  const [overrides, setOverrides] = useState<MeetingOverride[]>([]);
   const [configModalOpen, setConfigModalOpen] = useState(false);
   const [activeConfigMeeting, setActiveConfigMeeting] = useState<AcademicMeeting | null>(null);
 
-  // Muat & dengarkan perubahan hari libur dari Firestore
+  // Muat & dengarkan perubahan hari libur & override pertemuan dari Firestore
   useEffect(() => {
     let isMounted = true;
     getAcademicHolidays().then(data => {
       if (isMounted) setHolidays(data);
+    });
+    getMeetingOverrides().then(data => {
+      if (isMounted) setOverrides(data);
     });
 
     const unsubscribe = subscribeAcademicHolidays((updatedList) => {
       if (isMounted) setHolidays(updatedList);
     });
 
+    const handleCalendarUpdate = () => {
+      getAcademicHolidays(true).then(data => { if (isMounted) setHolidays(data); });
+      getMeetingOverrides(true).then(data => { if (isMounted) setOverrides(data); });
+    };
+
+    window.addEventListener('calendar-updated', handleCalendarUpdate);
+
     return () => {
       isMounted = false;
       unsubscribe();
+      window.removeEventListener('calendar-updated', handleCalendarUpdate);
     };
   }, []);
 
-  const meetings = getSynchronizedMeetings(allAttendance, journals, holidays);
+  const meetings = getSynchronizedMeetings(allAttendance, journals, holidays, overrides);
   
   // Ambil pertemuan aktif
   const currentMeeting = meetings.find(m => m.status === 'ongoing' && !m.isHoliday) || 
@@ -78,6 +96,10 @@ export const AcademicCalendarCard: React.FC<AcademicCalendarCardProps> = ({
 
   const activeHolidayObj = activeConfigMeeting 
     ? holidays.find(h => h.date === activeConfigMeeting.date)
+    : undefined;
+
+  const activeOverrideObj = activeConfigMeeting
+    ? overrides.find(o => o.meetingNumber === activeConfigMeeting.meetingNumber)
     : undefined;
 
   return (
@@ -233,6 +255,7 @@ export const AcademicCalendarCard: React.FC<AcademicCalendarCardProps> = ({
         }}
         meeting={activeConfigMeeting}
         existingHoliday={activeHolidayObj}
+        existingOverride={activeOverrideObj}
         isAdmin={isAdmin}
       />
     </div>

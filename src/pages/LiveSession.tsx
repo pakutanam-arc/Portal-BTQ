@@ -16,6 +16,7 @@ import { CurriculumSyncAlert } from '../components/CurriculumSyncAlert';
 import { StudentScoreDrawer } from '../components/session/StudentScoreDrawer';
 import { StudentTableSkeleton } from '../components/students/StudentTableSkeleton';
 import { StudentActionModal } from '../components/students/StudentActionModal';
+import { ModalPortal } from '../components/ui/ModalPortal';
 import { sortStudents } from '../utils/studentUtils';
 
 const QRScanner = React.lazy(() => import('../components/QRScanner').then(m => ({ default: m.QRScanner })));
@@ -1095,12 +1096,12 @@ export function LiveSession() {
                     </button>
                   </div>
                   <div className="pt-2 space-y-1">
-                    {availableSessions.map(s => {
+                    {availableSessions.map((s, idx) => {
                       const isSelected = selectedSessionIds.includes(s.id);
                       const isFinished = completedSessionIds.includes(s.id);
                       return (
                         <label 
-                          key={s.id} 
+                          key={`avail_session_${s.id}_${idx}`} 
                           className={cn(
                             "flex items-start gap-2.5 p-2 rounded-xl cursor-pointer transition-colors",
                             isSelected ? "bg-[#0362D0]/10 text-[#0362D0] font-bold" : "hover:bg-slate-50 text-slate-700"
@@ -1143,9 +1144,9 @@ export function LiveSession() {
           <CheckSquare size={14} className="text-[#0362D0]" /> Tahap Terpilih Hari Ini:
         </span>
         <AnimatePresence mode="popLayout">
-          {selectedTahapObjects.map(s => (
+          {selectedTahapObjects.map((s, idx) => (
             <motion.span 
-              key={s.id}
+              key={`selected_session_${s.id}_${idx}`}
               initial={{ opacity: 0, scale: 0.8, x: -6 }}
               animate={{ opacity: 1, scale: 1, x: 0 }}
               exit={{ opacity: 0, scale: 0.8, x: 6 }}
@@ -1582,12 +1583,12 @@ export function LiveSession() {
 
       {/* Modal Tambah Santri Baru Khusus Kelompok Binaan */}
       {isAddStudentOpen && (
-        <div 
-          className="fixed inset-0 z-[120] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150"
-          onClick={() => !isSubmittingStudent && setIsAddStudentOpen(false)}
+        <ModalPortal 
+          isOpen={isAddStudentOpen} 
+          onClose={() => !isSubmittingStudent && setIsAddStudentOpen(false)}
         >
           <div 
-            className="bg-white rounded-3xl max-w-lg w-full border border-slate-100 shadow-2xl p-6 space-y-5 max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-150"
+            className="bg-white rounded-3xl max-w-lg w-full border border-slate-100 shadow-2xl p-6 space-y-5 max-h-[calc(100dvh-3rem)] sm:max-h-[calc(100dvh-4rem)] overflow-y-auto animate-in zoom-in-95 duration-150 my-auto flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
@@ -1739,7 +1740,7 @@ export function LiveSession() {
               </div>
             </form>
           </div>
-        </div>
+        </ModalPortal>
       )}
     </div>
   );

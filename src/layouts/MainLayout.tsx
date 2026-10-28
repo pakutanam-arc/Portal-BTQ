@@ -55,7 +55,7 @@ export function MainLayout() {
         </div>
 
         {/* Page Content */}
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 xl:px-10 relative z-0 mx-auto w-full max-w-[1440px] print:p-0 print:m-0 print:max-w-none print:w-full">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 xl:px-10 relative mx-auto w-full max-w-[1440px] print:p-0 print:m-0 print:max-w-none print:w-full">
           <Outlet />
         </main>
         

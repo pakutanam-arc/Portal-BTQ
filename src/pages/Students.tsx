@@ -43,6 +43,7 @@ import {
   StudentAbsenceAlert
 } from '../services/db';
 import { getPublicStudentUrl, sortStudents } from '../utils/studentUtils';
+import { ModalPortal } from '../components/ui/ModalPortal';
 import { useAuth } from '../contexts/AuthContext';
 import { StudentIdCard } from '../components/cards/StudentIdCard';
 import { StudentTableSkeleton } from '../components/students/StudentTableSkeleton';
@@ -812,8 +813,11 @@ export function Students() {
 
       {/* Modal Tambah / Edit Santri */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-md w-full max-h-[90vh] flex flex-col border border-slate-100 shadow-2xl p-5 sm:p-6 space-y-4 sm:space-y-5 animate-in fade-in zoom-in-95 duration-150 overflow-y-auto">
+        <ModalPortal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
+          <div 
+            className="bg-white rounded-3xl max-w-md w-full max-h-[calc(100dvh-3rem)] sm:max-h-[calc(100dvh-4rem)] flex flex-col border border-slate-100 shadow-2xl p-5 sm:p-6 space-y-4 sm:space-y-5 animate-in fade-in zoom-in-95 duration-150 overflow-y-auto my-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex justify-between items-center border-b border-slate-100 pb-4">
               <h3 className="text-lg font-black text-[#172033]">
                 {editingStudent ? 'Edit Data Santri' : 'Tambah Santri Baru'}
@@ -908,13 +912,16 @@ export function Students() {
               </div>
             </form>
           </div>
-        </div>
+        </ModalPortal>
       )}
 
       {/* Print Preview Modal */}
       {isPreviewModalOpen && (
-        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 print:hidden">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden">
+        <ModalPortal isOpen={isPreviewModalOpen} onClose={() => setIsPreviewModalOpen(false)}>
+          <div 
+            className="bg-white rounded-3xl shadow-2xl w-full max-w-5xl max-h-[calc(100dvh-3rem)] sm:max-h-[calc(100dvh-4rem)] flex flex-col overflow-hidden my-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
               <h2 className="font-black text-lg text-[#172033] flex items-center gap-2">
                 <Printer size={20} className="text-[#0362D0]" /> Pratinjau Cetak Kartu ({printStudents.length} Kartu)
@@ -956,13 +963,16 @@ export function Students() {
               </Button>
             </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
 
       {/* Show Barcode Modal */}
       {isShowBarcodeOpen && (
-        <div className="fixed inset-0 z-[110] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden">
+        <ModalPortal isOpen={isShowBarcodeOpen} onClose={() => setIsShowBarcodeOpen(false)}>
+          <div 
+            className="bg-white rounded-3xl shadow-2xl w-full max-w-5xl max-h-[calc(100dvh-3rem)] sm:max-h-[calc(100dvh-4rem)] flex flex-col overflow-hidden my-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
               <h2 className="font-black text-lg text-[#172033] flex items-center gap-2">
                 <QrCode size={20} className="text-[#0362D0]" /> Barcode Siswa ({printStudents.length} Siswa)
@@ -998,7 +1008,7 @@ export function Students() {
               </Button>
             </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
     </div>
       {/* Print Layout (Only visible during print / PDF export) */}

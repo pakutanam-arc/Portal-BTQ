@@ -43,6 +43,7 @@ import { Toast } from '../components/Toast';
 import { APP_LOGO } from '../assets/logo';
 import { getGradeForGroup } from '../services/curriculumData';
 import { useDebounce } from '../hooks/useDebounce';
+import { ModalPortal } from '../components/ui/ModalPortal';
 
 const CATEGORIES: CertCategory[] = [
   'Khatam Iqro/Tilawati',
@@ -775,8 +776,11 @@ export function Certifications() {
 
       {/* Modal Form Tambah / Edit Sertifikasi */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-in fade-in">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-7 shadow-2xl border border-slate-100 max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200">
+        <ModalPortal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
+          <div 
+            className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-7 shadow-2xl border border-slate-100 max-h-[calc(100dvh-3rem)] sm:max-h-[calc(100dvh-4rem)] overflow-y-auto animate-in zoom-in-95 duration-200 my-auto flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex justify-between items-center mb-5 border-b border-slate-100 pb-3.5">
               <div>
                 <h3 className="font-black text-base sm:text-lg text-[#172033]">
@@ -825,11 +829,11 @@ export function Certifications() {
                   className="w-full px-3 py-2.5 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-[#172033] focus:ring-2 focus:ring-[#0362D0] outline-none"
                 >
                   <option value="">-- Pilih Santri --</option>
-                  {students.map(s => {
+                  {students.map((s, idx) => {
                     const grp = groups.find(g => g.id === s.groupId);
                     const gr = getGradeForGroup(grp);
                     return (
-                      <option key={s.id} value={s.id}>
+                      <option key={`cert_st_${s.id}_${idx}`} value={s.id}>
                         {s.name} ({s.class} - {grp?.name || 'Kelompok'} | {gr.name} {gr.programName})
                       </option>
                     );
@@ -972,13 +976,16 @@ export function Certifications() {
               </div>
             </form>
           </div>
-        </div>
+        </ModalPortal>
       )}
 
       {/* Modal Cetak Piagam / Sertifikat Digital */}
       {selectedCertToPrint && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-xs p-4 animate-in fade-in">
-          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl border border-slate-100 max-h-[95vh] overflow-y-auto">
+        <ModalPortal isOpen={!!selectedCertToPrint} onClose={() => setSelectedCertToPrint(null)}>
+          <div 
+            className="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl border border-slate-100 max-h-[calc(100dvh-3rem)] sm:max-h-[calc(100dvh-4rem)] overflow-y-auto my-auto flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-3">
               <h3 className="font-black text-base text-[#172033] flex items-center gap-2">
                 <Award className="text-[#C99A2E]" size={18} /> Piagam Sertifikasi Kelulusan BTQ
@@ -1079,14 +1086,17 @@ export function Certifications() {
               </div>
             </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
 
       {/* Modal Dialog Konfirmasi Hapus In-App */}
       {certToDelete && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[#172033]/60 backdrop-blur-xs p-4 animate-in fade-in">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 animate-in zoom-in-95">
-            <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-100 text-rose-600 flex items-center justify-center mb-4 shadow-xs">
+        <ModalPortal isOpen={!!certToDelete} onClose={() => setCertToDelete(null)}>
+          <div 
+            className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 animate-in zoom-in-95 max-h-[calc(100dvh-3rem)] sm:max-h-[calc(100dvh-4rem)] overflow-y-auto my-auto flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-100 text-rose-600 flex items-center justify-center mb-4 shadow-xs shrink-0">
               <Trash2 size={24} />
             </div>
 
@@ -1146,7 +1156,7 @@ export function Certifications() {
               </button>
             </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
     </div>
   );

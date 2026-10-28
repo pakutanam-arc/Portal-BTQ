@@ -23,6 +23,8 @@ import { signOut } from 'firebase/auth';
 import { auth } from '../services/firebase';
 import { cn } from '../utils/cn';
 import { useAuth } from '../contexts/AuthContext';
+import { getSchoolConfig } from '../services/schoolConfig';
+import { ModalPortal } from './ui/ModalPortal';
 import { 
   AppNotification, 
   subscribeNotifications, 
@@ -106,21 +108,24 @@ export function Header() {
   });
 
   useEffect(() => {
-    const readConfig = () => {
+    const readConfig = async () => {
       try {
-        const raw = localStorage.getItem('sibtq_academic_config');
-        if (raw) {
-          const parsed = JSON.parse(raw);
+        const cfg = await getSchoolConfig();
+        if (cfg) {
           setAcademicConfig({
-            academicYear: parsed.academicYear || '2026/2027',
-            semester: parsed.semester || 'Ganjil',
+            academicYear: cfg.academicYear || '2026/2027',
+            semester: cfg.semester || 'Ganjil',
           });
         }
       } catch {}
     };
     readConfig();
     window.addEventListener('sibtq_academic_updated', readConfig);
-    return () => window.removeEventListener('sibtq_academic_updated', readConfig);
+    window.addEventListener('school_config_updated', readConfig);
+    return () => {
+      window.removeEventListener('sibtq_academic_updated', readConfig);
+      window.removeEventListener('school_config_updated', readConfig);
+    };
   }, []);
 
   // Real-time subscription to notifications
@@ -267,7 +272,7 @@ export function Header() {
           {isNotifOpen && (
             <>
               <div className="fixed inset-0 z-40" onClick={() => setIsNotifOpen(false)} />
-              <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200 max-h-[min(520px,calc(100dvh-5rem))] flex flex-col">
                 
                 {/* Header */}
                 <div className="p-3.5 border-b border-slate-100 bg-[#172033] text-white flex justify-between items-center">
@@ -440,7 +445,7 @@ export function Header() {
           {isProfileOpen && (
             <>
               <div className="fixed inset-0 z-40" onClick={() => setIsProfileOpen(false)} />
-              <div className="absolute right-0 mt-2 w-52 bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="absolute right-0 mt-2 w-52 bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200 max-h-[calc(100dvh-5rem)] overflow-y-auto">
                 <div className="p-3 border-b border-slate-100 bg-slate-50">
                   <p className="text-xs font-extrabold text-[#172033] capitalize">{username}</p>
                   <p className="text-[10px] text-[#950415] font-bold">{roleDisplay}</p>
@@ -474,8 +479,11 @@ export function Header() {
 
       {/* Broadcast Announcement Modal */}
       {isBroadcastOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#172033]/60 backdrop-blur-xs p-4 animate-in fade-in">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 animate-in zoom-in-95 duration-200">
+        <ModalPortal isOpen={isBroadcastOpen} onClose={() => setIsBroadcastOpen(false)}>
+          <div 
+            className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 animate-in zoom-in-95 duration-200 max-h-[calc(100dvh-3rem)] sm:max-h-[calc(100dvh-4rem)] overflow-y-auto my-auto flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-3">
               <div>
                 <h3 className="font-extrabold text-base text-[#172033]">Kirim Notifikasi Real-time</h3>
@@ -577,7 +585,7 @@ export function Header() {
               </div>
             </form>
           </div>
-        </div>
+        </ModalPortal>
       )}
 
       {/* User Profile & Signature Modal */}

@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { APP_LOGO, APP_NAME, APP_SUBTITLE, APP_DESC } from '../assets/logo';
+import { ModalPortal } from '../components/ui/ModalPortal';
 
 export function Login() {
   const [username, setUsername] = useState('');
@@ -285,8 +286,11 @@ export function Login() {
 
       {/* Help / Password Guide Modal */}
       {showHelpModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#172033]/60 backdrop-blur-xs p-4 animate-in fade-in">
-          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 animate-in zoom-in-95">
+        <ModalPortal isOpen={showHelpModal} onClose={() => setShowHelpModal(false)}>
+          <div 
+            className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 animate-in zoom-in-95 max-h-[calc(100dvh-3rem)] sm:max-h-[calc(100dvh-4rem)] overflow-y-auto my-auto flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex justify-between items-center mb-4 pb-2 border-b border-slate-100">
               <div className="flex items-center gap-2 text-[#0362D0] font-extrabold text-sm">
                 <KeyRound size={18} /> Panduan Akses Akun
@@ -332,7 +336,7 @@ export function Login() {
               Mengerti
             </button>
           </div>
-        </div>
+        </ModalPortal>
       )}
     </div>
   );

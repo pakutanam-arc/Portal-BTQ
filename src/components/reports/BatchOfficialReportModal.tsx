@@ -27,8 +27,9 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { id as localeId } from 'date-fns/locale';
-import { getStoredSchoolConfig } from '../../services/schoolConfig';
+import { getStoredSchoolConfig, getSchoolConfig } from '../../services/schoolConfig';
 import { sortStudents, extractClassComponents } from '../../utils/studentUtils';
+import { ModalPortal } from '../ui/ModalPortal';
 
 interface BatchOfficialReportModalProps {
   isOpen: boolean;
@@ -85,18 +86,26 @@ export function BatchOfficialReportModal({
     }
   }, [isOpen, defaultGroupId, defaultClass]);
 
-  // Load all attendance & progress in batch once
+  // Load all attendance, progress & fresh school config from Firestore in batch once
   useEffect(() => {
     async function loadBatchData() {
       if (!isOpen) return;
       setLoading(true);
       try {
-        const [att, prog] = await Promise.all([
+        const [att, prog, freshCfg] = await Promise.all([
           getAllStudentAttendance('all', 5000),
           getAllStudentProgress(5000),
+          getSchoolConfig(),
         ]);
         setAllAttendance(att);
         setAllProgress(prog);
+        if (freshCfg) {
+          if (freshCfg.academicYear) setAcademicYear(freshCfg.academicYear);
+          if (freshCfg.semester) setSemester(freshCfg.semester);
+          if (freshCfg.headmasterName) setHeadmasterName(freshCfg.headmasterName);
+          if (freshCfg.headmasterNip) setHeadmasterNip(freshCfg.headmasterNip);
+          if (freshCfg.kkm) setKkm(freshCfg.kkm);
+        }
       } catch (err) {
         console.error('Failed to load batch data for reports:', err);
       } finally {
@@ -307,8 +316,11 @@ export function BatchOfficialReportModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto print:p-0 print:bg-white">
-      <div className="bg-slate-100 rounded-3xl shadow-2xl w-full max-w-6xl max-h-[94vh] flex flex-col overflow-hidden my-auto border border-slate-300 print:border-none print:shadow-none print:max-h-none print:w-full">
+    <ModalPortal isOpen={isOpen} onClose={onClose}>
+      <div 
+        className="bg-slate-100 rounded-3xl shadow-2xl w-full max-w-6xl max-h-[calc(100dvh-3rem)] sm:max-h-[calc(100dvh-4rem)] flex flex-col overflow-hidden my-auto border border-slate-300 print:border-none print:shadow-none print:max-h-none print:w-full"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* MODAL HEADER */}
         <div className="p-4 sm:p-5 border-b border-slate-100 bg-white flex flex-col sm:flex-row justify-between sm:items-center gap-4 shrink-0 print:hidden">
           <div className="flex items-center gap-3">
@@ -572,6 +584,6 @@ export function BatchOfficialReportModal({
           )}
         </div>
       </div>
-    </div>
+    </ModalPortal>
   );
 }

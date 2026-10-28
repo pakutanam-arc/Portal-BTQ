@@ -35,6 +35,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { cn } from '../utils/cn';
 import { Toast } from '../components/Toast';
 import { useDebounce } from '../hooks/useDebounce';
+import { ModalPortal } from '../components/ui/ModalPortal';
 
 export function Journals() {
   const { userData, userRole, currentUser } = useAuth();
@@ -512,8 +513,11 @@ export function Journals() {
 
       {/* Modal Form Jurnal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#172033]/60 backdrop-blur-xs p-4 animate-in fade-in">
-          <div className="bg-white rounded-3xl max-w-xl w-full p-6 sm:p-7 shadow-2xl border border-slate-100 max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200">
+        <ModalPortal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
+          <div 
+            className="bg-white rounded-3xl max-w-xl w-full p-6 sm:p-7 shadow-2xl border border-slate-100 max-h-[calc(100dvh-3rem)] sm:max-h-[calc(100dvh-4rem)] overflow-y-auto animate-in zoom-in-95 duration-200 my-auto flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex justify-between items-center mb-5 border-b border-slate-100 pb-3.5">
               <div>
                 <h3 className="font-black text-base sm:text-lg text-[#172033]">
@@ -588,8 +592,8 @@ export function Journals() {
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-100 rounded-xl text-xs font-medium focus:ring-2 focus:ring-[#0362D0] outline-none text-[#172033]"
                   >
                     <option value="">-- Pilih Tahap Kurikulum --</option>
-                    {masterSessions.map(s => (
-                      <option key={s.id} value={s.id}>
+                    {masterSessions.map((s, idx) => (
+                      <option key={`journal_sess_${s.id}_${idx}`} value={s.id}>
                         Tahap {s.sessionNumber}: {s.topic}
                       </option>
                     ))}
@@ -681,12 +685,15 @@ export function Journals() {
               </div>
             </form>
           </div>
-        </div>
+        </ModalPortal>
       )}
       {/* Modal Dialog Konfirmasi Hapus Jurnal In-App */}
       {journalToDelete && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[#172033]/60 backdrop-blur-xs p-4 animate-in fade-in">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 animate-in zoom-in-95">
+        <ModalPortal isOpen={!!journalToDelete} onClose={() => setJournalToDelete(null)}>
+          <div 
+            className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 animate-in zoom-in-95 max-h-[calc(100dvh-3rem)] sm:max-h-[calc(100dvh-4rem)] overflow-y-auto my-auto flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-100 text-rose-600 flex items-center justify-center mb-4 shadow-xs">
               <Trash2 size={24} />
             </div>
@@ -745,7 +752,7 @@ export function Journals() {
               </button>
             </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
     </div>
   );

@@ -18,6 +18,7 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { ModalPortal } from '../ui/ModalPortal';
 import { 
   ResponsiveContainer, 
   AreaChart, 
@@ -134,16 +135,13 @@ export function StudentProgressChartModal({
   }));
 
   return (
-    <div 
-      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto"
-      onClick={onClose}
-    >
+    <ModalPortal isOpen={true} onClose={onClose}>
       <div 
-        className="relative w-full max-w-[calc(100vw-16px)] sm:max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden my-4 sm:my-6 transition-all"
+        className="relative w-full max-w-[calc(100vw-16px)] sm:max-w-2xl max-h-[calc(100dvh-3rem)] sm:max-h-[calc(100dvh-4rem)] bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden my-auto transition-all flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex justify-between items-start p-3.5 sm:p-5 border-b border-transparent shadow-sm bg-slate-50 gap-2">
+        <div className="flex justify-between items-start p-3.5 sm:p-5 border-b border-transparent shadow-sm bg-slate-50 gap-2 shrink-0">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-1">
               <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-[#0362D0]/10 text-[#0362D0] border border-[#0362D0]/20">
@@ -164,14 +162,14 @@ export function StudentProgressChartModal({
           <button
             onClick={onClose}
             aria-label="Tutup modal"
-            className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 transition-colors shrink-0"
+            className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 transition-colors shrink-0 cursor-pointer"
           >
             <X size={20} />
           </button>
         </div>
 
         {/* Tab Switcher: Grafik Nilai vs Grafik Kehadiran */}
-        <div className="flex border-b border-slate-200 bg-slate-100/70 p-1 sm:p-1.5 gap-1 overflow-x-auto w-full">
+        <div className="flex border-b border-slate-200 bg-slate-100/70 p-1 sm:p-1.5 gap-1 overflow-x-auto w-full shrink-0">
           <button
             type="button"
             onClick={() => setActiveTab('progress')}
@@ -203,7 +201,7 @@ export function StudentProgressChartModal({
           </button>
         </div>
 
-        <div className="p-3 sm:p-5 space-y-4 sm:space-y-5 max-h-[calc(85vh-120px)] overflow-y-auto overflow-x-hidden w-full max-w-full">
+        <div className="p-3 sm:p-5 space-y-4 sm:space-y-5 overflow-y-auto overflow-x-hidden flex-1 w-full max-w-full scrollbar-thin">
           {activeTab === 'progress' ? (
             <div className="space-y-4 sm:space-y-5 w-full">
               {/* KPI Mini Badges */}
@@ -487,7 +485,7 @@ export function StudentProgressChartModal({
                   {history.map((h, i) => {
                     const isFirst = i === 0;
                     return (
-                      <tr key={h.sessionId || i} className="hover:bg-slate-50 transition-colors">
+                      <tr key={`history_${h.sessionId || 'session'}_${i}`} className="hover:bg-slate-50 transition-colors">
                         <td className="py-2.5 px-3 font-extrabold text-[#172033]">
                           Tahap {h.sessionNumber}
                           <span className="block text-[10px] text-slate-400 font-normal">{h.date}</span>
@@ -855,6 +853,6 @@ export function StudentProgressChartModal({
         </div>
 
       </div>
-    </div>
+    </ModalPortal>
   );
 }

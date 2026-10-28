@@ -64,8 +64,8 @@ export function Reports() {
       try {
         const [stList, grList, mList] = await Promise.all([
           getStudents(),
-          getGroups(),
-          getMentors()
+          getGroups(true),
+          getMentors(true)
         ]);
         const sorted = sortStudents(stList);
         setStudents(sorted);

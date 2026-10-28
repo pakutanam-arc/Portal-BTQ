@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { Html5Qrcode } from 'html5-qrcode';
 import { Camera, X, Check, Loader2 } from 'lucide-react';
 import { Button } from './ui/Button';
@@ -118,10 +119,10 @@ export function QRScanner({ onScanSuccess, onClose }: QRScannerProps) {
     };
   }, [onScanSuccess]);
 
-  return (
+  const scannerContent = (
     <div className="fixed inset-0 z-[9999] bg-black/90 flex flex-col items-center justify-center">
       <div className="absolute top-6 right-6">
-        <Button variant="ghost" onClick={onClose} className="text-white hover:bg-white/20 rounded-full h-12 w-12 p-0">
+        <Button variant="ghost" onClick={onClose} className="text-white hover:bg-white/20 rounded-full h-12 w-12 p-0 cursor-pointer">
           <X size={28} />
         </Button>
       </div>
@@ -168,4 +169,6 @@ export function QRScanner({ onScanSuccess, onClose }: QRScannerProps) {
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(scannerContent, document.body) : scannerContent;
 }

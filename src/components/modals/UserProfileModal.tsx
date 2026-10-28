@@ -16,7 +16,8 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { updateMentorProfile } from '../../services/db/mentors';
-import { getStoredSchoolConfig, saveAdminAndSchoolProfile, SchoolConfig } from '../../services/schoolConfig';
+import { getStoredSchoolConfig, getSchoolConfig, saveAdminAndSchoolProfile, SchoolConfig } from '../../services/schoolConfig';
+import { ModalPortal } from '../ui/ModalPortal';
 
 interface UserProfileModalProps {
   isOpen: boolean;
@@ -298,19 +299,19 @@ export function UserProfileModal({ isOpen, onClose, onSaved }: UserProfileModalP
       return;
     }
 
-    const schoolCfg = getStoredSchoolConfig();
-
-    if (isAdmin) {
-      setAdminName(userData?.name || schoolCfg.coordinatorName || 'H. Ahmad Fauzi, S.Pd.I');
-      setAdminNip(userData?.nip || schoolCfg.coordinatorNip || '19790415 200801 1 012');
-      setAdminSignature(userData?.signature || schoolCfg.coordinatorSignature || '');
-      setHeadmasterName(schoolCfg.headmasterName || 'Dra. Hj. Sri Rahayu, M.Pd.');
-      setHeadmasterNip(schoolCfg.headmasterNip || '19680512 199412 2 001');
-      setHeadmasterSignature(schoolCfg.headmasterSignature || '');
-    } else {
-      setMentorName(userData?.name || currentUser?.displayName || 'Kak Alumni');
-      setMentorSignature(userData?.signature || '');
-    }
+    getSchoolConfig().then(schoolCfg => {
+      if (isAdmin) {
+        setAdminName(userData?.name || schoolCfg.coordinatorName || 'H. Ahmad Fauzi, S.Pd.I');
+        setAdminNip(userData?.nip || schoolCfg.coordinatorNip || '19790415 200801 1 012');
+        setAdminSignature(userData?.signature || schoolCfg.coordinatorSignature || '');
+        setHeadmasterName(schoolCfg.headmasterName || 'Dra. Hj. Sri Rahayu, M.Pd.');
+        setHeadmasterNip(schoolCfg.headmasterNip || '19680512 199412 2 001');
+        setHeadmasterSignature(schoolCfg.headmasterSignature || '');
+      } else {
+        setMentorName(userData?.name || currentUser?.displayName || 'Kak Alumni');
+        setMentorSignature(userData?.signature || '');
+      }
+    }).catch(() => {});
   }, [isOpen, isAdmin, userData, currentUser]);
 
   if (!isOpen) return null;
@@ -383,11 +384,10 @@ export function UserProfileModal({ isOpen, onClose, onSaved }: UserProfileModalP
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
+    <ModalPortal isOpen={isOpen} onClose={onClose}>
       <div 
-        className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-lg w-full max-h-[92vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
-        role="dialog"
-        aria-modal="true"
+        className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-lg w-full max-h-[calc(100dvh-3rem)] sm:max-h-[calc(100dvh-4rem)] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 my-auto"
+        onClick={(e) => e.stopPropagation()}
       >
         {/* Header Modal */}
         <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/60 shrink-0">
@@ -633,6 +633,6 @@ export function UserProfileModal({ isOpen, onClose, onSaved }: UserProfileModalP
           </button>
         </div>
       </div>
-    </div>
+    </ModalPortal>
   );
 }

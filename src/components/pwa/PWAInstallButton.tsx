@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Download, Smartphone, X, Check, Apple, Sparkles } from 'lucide-react';
 import { usePWAInstall } from '../../hooks/usePWAInstall';
+import { ModalPortal } from '../ui/ModalPortal';
 
 export const PWAInstallButton: React.FC<{ className?: string; compact?: boolean }> = ({ 
   className = '', 
@@ -55,8 +56,11 @@ export const PWAInstallButton: React.FC<{ className?: string; compact?: boolean 
         </button>
 
         {showIOSGuide && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 animate-in fade-in">
-            <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl border border-slate-100">
+          <ModalPortal isOpen={showIOSGuide} onClose={() => setShowIOSGuide(false)}>
+            <div 
+              className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl border border-slate-100 max-h-[calc(100dvh-3rem)] sm:max-h-[calc(100dvh-4rem)] overflow-y-auto my-auto flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
               <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-xl bg-[#172033] text-white flex items-center justify-center font-bold">
@@ -94,7 +98,7 @@ export const PWAInstallButton: React.FC<{ className?: string; compact?: boolean 
                 Mengerti
               </button>
             </div>
-          </div>
+          </ModalPortal>
         )}
       </>
     );

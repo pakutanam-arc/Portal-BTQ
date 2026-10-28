@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { X, Loader2, Inbox } from 'lucide-react';
 import { cn } from '../../utils/cn';
 import { getSystemActivities, SystemActivity } from '../../services/db';
+import { ModalPortal } from '../ui/ModalPortal';
 
 export function ActivityLogModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const [activities, setActivities] = useState<SystemActivity[]>([]);
@@ -26,8 +27,11 @@ export function ActivityLogModal({ isOpen, onClose }: { isOpen: boolean; onClose
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[80vh] animate-in slide-in-from-bottom-4 duration-300">
+    <ModalPortal isOpen={isOpen} onClose={onClose}>
+      <div 
+        className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[calc(100dvh-3rem)] sm:max-h-[calc(100dvh-4rem)] my-auto animate-in slide-in-from-bottom-4 duration-300"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 shrink-0">
           <h2 className="font-bold text-slate-800 text-lg">Log Aktivitas Sistem</h2>
           <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-full transition-colors">
@@ -72,6 +76,6 @@ export function ActivityLogModal({ isOpen, onClose }: { isOpen: boolean; onClose
           </p>
         </div>
       </div>
-    </div>
+    </ModalPortal>
   );
 }

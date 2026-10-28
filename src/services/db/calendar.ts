@@ -159,3 +159,95 @@ export function subscribeAcademicHolidays(
     return () => {};
   }
 }
+
+export interface MeetingOverride {
+  id: string; // e.g. 'm_1'
+  meetingNumber: number;
+  customDate?: string;
+  customTitle?: string;
+  updatedAt?: string;
+}
+
+const LOCAL_STORAGE_OVERRIDES_KEY = 'btq_meeting_overrides_cache';
+
+function getLocalOverrides(): MeetingOverride[] {
+  try {
+    const raw = localStorage.getItem(LOCAL_STORAGE_OVERRIDES_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalOverrides(list: MeetingOverride[]) {
+  try {
+    localStorage.setItem(LOCAL_STORAGE_OVERRIDES_KEY, JSON.stringify(list));
+  } catch {}
+}
+
+export async function getMeetingOverrides(forceFresh = false): Promise<MeetingOverride[]> {
+  return fetchWithSWR<MeetingOverride[]>('meeting_overrides', async () => {
+    try {
+      const q = query(collection(db, 'meeting_overrides'));
+      const snapshot = await getDocs(q);
+      if (!snapshot.empty) {
+        const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as MeetingOverride));
+        saveLocalOverrides(list);
+        return list;
+      }
+    } catch (error) {
+      console.warn("Firestore fetch meeting_overrides fallback:", error);
+    }
+    return getLocalOverrides();
+  }, { forceFresh, freshTtlMs: STATIC_CACHE_TTL_MS });
+}
+
+export async function saveMeetingOverride(override: {
+  meetingNumber: number;
+  customDate?: string;
+  customTitle?: string;
+}): Promise<void> {
+  const docId = `m_${override.meetingNumber}`;
+  const nowIso = new Date().toISOString();
+  const data: MeetingOverride = {
+    id: docId,
+    meetingNumber: override.meetingNumber,
+    customDate: override.customDate ? override.customDate.split('T')[0] : undefined,
+    customTitle: override.customTitle?.trim() || undefined,
+    updatedAt: nowIso
+  };
+
+  try {
+    await setDoc(doc(db, 'meeting_overrides', docId), data, { merge: true });
+    invalidateDbCache('meeting_overrides');
+
+    const current = getLocalOverrides().filter(o => o.meetingNumber !== override.meetingNumber);
+    current.push(data);
+    saveLocalOverrides(current);
+
+    window.dispatchEvent(new CustomEvent('calendar-updated', { detail: { meetingNumber: override.meetingNumber, override: data } }));
+    window.dispatchEvent(new CustomEvent('attendance-updated'));
+  } catch (error) {
+    console.error("Gagal menyimpan override pertemuan:", error);
+    handleFirestoreError(error, OperationType.WRITE, `meeting_overrides/${docId}`);
+    throw error;
+  }
+}
+
+export async function deleteMeetingOverride(meetingNumber: number): Promise<void> {
+  const docId = `m_${meetingNumber}`;
+  try {
+    await deleteDoc(doc(db, 'meeting_overrides', docId));
+    invalidateDbCache('meeting_overrides');
+
+    const current = getLocalOverrides().filter(o => o.meetingNumber !== meetingNumber);
+    saveLocalOverrides(current);
+
+    window.dispatchEvent(new CustomEvent('calendar-updated', { detail: { meetingNumber, removedOverride: true } }));
+    window.dispatchEvent(new CustomEvent('attendance-updated'));
+  } catch (error) {
+    console.error("Gagal menghapus override pertemuan:", error);
+    handleFirestoreError(error, OperationType.DELETE, `meeting_overrides/${docId}`);
+    throw error;
+  }
+}

@@ -16,6 +16,7 @@ import { Card, CardContent } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { getMentors, getGroups, getGroupNumber, updateMentorName, Mentor, Group } from '../../services/db';
+import { ModalPortal } from '../ui/ModalPortal';
 
 export function MentorSettingsTab() {
   const [mentors, setMentors] = useState<Mentor[]>([]);
@@ -218,8 +219,11 @@ export function MentorSettingsTab() {
 
       {/* Edit Mentor Name Modal */}
       {selectedMentor && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#172033]/60 backdrop-blur-xs p-4 animate-in fade-in">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 animate-in zoom-in-95">
+        <ModalPortal isOpen={!!selectedMentor} onClose={() => setSelectedMentor(null)}>
+          <div 
+            className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 animate-in zoom-in-95 max-h-[calc(100dvh-3rem)] sm:max-h-[calc(100dvh-4rem)] overflow-y-auto my-auto flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex justify-between items-start pb-3 border-b border-slate-100 mb-4">
               <div>
                 <h3 className="text-base font-black text-[#172033]">Ubah Nama Mentor</h3>
@@ -295,7 +299,7 @@ export function MentorSettingsTab() {
               </div>
             </form>
           </div>
-        </div>
+        </ModalPortal>
       )}
     </div>
   );

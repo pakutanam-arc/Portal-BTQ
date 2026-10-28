@@ -30,6 +30,7 @@ import { getAuditLogs, addAuditLog, AuditLogEntry } from '../services/db';
 import { validateCurriculumConsistency } from '../utils/curriculumValidator';
 import { forceSyncGroupProgress } from '../services/dataHealthCheck';
 import { cn } from '../utils/cn';
+import { ModalPortal } from '../components/ui/ModalPortal';
 
 export function AuditLogs() {
   const { currentUser, userRole } = useAuth();
@@ -668,8 +669,11 @@ export function AuditLogs() {
 
       {/* Log Inspection Drawer / Modal */}
       {selectedLog && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-2xl w-full border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">
+        <ModalPortal isOpen={!!selectedLog} onClose={() => setSelectedLog(null)}>
+          <div 
+            className="bg-white rounded-3xl max-w-2xl w-full border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[calc(100dvh-3rem)] sm:max-h-[calc(100dvh-4rem)] my-auto animate-in fade-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
             
             {/* Modal Header */}
             <div className="p-5 bg-[#172033] text-white flex items-center justify-between border-b border-slate-800">
@@ -792,7 +796,7 @@ export function AuditLogs() {
               </button>
             </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
     </div>
   );

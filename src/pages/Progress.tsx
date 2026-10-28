@@ -345,14 +345,14 @@ export function Progress() {
               onChange={(e) => setSelectedSessionId(e.target.value)}
               className="w-full font-bold text-xs"
             >
-              {availableSessions.map(s => {
+              {availableSessions.map((s, idx) => {
                 const statusTag = selectedSemester === 1 && s.sessionNumber <= 2 
                   ? ' [Selesai]' 
                   : selectedSemester === 1 && s.sessionNumber === 3 
                   ? ' [Tahap Aktif]' 
                   : '';
                 return (
-                  <option key={s.id} value={s.id}>
+                  <option key={`prog_sess_${s.id}_${idx}`} value={s.id}>
                     Tahap {s.sessionNumber}: {s.topic}{statusTag}
                   </option>
                 );

@@ -5,7 +5,7 @@
  * pelaksanaan BTQ (Sabtu pagi) dengan fleksibilitas penuh jika ada hari libur / sesi ditiadakan.
  */
 
-import { AcademicHoliday } from './db/calendar';
+import { AcademicHoliday, MeetingOverride } from './db/calendar';
 
 export interface AcademicMeeting {
   meetingNumber: number; // 0 jika hari libur, 1..32 jika sesi efektif
@@ -314,23 +314,54 @@ export function formatLocalDateString(d: Date): string {
 export function getSynchronizedMeetings(
   allAttendance: { meetingNumber?: number; date?: string }[] = [],
   journals: { meetingNumber?: number; date?: string; title?: string }[] = [],
-  holidays: AcademicHoliday[] = []
+  holidays: AcademicHoliday[] = [],
+  overrides: MeetingOverride[] = []
 ): AcademicMeeting[] {
   const holidayMap = new Map<string, AcademicHoliday>();
   holidays.forEach(h => {
     if (h.date) holidayMap.set(h.date.split('T')[0], h);
   });
 
-  // Petakan tanggal riil dari jurnal & presensi
-  const recordedMeetingDates = new Map<number, string>();
+  const overrideMap = new Map<number, MeetingOverride>();
+  overrides.forEach(o => {
+    if (o.meetingNumber) overrideMap.set(o.meetingNumber, o);
+  });
+
+  // Petakan frekuensi tanggal dari presensi & jurnal untuk mendeteksi tanggal duplikat yang salah
+  const dateMeetingFreq = new Map<string, Set<number>>();
   journals.forEach(j => {
     if (j.meetingNumber && j.date) {
-      recordedMeetingDates.set(j.meetingNumber, j.date.split('T')[0]);
+      const d = j.date.split('T')[0];
+      const set = dateMeetingFreq.get(d) || new Set<number>();
+      set.add(j.meetingNumber);
+      dateMeetingFreq.set(d, set);
     }
   });
   allAttendance.forEach(a => {
     if (a.meetingNumber && a.date) {
-      recordedMeetingDates.set(a.meetingNumber, a.date.split('T')[0]);
+      const d = a.date.split('T')[0];
+      const set = dateMeetingFreq.get(d) || new Set<number>();
+      set.add(a.meetingNumber);
+      dateMeetingFreq.set(d, set);
+    }
+  });
+
+  // Hanya gunakan recordedDate jika tanggal tersebut tidak pernah digunakan untuk banyak nomor pertemuan yang berbeda
+  const recordedMeetingDates = new Map<number, string>();
+  journals.forEach(j => {
+    if (j.meetingNumber && j.date) {
+      const d = j.date.split('T')[0];
+      if ((dateMeetingFreq.get(d)?.size || 0) <= 1) {
+        recordedMeetingDates.set(j.meetingNumber, d);
+      }
+    }
+  });
+  allAttendance.forEach(a => {
+    if (a.meetingNumber && a.date) {
+      const d = a.date.split('T')[0];
+      if ((dateMeetingFreq.get(d)?.size || 0) <= 1) {
+        recordedMeetingDates.set(a.meetingNumber, d);
+      }
     }
   });
 
@@ -350,9 +381,9 @@ export function getSynchronizedMeetings(
   const targetMeetingCount = 16;
   let weekOffset = 0;
   const maxWeeksSafety = 30; // Mencegah infinite loop
+  const usedDates = new Set<string>();
 
   while (currentMeetingNum <= targetMeetingCount && weekOffset < maxWeeksSafety) {
-    // Tambah hari berbasis kalender lokal (7 hari per pekan) agar selalu jatuh di hari Sabtu murni
     const curDate = new Date(baseYear, baseMonth, baseDay + (weekOffset * 7));
     const dateStr = formatLocalDateString(curDate);
 
@@ -371,10 +402,18 @@ export function getSynchronizedMeetings(
         notes: holiday.reason,
         isHoliday: true
       });
+      usedDates.add(dateStr);
     } else {
-      // BUKAN LIBUR: Jadikan Pertemuan Ke-[currentMeetingNum]
-      const actualDateStr = recordedMeetingDates.get(currentMeetingNum) || dateStr;
-      
+      // BUKAN LIBUR: Pertemuan Ke-[currentMeetingNum]
+      const override = overrideMap.get(currentMeetingNum);
+      let actualDateStr = override?.customDate || recordedMeetingDates.get(currentMeetingNum) || dateStr;
+
+      // Cegah tanggal duplikat kecuali jika memang sengaja diset khusus oleh admin
+      if (usedDates.has(actualDateStr) && !override?.customDate) {
+        actualDateStr = dateStr;
+      }
+      usedDates.add(actualDateStr);
+
       let status: 'completed' | 'ongoing' | 'upcoming' | 'holiday' = 'upcoming';
       if (currentMeetingNum < maxRecordedMeeting) {
         status = 'completed';
@@ -384,6 +423,8 @@ export function getSynchronizedMeetings(
         status = 'upcoming';
       }
 
+      const customTitle = override?.customTitle || DEFAULT_MEETING_TOPICS[currentMeetingNum] || `Pertemuan ${currentMeetingNum}`;
+
       result.push({
         meetingNumber: currentMeetingNum,
         date: actualDateStr,
@@ -391,7 +432,7 @@ export function getSynchronizedMeetings(
         shortDateLabel: formatShortDateID(actualDateStr),
         fullDateLabel: formatFullDateID(actualDateStr),
         status,
-        title: DEFAULT_MEETING_TOPICS[currentMeetingNum] || `Pertemuan ${currentMeetingNum}`,
+        title: customTitle,
         isHoliday: false
       });
 

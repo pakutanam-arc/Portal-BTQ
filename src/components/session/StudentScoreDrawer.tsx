@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   X, 
@@ -83,9 +84,9 @@ export function StudentScoreDrawer({
     onProgressChange(student.id, field, value);
   };
 
-  return (
+  const drawerDom = (
     <AnimatePresence>
-      <div className="fixed inset-0 z-[60] overflow-hidden">
+      <div className="fixed inset-0 z-[9999] overflow-hidden">
         {/* Backdrop */}
         <motion.div
           initial={{ opacity: 0 }}
@@ -480,4 +481,6 @@ export function StudentScoreDrawer({
       </div>
     </AnimatePresence>
   );
+
+  return typeof document !== 'undefined' ? createPortal(drawerDom, document.body) : drawerDom;
 }

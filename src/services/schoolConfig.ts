@@ -175,7 +175,7 @@ export async function saveAdminAndSchoolProfile(params: {
   headmasterSignature?: string;
   userEmail?: string;
 }): Promise<void> {
-  const current = getStoredSchoolConfig();
+  const current = await getSchoolConfig();
   const updated: SchoolConfig = {
     ...current,
     coordinatorName: params.adminName.trim() || current.coordinatorName,

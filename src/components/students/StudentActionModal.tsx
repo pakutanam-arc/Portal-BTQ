@@ -3,6 +3,7 @@ import { X, AlertTriangle, UserX, UserCheck, Trash2, ShieldAlert } from 'lucide-
 import { Student, Group } from '../../services/db/types';
 import { StudentAbsenceAlert } from '../../services/db/students';
 import { Button } from '../ui/Button';
+import { ModalPortal } from '../ui/ModalPortal';
 
 interface StudentActionModalProps {
   isOpen: boolean;
@@ -34,8 +35,11 @@ export function StudentActionModal({
   const isInactive = student.status === 'Nonaktif' || student.status === 'Non-Aktif';
 
   return (
-    <div className="fixed inset-0 z-[120] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
-      <div className="bg-white rounded-3xl max-w-lg w-full border border-slate-100 shadow-2xl p-6 space-y-5 animate-in zoom-in-95 duration-150 max-h-[90vh] overflow-y-auto">
+    <ModalPortal isOpen={isOpen} onClose={onClose}>
+      <div 
+        className="bg-white rounded-3xl max-w-lg w-full border border-slate-100 shadow-2xl p-5 sm:p-6 space-y-5 animate-in zoom-in-95 duration-150 max-h-[85vh] overflow-y-auto my-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="flex justify-between items-center border-b border-slate-100 pb-4">
           <div className="flex items-center gap-2.5">
@@ -209,6 +213,6 @@ export function StudentActionModal({
           </Button>
         </div>
       </div>
-    </div>
+    </ModalPortal>
   );
 }

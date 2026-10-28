@@ -6,7 +6,7 @@ import { getPublicStudentUrl } from '../../utils/studentUtils';
 import { format } from 'date-fns';
 import { id as localeId } from 'date-fns/locale';
 import { Printer, Download, Edit3, Check, X, ShieldCheck } from 'lucide-react';
-import { getStoredSchoolConfig, SchoolConfig } from '../../services/schoolConfig';
+import { getStoredSchoolConfig, getSchoolConfig, SchoolConfig } from '../../services/schoolConfig';
 
 interface OfficialReportSheetProps {
   student: Student;
@@ -45,17 +45,30 @@ export function OfficialReportSheet({
   const [schoolConfig, setSchoolConfig] = useState<SchoolConfig>(() => getStoredSchoolConfig());
 
   useEffect(() => {
+    let isMounted = true;
+
+    async function loadFreshConfig() {
+      try {
+        const fresh = await getSchoolConfig();
+        if (isMounted && fresh) {
+          setSchoolConfig(fresh);
+        }
+      } catch {}
+    }
+    loadFreshConfig();
+
     const handleConfigUpdate = (e: Event) => {
       const customEvent = e as CustomEvent<SchoolConfig>;
       if (customEvent.detail) {
         setSchoolConfig(customEvent.detail);
       } else {
-        setSchoolConfig(getStoredSchoolConfig());
+        loadFreshConfig();
       }
     };
     window.addEventListener('school_config_updated', handleConfigUpdate);
     window.addEventListener('storage', handleConfigUpdate);
     return () => {
+      isMounted = false;
       window.removeEventListener('school_config_updated', handleConfigUpdate);
       window.removeEventListener('storage', handleConfigUpdate);
     };

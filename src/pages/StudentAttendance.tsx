@@ -421,14 +421,14 @@ export function StudentAttendance() {
                 onChange={(e) => handleSessionChange(e.target.value)}
                 className="w-full font-bold text-xs"
               >
-                {availableSessions.map(s => {
+                {availableSessions.map((s, idx) => {
                   const isDone = selectedSemester === 1 && s.sessionNumber <= 2;
                   const isActive = selectedSemester === 1 && s.sessionNumber === 3;
                   const tag = isDone ? ' [Selesai]' : isActive ? ' [Pertemuan Aktif]' : '';
                   const mDate = getMeetingRealDate(s.sessionNumber);
                   const dateInfo = mDate ? ` (${formatShortDateID(mDate)})` : '';
                   return (
-                    <option key={s.id} value={s.id}>
+                    <option key={`att_sess_${s.id}_${idx}`} value={s.id}>
                       Pertemuan {s.sessionNumber}{dateInfo}: {s.topic}{tag}
                     </option>
                   );

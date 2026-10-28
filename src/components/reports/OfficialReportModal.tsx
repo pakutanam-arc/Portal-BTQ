@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Student, Group, Mentor, StudentAttendance, StudentProgress, getStudentAttendanceByStudent, getStudentProgressHistory, getGroups, getMentors } from '../../services/db';
 import { OfficialReportSheet } from './OfficialReportSheet';
 import { X, Printer, Loader2, Sparkles, UserCheck } from 'lucide-react';
-import { getStoredSchoolConfig } from '../../services/schoolConfig';
+import { getStoredSchoolConfig, getSchoolConfig } from '../../services/schoolConfig';
+import { ModalPortal } from '../ui/ModalPortal';
 
 interface OfficialReportModalProps {
   isOpen: boolean;
@@ -32,28 +33,26 @@ export function OfficialReportModal({
   const [kkm, setKkm] = useState(initialConfig.kkm);
 
   useEffect(() => {
-    if (isOpen) {
-      const cfg = getStoredSchoolConfig();
-      setHeadmasterName(cfg.headmasterName);
-      setHeadmasterNip(cfg.headmasterNip);
-      setKkm(cfg.kkm);
-    }
-  }, [isOpen]);
-
-  useEffect(() => {
     async function loadStudentData() {
       if (!student) return;
       setLoading(true);
       try {
-        const [att, prog, groups, mentors] = await Promise.all([
+        const [att, prog, groups, mentors, freshCfg] = await Promise.all([
           getStudentAttendanceByStudent(student.id),
           getStudentProgressHistory(student.id),
-          getGroups(),
-          getMentors(),
+          getGroups(true),
+          getMentors(true),
+          getSchoolConfig(),
         ]);
 
         setAttendance(att);
         setProgress(prog);
+
+        if (freshCfg) {
+          setHeadmasterName(freshCfg.headmasterName);
+          setHeadmasterNip(freshCfg.headmasterNip);
+          setKkm(freshCfg.kkm);
+        }
 
         const foundGroup = groups.find((g) => g.id === student.groupId) || null;
         setGroup(foundGroup);
@@ -77,8 +76,11 @@ export function OfficialReportModal({
   if (!isOpen || !student) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto print:p-0 print:bg-white">
-      <div className="bg-slate-100 rounded-3xl shadow-2xl w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden my-auto border border-slate-300 print:border-none print:shadow-none print:max-h-none print:w-full">
+    <ModalPortal isOpen={isOpen} onClose={onClose}>
+      <div 
+        className="bg-slate-100 rounded-3xl shadow-2xl w-full max-w-5xl max-h-[calc(100dvh-3rem)] sm:max-h-[calc(100dvh-4rem)] flex flex-col overflow-hidden my-auto border border-slate-300 print:border-none print:shadow-none print:max-h-none print:w-full"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header Modal */}
         <div className="p-4 sm:p-5 border-b border-slate-100 bg-white flex justify-between items-center shrink-0 print:hidden">
           <div className="flex items-center gap-3">
@@ -125,6 +127,6 @@ export function OfficialReportModal({
           )}
         </div>
       </div>
-    </div>
+    </ModalPortal>
   );
 }

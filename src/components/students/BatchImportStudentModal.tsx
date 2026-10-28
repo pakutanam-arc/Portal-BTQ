@@ -15,6 +15,7 @@ import {
   FileText
 } from 'lucide-react';
 import { Student, Group, batchAddStudents, updateStudent } from '../../services/db';
+import { ModalPortal } from '../ui/ModalPortal';
 
 interface BatchImportStudentModalProps {
   isOpen: boolean;
@@ -340,8 +341,11 @@ export function BatchImportStudentModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden border border-slate-100 my-auto">
+    <ModalPortal isOpen={isOpen} onClose={onClose}>
+      <div 
+        className="bg-white rounded-3xl shadow-2xl w-full max-w-5xl max-h-[calc(100dvh-3rem)] sm:max-h-[calc(100dvh-4rem)] flex flex-col overflow-hidden border border-slate-100 my-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* MODAL HEADER */}
         <div className="p-5 border-b border-slate-100 bg-white flex justify-between items-center shrink-0">
           <div className="flex items-center gap-3">
@@ -708,6 +712,6 @@ export function BatchImportStudentModal({
           </div>
         </div>
       </div>
-    </div>
+    </ModalPortal>
   );
 }

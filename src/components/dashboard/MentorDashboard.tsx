@@ -1228,7 +1228,7 @@ export function MentorDashboard() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {filteredStudents.map((s) => {
+                    {filteredStudents.map((s, idx) => {
                       let badgeStyle = '';
                       if (s.statusCategory === 'Sangat Baik') {
                         badgeStyle = 'bg-[#0362D0]/10 text-[#0362D0] border-[#0362D0]/20';
@@ -1239,7 +1239,7 @@ export function MentorDashboard() {
                       }
 
                       return (
-                        <tr key={s.id} className="hover:bg-slate-50/60 transition-colors">
+                        <tr key={`student_tr_${s.id}_${idx}`} className="hover:bg-slate-50/60 transition-colors">
                           <td className="py-3 px-4 whitespace-nowrap">
                             <div className="font-extrabold text-[#172033]">{s.name}</div>
                             <span className="text-[10px] text-slate-400 font-semibold">{s.nis ? `NIS: ${s.nis}` : 'Santri Aktif'}</span>
@@ -1296,7 +1296,7 @@ export function MentorDashboard() {
                   Tidak ada santri yang cocok.
                 </div>
               ) : (
-                filteredStudents.map((s) => {
+                filteredStudents.map((s, idx) => {
                   let badgeStyle = '';
                   if (s.statusCategory === 'Sangat Baik') {
                     badgeStyle = 'bg-[#0362D0]/10 text-[#0362D0] border-[#0362D0]/20';
@@ -1307,7 +1307,7 @@ export function MentorDashboard() {
                   }
 
                   return (
-                    <div key={s.id} className="bg-white border border-slate-100 rounded-xl p-3.5 shadow-xs">
+                    <div key={`student_mobile_${s.id}_${idx}`} className="bg-white border border-slate-100 rounded-xl p-3.5 shadow-xs">
                       <div className="flex justify-between items-start mb-2">
                         <div>
                           <h4 className="font-extrabold text-[#172033] text-xs sm:text-sm">{s.name}</h4>
