@@ -1,6 +1,6 @@
-import { collection, getDocs, query } from 'firebase/firestore';
+import { collection, getDocs, onSnapshot, query } from 'firebase/firestore';
 import { db } from '../firebase';
-import { fetchWithSWR, STATIC_CACHE_TTL_MS } from '../cacheService';
+import { fetchWithSWR, setCached, STATIC_CACHE_TTL_MS } from '../cacheService';
 import { Group, OperationType, handleFirestoreError } from './types';
 
 // Helper to parse group number for sorting
@@ -84,3 +84,27 @@ export async function getGroups(forceFresh = false): Promise<Group[]> {
     }
   }, { forceFresh, freshTtlMs: STATIC_CACHE_TTL_MS });
 }
+
+// Real-time Firestore listener for groups
+export function subscribeToGroups(
+  callback: (groups: Group[]) => void
+): () => void {
+  const q = query(collection(db, 'groups'));
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const items = snapshot.docs.map((docSnap) => {
+        const data = docSnap.data() as Group;
+        const gradeId = getGroupGradeId({ id: docSnap.id, ...data });
+        return { id: docSnap.id, ...data, schedule: 'Sabtu, 07:15 - 08:00', gradeId };
+      });
+      const sorted = items.sort((a, b) => getGroupNumber(a) - getGroupNumber(b));
+      setCached('groups', sorted);
+      callback(sorted);
+    },
+    (error) => {
+      console.warn('Real-time groups listener error:', error);
+    }
+  );
+}
+

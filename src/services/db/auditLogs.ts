@@ -2,6 +2,7 @@ import {
   collection,
   addDoc,
   getDocs,
+  onSnapshot,
   query,
   orderBy,
   limit,
@@ -17,6 +18,30 @@ import { initialSeedAuditLogs } from './initialData';
 
 const LOCAL_STORAGE_ACTIVITIES_KEY = 'sibtq_system_activities_v1';
 const LOCAL_STORAGE_AUDIT_LOGS_KEY = 'sibtq_audit_logs_v1';
+
+const ACTIVITY_ICON_MAP: Record<string, string> = {
+  journal: '📝',
+  progress: '📈',
+  certification: '🎓',
+  attendance: '✅',
+  mentor: '👤'
+};
+
+const ACTIVITY_COLOR_MAP: Record<string, string> = {
+  journal: 'text-[#C99A2E]',
+  progress: 'text-[#0362D0]',
+  certification: 'text-[#950415]',
+  attendance: 'text-[#0362D0]',
+  mentor: 'text-[#0362D0]'
+};
+
+const ACTIVITY_BG_MAP: Record<string, string> = {
+  journal: 'bg-[#C99A2E]/10',
+  progress: 'bg-[#0362D0]/10',
+  certification: 'bg-[#950415]/10',
+  attendance: 'bg-[#0362D0]/10',
+  mentor: 'bg-[#0362D0]/10'
+};
 
 function formatActivityTime(date: Date): string {
   try {
@@ -76,30 +101,6 @@ export async function logSystemActivity(
 export async function getSystemActivities(limitCount: number = 30): Promise<SystemActivity[]> {
   const activities: SystemActivity[] = [];
 
-  const iconMap: Record<string, string> = {
-    journal: '📝',
-    progress: '📈',
-    certification: '🎓',
-    attendance: '✅',
-    mentor: '👤'
-  };
-
-  const colorMap: Record<string, string> = {
-    journal: 'text-[#C99A2E]',
-    progress: 'text-[#0362D0]',
-    certification: 'text-[#950415]',
-    attendance: 'text-[#0362D0]',
-    mentor: 'text-[#0362D0]'
-  };
-
-  const bgMap: Record<string, string> = {
-    journal: 'bg-[#C99A2E]/10',
-    progress: 'bg-[#0362D0]/10',
-    certification: 'bg-[#950415]/10',
-    attendance: 'bg-[#0362D0]/10',
-    mentor: 'bg-[#0362D0]/10'
-  };
-
   try {
     const actCol = collection(db, 'system_activities');
     const actSnap = await getDocs(query(actCol, orderBy('createdAt', 'desc'), limit(limitCount)));
@@ -114,9 +115,9 @@ export async function getSystemActivities(limitCount: number = 30): Promise<Syst
           title: data.title || 'Aktivitas',
           description: data.description || '',
           timestamp: formatActivityTime(dateObj),
-          icon: iconMap[type] || '📝',
-          color: colorMap[type] || 'text-[#0362D0]',
-          bg: bgMap[type] || 'bg-[#0362D0]/10',
+          icon: ACTIVITY_ICON_MAP[type] || '📝',
+          color: ACTIVITY_COLOR_MAP[type] || 'text-[#0362D0]',
+          bg: ACTIVITY_BG_MAP[type] || 'bg-[#0362D0]/10',
           rawDate: dateObj
         });
       });
@@ -140,9 +141,9 @@ export async function getSystemActivities(limitCount: number = 30): Promise<Syst
           title: item.title || 'Aktivitas',
           description: item.description || '',
           timestamp: formatActivityTime(dateObj),
-          icon: iconMap[type] || '📝',
-          color: colorMap[type] || 'text-[#0362D0]',
-          bg: bgMap[type] || 'bg-[#0362D0]/10',
+          icon: ACTIVITY_ICON_MAP[type] || '📝',
+          color: ACTIVITY_COLOR_MAP[type] || 'text-[#0362D0]',
+          bg: ACTIVITY_BG_MAP[type] || 'bg-[#0362D0]/10',
           rawDate: dateObj
         };
       });
@@ -151,6 +152,45 @@ export async function getSystemActivities(limitCount: number = 30): Promise<Syst
   } catch {}
 
   return [];
+}
+
+// Real-time Firestore listener for system_activities
+export function subscribeToSystemActivities(
+  callback: (activities: SystemActivity[]) => void,
+  limitCount: number = 40
+): () => void {
+  const actCol = collection(db, 'system_activities');
+  const q = query(actCol, orderBy('createdAt', 'desc'), limit(limitCount));
+
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      if (snapshot.empty) {
+        return;
+      }
+      const items: SystemActivity[] = snapshot.docs.map((docSnap) => {
+        const data = docSnap.data();
+        const dateObj = data.createdAt ? new Date(data.createdAt) : new Date();
+        const type = (data.type || 'journal') as 'journal' | 'progress' | 'certification' | 'attendance';
+        return {
+          id: docSnap.id,
+          type,
+          title: data.title || 'Aktivitas',
+          description: data.description || '',
+          timestamp: formatActivityTime(dateObj),
+          icon: ACTIVITY_ICON_MAP[type] || '📝',
+          color: ACTIVITY_COLOR_MAP[type] || 'text-[#0362D0]',
+          bg: ACTIVITY_BG_MAP[type] || 'bg-[#0362D0]/10',
+          rawDate: dateObj,
+        };
+      });
+      items.sort((a, b) => b.rawDate.getTime() - a.rawDate.getTime());
+      callback(items);
+    },
+    (error) => {
+      console.warn('Real-time system_activities listener error:', error);
+    }
+  );
 }
 
 export async function addAuditLog(entry: Omit<AuditLogEntry, 'id' | 'timestamp'>): Promise<AuditLogEntry> {

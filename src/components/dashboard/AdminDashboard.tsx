@@ -1,35 +1,40 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { 
-  Users, 
-  Layers, 
-  UserCheck, 
-  TrendingUp, 
-  Loader2, 
-  Calendar, 
+import {
+  Users,
+  Layers,
+  UserCheck,
+  TrendingUp,
+  Loader2,
+  Calendar,
   Clock,
-  Edit3, 
-  PlusCircle, 
-  UserCheck2, 
+  Edit3,
+  PlusCircle,
   CheckSquare,
   RefreshCw,
-  CheckCircle2
+  CheckCircle2,
+  Award,
+  AlertTriangle,
+  BarChart3,
+  PieChart,
+  ChevronDown,
+  ChevronUp,
+  ClipboardCheck,
+  Sparkles,
+  ArrowUpRight,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { 
-  getGroups, 
-  getTotalStudentsCount, 
-  getGroupStudentsCount, 
-  getMentors, 
-  getGroupNumber, 
-  Group, 
-  Mentor, 
-  getSystemActivities, 
+import {
+  getGroups,
+  getMentors,
+  getGroupNumber,
+  Group,
+  Mentor,
+  getSystemActivities,
   SystemActivity,
   getAllStudentProgress,
   getStudents,
   Student,
   StudentProgress,
-  getStudentAttendance,
   getAllStudentAttendance,
   StudentAttendance,
   getTeachingJournals,
@@ -41,18 +46,18 @@ import {
   subscribeToAllStudentProgress,
   subscribeToTeachingJournals,
   subscribeToStudents,
-  invalidateDbCache
+  subscribeToGroups,
+  subscribeToMentors,
+  subscribeToSystemActivities,
+  invalidateDbCache,
 } from '../../services/db';
 import { cn } from '../../utils/cn';
 import { ActivityLogModal } from '../modals/ActivityLogModal';
-import { theme } from '../../theme';
-import { StatCardsGrid, StatCardItem } from './StatCardsGrid';
 import { AttendanceChartCard, AttendancePeriodStats } from './AttendanceChartCard';
 import { GroupProgressBarCard, GroupProgressItem } from './GroupProgressBarCard';
 import { GroupSummaryTable, GroupDetailItem, WeeklyProgressPoint } from './GroupSummaryTable';
 import { AttentionPanel, AttentionAlert } from './AttentionPanel';
 import { RecentActivitiesCard } from './RecentActivitiesCard';
-import { AttendanceHistoryWidget } from './AttendanceHistoryWidget';
 import { CurriculumSyncAlert } from '../CurriculumSyncAlert';
 import { WeeklyAttendanceSummaryCard, WeeklyOverallAttendancePoint } from './WeeklyAttendanceSummaryCard';
 import { GroupWeeklyAttendanceCard, WeeklyGroupDataPoint, GroupAttendanceDetail } from './GroupWeeklyAttendanceCard';
@@ -61,18 +66,26 @@ import { getMeetingRealDate, formatShortDateID, formatLocalDateString } from '..
 import { getAcademicHolidays, subscribeAcademicHolidays, AcademicHoliday } from '../../services/db/calendar';
 import { normalizeGroupId } from '../../services/db/groups';
 import { sortStudents } from '../../utils/studentUtils';
+import {
+  computeInstitutionExamReadiness,
+  evaluateGroupMeetingCompliance,
+  calculateAverageSessionScore,
+  MIN_PROGRESS_SCORE_STANDARD,
+  MIN_ATTENDANCE_RATE_STANDARD,
+} from '../../utils/sessionMetrics';
 
 export type DashboardTimeRange = 'semester' | '8weeks' | '4weeks';
+export type AdminAnalyticsTab = 'trends' | 'groups';
 
 export function AdminDashboard() {
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
   const [timeRange, setTimeRange] = useState<DashboardTimeRange>('semester');
+  const [analyticsTab, setAnalyticsTab] = useState<AdminAnalyticsTab>('trends');
+  const [showCalendarSection, setShowCalendarSection] = useState(false);
   const [rangeLoading, setRangeLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<string>('');
   const [groups, setGroups] = useState<Group[]>([]);
-  const [totalStudents, setTotalStudents] = useState(0);
-  const [groupCounts, setGroupCounts] = useState<Record<string, number>>({});
   const [mentors, setMentors] = useState<Mentor[]>([]);
   const [activities, setActivities] = useState<SystemActivity[]>([]);
   const [allProgress, setAllProgress] = useState<StudentProgress[]>([]);
@@ -82,7 +95,6 @@ export function AdminDashboard() {
   const [holidays, setHolidays] = useState<AcademicHoliday[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Perhitungan rentang waktu rekap (Semester Aktif / 4-8 Pertemuan Terakhir)
   const semesterInfo: SemesterInfo = useMemo(() => getActiveSemesterInfo(), []);
 
   const activeRangeConfig = useMemo(() => {
@@ -93,7 +105,7 @@ export function AdminDashboard() {
         label: '4 Pertemuan Terakhir',
         shortLabel: '4 Pertemuan',
         startDate,
-        description: `Sejak ${startDate}`
+        description: `Sejak ${startDate}`,
       };
     }
     if (timeRange === '8weeks') {
@@ -103,7 +115,7 @@ export function AdminDashboard() {
         label: '8 Pertemuan Terakhir',
         shortLabel: '8 Pertemuan',
         startDate,
-        description: `Sejak ${startDate}`
+        description: `Sejak ${startDate}`,
       };
     }
     return {
@@ -111,66 +123,66 @@ export function AdminDashboard() {
       label: `Semester ${semesterInfo.semesterName} (${semesterInfo.academicYear})`,
       shortLabel: `Sem. ${semesterInfo.semesterName}`,
       startDate: semesterInfo.startDate,
-      description: `Semester Aktif (${semesterInfo.startDate} s/d ${semesterInfo.endDate})`
+      description: `Semester Aktif (${semesterInfo.startDate} s/d ${semesterInfo.endDate})`,
     };
   }, [timeRange, semesterInfo]);
 
+  const markSyncedNow = useCallback(() => {
+    const now = new Date();
+    setLastSyncTime(
+      now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    );
+  }, []);
+
   // Fungsi pemanggilan data murni dari Cloud Firestore (forceFresh: true)
-  const loadData = useCallback(async (isManualRefresh = false) => {
-    if (isManualRefresh) setIsRefreshing(true);
-    try {
-      if (isManualRefresh) {
-        invalidateDbCache(); // Bersihkan seluruh cache lokal untuk memastikan pembacaan live
+  const loadData = useCallback(
+    async (isManualRefresh = false) => {
+      if (isManualRefresh) setIsRefreshing(true);
+      try {
+        if (isManualRefresh) {
+          invalidateDbCache();
+        }
+        const [
+          groupsData,
+          mentorsData,
+          activitiesData,
+          progressData,
+          studentsData,
+          journalsRes,
+          attendanceData,
+          holidaysData,
+        ] = await Promise.all([
+          getGroups(true),
+          getMentors(true),
+          getSystemActivities(60),
+          getAllStudentProgress(2000, true),
+          getStudents(true),
+          getTeachingJournals(undefined, 100),
+          getAllStudentAttendance(activeRangeConfig.startDate, 2000, true),
+          getAcademicHolidays(true),
+        ]);
+
+        const sortedGroups = [...groupsData].sort((a, b) => getGroupNumber(a) - getGroupNumber(b));
+        const activeStudents = studentsData.filter((s) => s.status !== 'Nonaktif');
+
+        setGroups(sortedGroups);
+        setMentors(mentorsData);
+        setActivities(activitiesData);
+        setAllProgress(progressData);
+        setStudents(activeStudents);
+        setJournals(journalsRes?.data || []);
+        setAllAttendance(attendanceData || []);
+        setHolidays(holidaysData || []);
+        markSyncedNow();
+      } catch (error) {
+        console.error('Error fetching live dashboard data:', error);
+      } finally {
+        setLoading(false);
+        if (isManualRefresh) setIsRefreshing(false);
       }
-      const [
-        groupsData, 
-        mentorsData, 
-        activitiesData,
-        progressData,
-        studentsData,
-        journalsRes,
-        attendanceData,
-        holidaysData
-      ] = await Promise.all([
-        getGroups(true),
-        getMentors(true),
-        getSystemActivities(100),
-        getAllStudentProgress(2000, true),
-        getStudents(true),
-        getTeachingJournals(undefined, 100),
-        getAllStudentAttendance(activeRangeConfig.startDate, 2000, true),
-        getAcademicHolidays(true)
-      ]);
-
-      const sortedGroups = [...groupsData].sort((a, b) => getGroupNumber(a) - getGroupNumber(b));
-      setGroups(sortedGroups);
-      setTotalStudents(studentsData.length);
-      setMentors(mentorsData);
-      setActivities(activitiesData);
-      setAllProgress(progressData);
-      setStudents(studentsData);
-      setJournals(journalsRes?.data || []);
-      setAllAttendance(attendanceData || []);
-      setHolidays(holidaysData || []);
-
-      // Hitung santri per kelompok dengan normalisasi ID yang konsisten
-      const counts: Record<string, number> = {};
-      sortedGroups.forEach((g) => {
-        counts[g.id] = studentsData.filter(
-          s => normalizeGroupId(s.groupId) === normalizeGroupId(g.id)
-        ).length;
-      });
-      setGroupCounts(counts);
-
-      const now = new Date();
-      setLastSyncTime(now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
-    } catch (error) {
-      console.error("Error fetching live dashboard data:", error);
-    } finally {
-      setLoading(false);
-      if (isManualRefresh) setIsRefreshing(false);
-    }
-  }, [activeRangeConfig.startDate]);
+    },
+    [activeRangeConfig.startDate, markSyncedNow]
+  );
 
   useEffect(() => {
     let isMounted = true;
@@ -178,40 +190,62 @@ export function AdminDashboard() {
     // 1. Pemuatan awal data murni dari Cloud Firestore
     loadData(false);
 
-    // 2. Real-time Firestore Subscriptions: Multi-perangkat & multi-browser sinkron instan
+    // 2. Real-time Firestore Subscriptions (100% 8 Koleksi Utama)
     const unsubAttendance = subscribeToAllStudentAttendance((freshAttendance) => {
       if (!isMounted) return;
-      setAllAttendance(freshAttendance);
-      const now = new Date();
-      setLastSyncTime(now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+      const filtered = activeRangeConfig.startDate
+        ? freshAttendance.filter((a) => !a.date || a.date >= activeRangeConfig.startDate!)
+        : freshAttendance;
+      setAllAttendance(filtered);
+      markSyncedNow();
     });
 
     const unsubProgress = subscribeToAllStudentProgress((freshProgress) => {
       if (!isMounted) return;
       setAllProgress(freshProgress);
-      const now = new Date();
-      setLastSyncTime(now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+      markSyncedNow();
     });
 
     const unsubJournals = subscribeToTeachingJournals((freshJournals) => {
       if (!isMounted) return;
-      setJournals(freshJournals);
-      const now = new Date();
-      setLastSyncTime(now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+      const filtered = activeRangeConfig.startDate
+        ? freshJournals.filter((j) => !j.date || j.date >= activeRangeConfig.startDate!)
+        : freshJournals;
+      setJournals(filtered);
+      markSyncedNow();
     });
 
     const unsubStudents = subscribeToStudents((freshStudents) => {
       if (!isMounted) return;
-      setStudents(freshStudents);
-      setTotalStudents(freshStudents.length);
+      const activeOnly = freshStudents.filter((s) => s.status !== 'Nonaktif');
+      setStudents(activeOnly);
+      markSyncedNow();
     });
+
+    const unsubGroups = subscribeToGroups((freshGroups) => {
+      if (!isMounted) return;
+      setGroups(freshGroups);
+      markSyncedNow();
+    });
+
+    const unsubMentors = subscribeToMentors((freshMentors) => {
+      if (!isMounted) return;
+      setMentors(freshMentors);
+      markSyncedNow();
+    });
+
+    const unsubActivities = subscribeToSystemActivities((freshActivities) => {
+      if (!isMounted) return;
+      setActivities(freshActivities);
+      markSyncedNow();
+    }, 50);
 
     const unsubHolidays = subscribeAcademicHolidays((freshHolidays) => {
       if (!isMounted) return;
       setHolidays(freshHolidays);
+      markSyncedNow();
     });
 
-    // Event lokal untuk tab yang sama
     const handleDataUpdated = () => {
       loadData(false);
     };
@@ -220,6 +254,7 @@ export function AdminDashboard() {
     window.addEventListener('progress-updated', handleDataUpdated);
     window.addEventListener('journal-updated', handleDataUpdated);
     window.addEventListener('db-cache-invalidated', handleDataUpdated);
+    window.addEventListener('user_profile_updated', handleDataUpdated);
     window.addEventListener('storage', handleDataUpdated);
 
     return () => {
@@ -228,14 +263,18 @@ export function AdminDashboard() {
       unsubProgress();
       unsubJournals();
       unsubStudents();
+      unsubGroups();
+      unsubMentors();
+      unsubActivities();
       unsubHolidays();
       window.removeEventListener('attendance-updated', handleDataUpdated);
       window.removeEventListener('progress-updated', handleDataUpdated);
       window.removeEventListener('journal-updated', handleDataUpdated);
       window.removeEventListener('db-cache-invalidated', handleDataUpdated);
+      window.removeEventListener('user_profile_updated', handleDataUpdated);
       window.removeEventListener('storage', handleDataUpdated);
     };
-  }, [loadData]);
+  }, [loadData, activeRangeConfig.startDate, markSyncedNow]);
 
   // Memperbarui presensi & jurnal ketika rentang waktu rekap diubah oleh admin
   const isInitialMount = React.useRef(true);
@@ -250,13 +289,13 @@ export function AdminDashboard() {
       try {
         const [journalsRes, attendanceData] = await Promise.all([
           getTeachingJournals(undefined, 80, undefined, activeRangeConfig.startDate),
-          getAllStudentAttendance(activeRangeConfig.startDate, 2000)
+          getAllStudentAttendance(activeRangeConfig.startDate, 2000),
         ]);
         if (!isSubscribed) return;
         setJournals(journalsRes?.data || []);
         setAllAttendance(attendanceData || []);
       } catch (err) {
-        console.error("Gagal memperbarui rentang rekap dashboard:", err);
+        console.error('Gagal memperbarui rentang rekap dashboard:', err);
       } finally {
         if (isSubscribed) setRangeLoading(false);
       }
@@ -276,9 +315,56 @@ export function AdminDashboard() {
     return map;
   }, [mentors]);
 
-  // Memoize group details transformation synchronized with REAL progress data & future weeks
+  // Hitung santri aktif per kelompok secara reaktif
+  const groupCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    groups.forEach((g) => {
+      const gNorm = normalizeGroupId(g.id);
+      counts[g.id] = students.filter((s) => normalizeGroupId(s.groupId) === gNorm).length;
+    });
+    return counts;
+  }, [groups, students]);
+
+  // Evaluasi kesiapan ujian institusi (Standar Ganda: Rata-rata Nilai >= 75 DAN Kehadiran >= 75%)
+  const examReadinessSummary = useMemo(() => {
+    return computeInstitutionExamReadiness(students, allProgress, allAttendance);
+  }, [students, allProgress, allAttendance]);
+
+  // Deteksi nomor pertemuan aktif tertinggi di institusi
+  const activeMeetingNumber = useMemo(() => {
+    const extractSessionNumber = (p: StudentProgress): number => {
+      if (p.meetingNumber && p.meetingNumber > 0) return p.meetingNumber;
+      if (p.sessionId) {
+        const match = p.sessionId.match(/(?:s|session_?)(\d+)/i) || p.sessionId.match(/(\d+)$/);
+        if (match) return parseInt(match[1] || match[0], 10);
+      }
+      return 1;
+    };
+
+    const journalMax = journals.reduce((max, j) => Math.max(max, j.meetingNumber || 0), 0);
+    const progressMax = allProgress.reduce((max, p) => Math.max(max, extractSessionNumber(p)), 0);
+    const attendanceMax = allAttendance.reduce((max, a) => Math.max(max, a.meetingNumber || 0), 0);
+    return Math.max(1, journalMax, progressMax, attendanceMax);
+  }, [journals, allProgress, allAttendance]);
+
+  // Evaluasi kepatuhan pengisian sesi KBM & jurnal mentor pada pertemuan aktif
+  const meetingCompliance = useMemo(() => {
+    const mappedGroups = groups.map((g) => ({
+      id: g.id,
+      name: g.name,
+      mentorName: mentorMap.get(g.mentorId) || 'Ustadz / Ustadzah',
+    }));
+    return evaluateGroupMeetingCompliance({
+      meetingNumber: activeMeetingNumber,
+      groups: mappedGroups,
+      attendanceRecords: allAttendance,
+      progressRecords: allProgress,
+      journalRecords: journals,
+    });
+  }, [activeMeetingNumber, groups, mentorMap, allAttendance, allProgress, journals]);
+
+  // Transformasi rincian kelompok tersinkronisasi dengan data riil
   const groupDetails: GroupDetailItem[] = useMemo(() => {
-    // Map students by normalized groupId
     const studentsByGroup = new Map<string, Student[]>();
     students.forEach((s) => {
       const gNorm = normalizeGroupId(s.groupId);
@@ -287,7 +373,6 @@ export function AdminDashboard() {
       studentsByGroup.set(gNorm, list);
     });
 
-    // Map progress by studentId and normalized groupId
     const progressByGroup = new Map<string, StudentProgress[]>();
     allProgress.forEach((p) => {
       const rawGId = p.groupId || students.find((s) => s.id === p.studentId)?.groupId;
@@ -299,7 +384,6 @@ export function AdminDashboard() {
       }
     });
 
-    // Helper untuk mengekstrak nomor pekan/sesi secara dinamis dari catatan progres
     const extractSessionNumber = (p: StudentProgress): number => {
       if (p.meetingNumber && p.meetingNumber > 0) return p.meetingNumber;
       if (p.sessionId) {
@@ -309,24 +393,11 @@ export function AdminDashboard() {
       return 1;
     };
 
-    // Deteksi pekan yang telah terlaksana secara dinamis:
-    // 1. Dari jurnal pengajaran yang telah direkam mentor
-    const journalMaxWeek = journals.reduce((max, j) => Math.max(max, j.meetingNumber || 0), 0);
-
-    // 2. Dari catatan progres siswa tersimpan di Firestore (input nilai oleh mentor)
-    const savedProgressMaxWeek = allProgress.reduce((max, p) => {
-      const s = extractSessionNumber(p);
-      return Math.max(max, s);
-    }, 0);
-
-    const attendanceMaxWeek = allAttendance.reduce((max, a) => Math.max(max, a.meetingNumber || 0), 0);
-    const activeMaxWeek = Math.max(0, journalMaxWeek, savedProgressMaxWeek, attendanceMaxWeek);
     const activeWeeksList: number[] = [];
-    for (let w = 1; w <= activeMaxWeek; w++) {
+    for (let w = 1; w <= activeMeetingNumber; w++) {
       activeWeeksList.push(w);
     }
 
-    // Precompute attendance stats per group from allAttendance using normalized groupId
     const groupAttendanceMap = new Map<string, { present: number; total: number }>();
     allAttendance.forEach((att) => {
       const gNorm = normalizeGroupId(att.groupId);
@@ -341,10 +412,9 @@ export function AdminDashboard() {
       const gNorm = normalizeGroupId(g.id);
       const mentorName = mentorMap.get(g.mentorId) || 'Ustadz / Ustadzah';
       const gStudents = sortStudents(studentsByGroup.get(gNorm) || []);
-      const studentsCount = gStudents.length || groupCounts[g.id] || groupCounts[gNorm] || 0;
+      const studentsCount = gStudents.length || groupCounts[g.id] || 0;
       const gProgs = progressByGroup.get(gNorm) || [];
 
-      // Kelompokkan nilai siswa per nomor pekan murni dari Firestore
       const progsByWeek = new Map<number, number[]>();
       gProgs.forEach((p) => {
         const sNum = extractSessionNumber(p);
@@ -355,7 +425,6 @@ export function AdminDashboard() {
         progsByWeek.set(sNum, scores);
       });
 
-      // Hitung capaian per pekan secara dinamis murni dari data Firestore
       const weeklyProgress: WeeklyProgressPoint[] = activeWeeksList.map((weekNum, wIdx) => {
         const weekScores = progsByWeek.get(weekNum) || [];
         const hasScores = weekScores.length > 0;
@@ -363,44 +432,53 @@ export function AdminDashboard() {
           ? Math.round(weekScores.reduce((acc, c) => acc + c, 0) / weekScores.length)
           : 0;
 
-        const prevWeekScores = wIdx > 0 ? (progsByWeek.get(activeWeeksList[wIdx - 1]) || []) : [];
-        const prevAvg = prevWeekScores.length > 0
-          ? Math.round(prevWeekScores.reduce((acc, c) => acc + c, 0) / prevWeekScores.length)
-          : 0;
+        const prevWeekScores = wIdx > 0 ? progsByWeek.get(activeWeeksList[wIdx - 1]) || [] : [];
+        const prevAvg =
+          prevWeekScores.length > 0
+            ? Math.round(prevWeekScores.reduce((acc, c) => acc + c, 0) / prevWeekScores.length)
+            : 0;
 
-        const delta = (hasScores && prevAvg > 0) ? (weekAvg - prevAvg) : 0;
+        const delta = hasScores && prevAvg > 0 ? weekAvg - prevAvg : 0;
 
         return {
           week: weekNum,
           label: `P${weekNum}`,
           progress: weekAvg,
-          target: 75,
+          target: MIN_PROGRESS_SCORE_STANDARD,
           delta,
-          isCurrent: weekNum === activeMaxWeek
+          isCurrent: weekNum === activeMeetingNumber,
         };
       });
 
-      // Capaian terkini adalah capaian di pekan terakhir yang memiliki nilai riil
-      const validPoints = weeklyProgress.filter(p => p.progress > 0);
-      const latestPoint = validPoints.length > 0 ? validPoints[validPoints.length - 1] : null;
-      const currentProgress = latestPoint ? latestPoint.progress : 0;
+      // Rata-rata kumulatif seluruh pertemuan yang telah memiliki nilai
+      const validPoints = weeklyProgress.filter((p) => p.progress > 0);
+      const currentProgress =
+        validPoints.length > 0
+          ? calculateAverageSessionScore(validPoints.map((p) => p.progress))
+          : 0;
 
-      let statusLabel: 'Baik' | 'Perlu Dipantau' | 'Perlu Pendampingan' | 'Belum Diinput' = 'Belum Diinput';
-      if (currentProgress > 0) {
-        if (currentProgress < 65) {
+      const groupAtt = groupAttendanceMap.get(gNorm);
+      const attendance =
+        groupAtt && groupAtt.total > 0 ? Math.round((groupAtt.present / groupAtt.total) * 100) : 0;
+
+      // Evaluasi status kelompok berdasarkan capaian nilai DAN kehadiran
+      let statusLabel: 'Baik' | 'Perlu Dipantau' | 'Perlu Pendampingan' | 'Belum Diinput' =
+        'Belum Diinput';
+      if (currentProgress > 0 || attendance > 0) {
+        if (
+          (currentProgress > 0 && currentProgress < 65) ||
+          (attendance > 0 && attendance < 65)
+        ) {
           statusLabel = 'Perlu Pendampingan';
-        } else if (currentProgress < 75) {
+        } else if (
+          currentProgress < MIN_PROGRESS_SCORE_STANDARD ||
+          (attendance > 0 && attendance < MIN_ATTENDANCE_RATE_STANDARD)
+        ) {
           statusLabel = 'Perlu Dipantau';
         } else {
           statusLabel = 'Baik';
         }
       }
-
-      // Real attendance rate from allAttendance murni tanpa estimasi acak
-      const groupAtt = groupAttendanceMap.get(gNorm);
-      const attendance = groupAtt && groupAtt.total > 0
-        ? Math.round((groupAtt.present / groupAtt.total) * 100)
-        : 0;
 
       return {
         id: g.id,
@@ -410,12 +488,11 @@ export function AdminDashboard() {
         progress: currentProgress,
         attendance,
         status: statusLabel,
-        weeklyProgress
+        weeklyProgress,
       };
     });
-  }, [groups, mentorMap, groupCounts, students, allProgress, journals, allAttendance]);
+  }, [groups, mentorMap, groupCounts, students, allProgress, allAttendance, activeMeetingNumber]);
 
-  // Helper to compute stats for a specific set of attendance records (murni tanpa fabrikasi)
   const computeAttendanceStats = (records: StudentAttendance[]): AttendancePeriodStats => {
     let present = 0;
     let permission = 0;
@@ -442,8 +519,8 @@ export function AdminDashboard() {
           { name: 'Hadir', value: 0, count: 0, color: '#0362D0' },
           { name: 'Izin', value: 0, count: 0, color: '#C99A2E' },
           { name: 'Sakit', value: 0, count: 0, color: '#94A3B8' },
-          { name: 'Alpa', value: 0, count: 0, color: '#950415' }
-        ]
+          { name: 'Alpa', value: 0, count: 0, color: '#950415' },
+        ],
       };
     }
 
@@ -463,250 +540,196 @@ export function AdminDashboard() {
         { name: 'Hadir', value: pHadir, count: present, color: '#0362D0' },
         { name: 'Izin', value: pIzin, count: permission, color: '#C99A2E' },
         { name: 'Sakit', value: pSakit, count: sick, color: '#94A3B8' },
-        { name: 'Alpa', value: pAlpa, count: absent, color: '#950415' }
-      ]
+        { name: 'Alpa', value: pAlpa, count: absent, color: '#950415' },
+      ],
     };
   };
 
-  // Resolve relevant meeting session for "Minggu Ini" (Saturday meeting cycle)
   const { thisWeekRecords, thisWeekLabel } = useMemo(() => {
     const now = new Date();
-    const currentDay = now.getDay(); // 0 = Sun, 1 = Mon, ..., 5 = Fri, 6 = Sat
+    const currentDay = now.getDay();
     const isSaturdayToday = currentDay === 6;
     const todayStr = formatLocalDateString(now);
 
-    // If today is Saturday, check if attendance has been taken for today
     if (isSaturdayToday) {
-      const todayMatches = allAttendance.filter(a => a.date && a.date.startsWith(todayStr));
+      const todayMatches = allAttendance.filter((a) => a.date && a.date.startsWith(todayStr));
       if (todayMatches.length > 0) {
         return {
           thisWeekRecords: todayMatches,
-          thisWeekLabel: 'pertemuan Sabtu hari ini'
+          thisWeekLabel: 'pertemuan Sabtu hari ini',
         };
       }
     }
 
-    // Ambil pertemuan dengan nomor pekan tertinggi yang telah tercatat
     let maxMeetingNumber = 0;
-    allAttendance.forEach(a => {
+    allAttendance.forEach((a) => {
       if (a.meetingNumber && a.meetingNumber > maxMeetingNumber) {
         maxMeetingNumber = a.meetingNumber;
       }
     });
 
     if (maxMeetingNumber > 0) {
-      const latestMeetingRecords = allAttendance.filter(a => a.meetingNumber === maxMeetingNumber);
+      const latestMeetingRecords = allAttendance.filter((a) => a.meetingNumber === maxMeetingNumber);
       if (latestMeetingRecords.length > 0) {
-        const matchedRecord = latestMeetingRecords.find(r => r.date);
-        const realDateLabel = matchedRecord?.date 
-          ? formatShortDateID(matchedRecord.date) 
-          : (getMeetingRealDate(maxMeetingNumber) ? formatShortDateID(getMeetingRealDate(maxMeetingNumber)!) : '');
+        const matchedRecord = latestMeetingRecords.find((r) => r.date);
+        const realDateLabel = matchedRecord?.date
+          ? formatShortDateID(matchedRecord.date)
+          : getMeetingRealDate(maxMeetingNumber)
+          ? formatShortDateID(getMeetingRealDate(maxMeetingNumber)!)
+          : '';
         const labelSuffix = realDateLabel ? ` (${realDateLabel})` : '';
 
         return {
           thisWeekRecords: latestMeetingRecords,
-          thisWeekLabel: isSaturdayToday ? 'pertemuan Sabtu hari ini' : `Pertemuan Ke-${maxMeetingNumber}${labelSuffix}`
+          thisWeekLabel: isSaturdayToday
+            ? 'pertemuan Sabtu hari ini'
+            : `Pertemuan Ke-${maxMeetingNumber}${labelSuffix}`,
         };
       }
     }
 
-    // Check records for the most recent Saturday
     const daysSinceLastSaturday = (currentDay + 1) % 7;
     const lastSaturdayDate = new Date(now.getTime() - daysSinceLastSaturday * 24 * 60 * 60 * 1000);
     const lastSaturdayStr = formatLocalDateString(lastSaturdayDate);
 
-    const lastSaturdayMatches = allAttendance.filter(a => a.date && a.date.startsWith(lastSaturdayStr));
+    const lastSaturdayMatches = allAttendance.filter(
+      (a) => a.date && a.date.startsWith(lastSaturdayStr)
+    );
     if (lastSaturdayMatches.length > 0) {
       return {
         thisWeekRecords: lastSaturdayMatches,
-        thisWeekLabel: isSaturdayToday ? 'pertemuan Sabtu hari ini' : 'pertemuan Sabtu lalu'
+        thisWeekLabel: isSaturdayToday ? 'pertemuan Sabtu hari ini' : 'pertemuan Sabtu lalu',
       };
     }
 
-    // Dynamic fallback: take the latest recorded halaqah date in the database
     const dateStrings = Array.from(
-      new Set(allAttendance.map(a => a.date ? a.date.split('T')[0] : ''))
-    ).filter(Boolean).sort().reverse();
+      new Set(allAttendance.map((a) => (a.date ? a.date.split('T')[0] : '')))
+    )
+      .filter(Boolean)
+      .sort()
+      .reverse();
 
     const latestDate = dateStrings[0];
-    const latestMatches = latestDate ? allAttendance.filter(a => a.date && a.date.startsWith(latestDate)) : [];
+    const latestMatches = latestDate
+      ? allAttendance.filter((a) => a.date && a.date.startsWith(latestDate))
+      : [];
 
     return {
       thisWeekRecords: latestMatches.length > 0 ? latestMatches : allAttendance,
-      thisWeekLabel: isSaturdayToday ? 'pertemuan Sabtu hari ini' : 'pertemuan Sabtu lalu'
+      thisWeekLabel: isSaturdayToday ? 'pertemuan Sabtu hari ini' : 'pertemuan Sabtu lalu',
     };
   }, [allAttendance]);
 
-  // Synchronized attendance statistics for all period filters (This Week, Month, 6 Months, All)
-  const attendancePeriodData = useMemo<Record<'thisWeek' | 'month' | 'sixMonths' | 'all', AttendancePeriodStats>>(() => {
+  const attendancePeriodData = useMemo<
+    Record<'thisWeek' | 'month' | 'sixMonths' | 'all', AttendancePeriodStats>
+  >(() => {
     if (!allAttendance || allAttendance.length === 0) {
       return {
         thisWeek: computeAttendanceStats([]),
         month: computeAttendanceStats([]),
         sixMonths: computeAttendanceStats([]),
-        all: computeAttendanceStats([])
+        all: computeAttendanceStats([]),
       };
     }
 
-    // Sort unique dates descending to find the latest active session date
     const dateStrings = Array.from(
-      new Set(allAttendance.map(a => a.date ? a.date.split('T')[0] : ''))
-    ).filter(Boolean).sort().reverse();
+      new Set(allAttendance.map((a) => (a.date ? a.date.split('T')[0] : '')))
+    )
+      .filter(Boolean)
+      .sort()
+      .reverse();
 
     const latestDate = dateStrings[0];
     const latestDateObj = latestDate ? new Date(latestDate) : new Date();
 
-    // Month records: sessions within 30 days of latest session
     const thirtyDaysAgo = new Date(latestDateObj.getTime() - 30 * 24 * 60 * 60 * 1000);
-    const monthRecords = allAttendance.filter(a => {
+    const monthRecords = allAttendance.filter((a) => {
       if (!a.date) return false;
       const d = new Date(a.date.split('T')[0]);
       return d >= thirtyDaysAgo && d <= latestDateObj;
     });
 
-    // 6 Months records: sessions within 180 days of latest session (Semester)
     const sixMonthsAgo = new Date(latestDateObj.getTime() - 180 * 24 * 60 * 60 * 1000);
-    const sixMonthsRecords = allAttendance.filter(a => {
+    const sixMonthsRecords = allAttendance.filter((a) => {
       if (!a.date) return false;
       const d = new Date(a.date.split('T')[0]);
       return d >= sixMonthsAgo && d <= latestDateObj;
     });
 
-    // All records: cumulative history
-    const allRecords = allAttendance;
-
-    const thisWeekStats = computeAttendanceStats(thisWeekRecords);
-    const monthStats = computeAttendanceStats(monthRecords);
-    const sixMonthsStats = computeAttendanceStats(sixMonthsRecords);
-    const allStats = computeAttendanceStats(allRecords);
-
     return {
-      thisWeek: thisWeekStats,
-      month: monthStats,
-      sixMonths: sixMonthsStats,
-      all: allStats
+      thisWeek: computeAttendanceStats(thisWeekRecords),
+      month: computeAttendanceStats(monthRecords),
+      sixMonths: computeAttendanceStats(sixMonthsRecords),
+      all: computeAttendanceStats(allAttendance),
     };
   }, [allAttendance, thisWeekRecords]);
 
-  // Real group progress list for bar chart
   const groupProgressBarData: GroupProgressItem[] = useMemo(() => {
     return groupDetails.map((gd) => ({
       name: gd.name,
-      progress: gd.progress
+      progress: gd.progress,
     }));
   }, [groupDetails]);
 
-  // Memoize summary statistics cards for Admin (Murni data riil)
-  const statCards: StatCardItem[] = useMemo(() => {
-    const totalSiswaVal = totalStudents || students.length;
+  // 4-Card Bento KPI Metrics
+  const kpiSummary = useMemo(() => {
+    const activeStudentsCount = students.length;
     const totalKelompokVal = groups.length;
     const totalMentorVal = mentors.length;
     const attendanceThisWeekVal = attendancePeriodData.thisWeek.rate;
     const attendanceAvgVal = attendancePeriodData.sixMonths.rate;
-    const groupsWithProg = groupDetails.filter(g => g.progress > 0);
-    const progressAvgVal = groupsWithProg.length 
+    const groupsWithProg = groupDetails.filter((g) => g.progress > 0);
+    const progressAvgVal = groupsWithProg.length
       ? Math.round(groupsWithProg.reduce((sum, g) => sum + g.progress, 0) / groupsWithProg.length)
       : 0;
+    const groupsOnTarget = groupDetails.filter(
+      (g) => g.progress >= MIN_PROGRESS_SCORE_STANDARD
+    ).length;
 
-    return [
-      { 
-        label: 'Total Siswa', 
-        value: `${totalSiswaVal}`, 
-        sub: 'Terdaftar aktif',
-        trend: '100% kapasitas',
-        icon: Users, 
-        color: 'text-[#0362D0]', 
-        bg: 'bg-[#0362D0]/10', 
-        border: 'border-[#0362D0]/20' 
-      },
-      { 
-        label: 'Kelompok BTQ', 
-        value: `${totalKelompokVal}`, 
-        sub: 'Halaqah binaan',
-        trend: 'Terdistribusi merata',
-        icon: Layers, 
-        color: 'text-[#C99A2E]', 
-        bg: 'bg-[#C99A2E]/10', 
-        border: 'border-[#C99A2E]/20' 
-      },
-      { 
-        label: 'Mentor', 
-        value: `${totalMentorVal}`, 
-        sub: 'Ustadz / Ustadzah',
-        trend: '1 mentor per kelompok',
-        icon: UserCheck2, 
-        color: 'text-[#0362D0]', 
-        bg: 'bg-[#0362D0]/10', 
-        border: 'border-[#0362D0]/20' 
-      },
-      { 
-        label: 'Kehadiran Minggu Ini', 
-        value: attendancePeriodData.thisWeek.total > 0 ? `${attendanceThisWeekVal}%` : '-', 
-        sub: thisWeekLabel === 'pertemuan Sabtu hari ini' ? 'Pertemuan Sabtu ini' : 'Pertemuan Sabtu lalu',
-        trend: attendancePeriodData.thisWeek.total > 0 ? 'Siswa hadir kelas' : 'Belum ada presensi',
-        icon: UserCheck, 
-        color: 'text-[#0362D0]', 
-        bg: 'bg-[#0362D0]/10', 
-        border: 'border-[#0362D0]/20' 
-      },
-      { 
-        label: 'Rata-rata Kehadiran', 
-        value: attendancePeriodData.sixMonths.total > 0 ? `${attendanceAvgVal}%` : '-', 
-        sub: 'Akumulasi semester',
-        trend: attendancePeriodData.sixMonths.total > 0 ? 'Konsisten di atas target' : 'Belum ada data',
-        icon: TrendingUp, 
-        color: 'text-[#0362D0]', 
-        bg: 'bg-[#0362D0]/10', 
-        border: 'border-[#0362D0]/20' 
-      },
-      { 
-        label: 'Rata-rata Progress', 
-        value: groupsWithProg.length > 0 ? `${progressAvgVal}%` : '-', 
-        sub: 'Pencapaian silabus',
-        trend: groupsWithProg.length > 0 ? 'Sesuai timeline kurikulum' : 'Belum diinput mentor',
-        icon: CheckSquare, 
-        color: 'text-[#C99A2E]', 
-        bg: 'bg-[#C99A2E]/10', 
-        border: 'border-[#C99A2E]/20' 
-      },
-    ];
-  }, [totalStudents, groups.length, mentors.length, groupDetails, attendancePeriodData, thisWeekLabel]);
+    return {
+      activeStudentsCount,
+      totalKelompokVal,
+      totalMentorVal,
+      attendanceThisWeekVal,
+      attendanceAvgVal,
+      hasAttendanceThisWeek: attendancePeriodData.thisWeek.total > 0,
+      hasAttendanceSemester: attendancePeriodData.sixMonths.total > 0,
+      progressAvgVal,
+      groupsWithProgCount: groupsWithProg.length,
+      groupsOnTarget,
+    };
+  }, [students.length, groups.length, mentors.length, attendancePeriodData, groupDetails]);
 
-  // -------------------------------------------------------------
-  // ANALISIS PEKANAN KEHADIRAN (RINGKASAN KESELURUHAN & RINCIAN KELOMPOK)
-  // -------------------------------------------------------------
-  const { 
-    weeklyOverallAttendanceData, 
-    weeklyGroupAttendanceData, 
+  const {
+    weeklyOverallAttendanceData,
+    weeklyGroupAttendanceData,
     cumulativeGroupAttendanceData,
     overallAverageRate,
-    overallLatestRate
+    overallLatestRate,
   } = useMemo(() => {
-    // 1. Kumpulkan seluruh tanggal unik presensi & urutkan kronologis (terlama ke terbaru)
     const uniqueDates = Array.from(
-      new Set(allAttendance.map(a => a.date ? a.date.split('T')[0] : ''))
-    ).filter(Boolean).sort();
+      new Set(allAttendance.map((a) => (a.date ? a.date.split('T')[0] : '')))
+    )
+      .filter(Boolean)
+      .sort();
 
-    // Petakan jurnal untuk korelasi tanggal ke nomor pekan jika ada
     const dateToJournalMeeting = new Map<string, number>();
-    journals.forEach(j => {
+    journals.forEach((j) => {
       if (j.date && j.meetingNumber) {
         dateToJournalMeeting.set(j.date.split('T')[0], j.meetingNumber);
       }
     });
 
-    // Standar acuan resmi tanggal kalender BTQ Sabtu
     const dateToWeekMap = new Map<string, number>();
     dateToWeekMap.set('2026-08-15', 1);
     dateToWeekMap.set('2026-08-22', 2);
 
-    journals.forEach(j => {
+    journals.forEach((j) => {
       if (j.date && j.meetingNumber) {
         dateToWeekMap.set(j.date.split('T')[0], j.meetingNumber);
       }
     });
 
-    // Petakan sisa tanggal jika ada tanggal lain diinput
     uniqueDates.forEach((dateStr, idx) => {
       if (!dateToWeekMap.has(dateStr)) {
         const fromJournal = dateToJournalMeeting.get(dateStr);
@@ -718,9 +741,8 @@ export function AdminDashboard() {
       }
     });
 
-    // Ambil daftar nomor pekan unik HANYA dari data riil presensi dan jurnal
     const allWeekNumbersSet = new Set<number>();
-    allAttendance.forEach(a => {
+    allAttendance.forEach((a) => {
       if (a.meetingNumber && a.meetingNumber > 0) {
         allWeekNumbersSet.add(a.meetingNumber);
       } else if (a.date) {
@@ -730,7 +752,7 @@ export function AdminDashboard() {
       }
     });
 
-    journals.forEach(j => {
+    journals.forEach((j) => {
       if (j.meetingNumber && j.meetingNumber > 0) {
         allWeekNumbersSet.add(j.meetingNumber);
       }
@@ -738,7 +760,6 @@ export function AdminDashboard() {
 
     const sortedWeeks = Array.from(allWeekNumbersSet).sort((a, b) => a - b);
 
-    // Format helper tanggal Indonesia singkat (misal: "15 Agu")
     const formatShortDate = (dStr: string) => {
       try {
         const d = new Date(dStr);
@@ -748,31 +769,25 @@ export function AdminDashboard() {
       }
     };
 
-    // Helper cari tanggal representatif untuk pertemuan
     const getWeekDateLabel = (weekNum: number): string | undefined => {
-      // 1. Cek dari rekaman presensi langsung
-      const matchedRecord = allAttendance.find(a => a.meetingNumber === weekNum && a.date);
+      const matchedRecord = allAttendance.find((a) => a.meetingNumber === weekNum && a.date);
       if (matchedRecord && matchedRecord.date) return formatShortDate(matchedRecord.date);
 
-      // 2. Cek dari jurnal pembelajaran
-      const matchedJournal = journals.find(j => j.meetingNumber === weekNum && j.date);
+      const matchedJournal = journals.find((j) => j.meetingNumber === weekNum && j.date);
       if (matchedJournal && matchedJournal.date) return formatShortDate(matchedJournal.date);
 
-      // 3. Cek dari mapping tanggal unik
       for (const [dStr, wNum] of dateToWeekMap.entries()) {
         if (wNum === weekNum) return formatShortDate(dStr);
       }
 
-      // 4. Jadwal kalender akademik riil
       const fallbackDate = getMeetingRealDate(weekNum, [], holidays);
       if (fallbackDate) return formatShortDate(fallbackDate);
 
       return undefined;
     };
 
-    // 2. Hitung Ringkasan Tiap Pertemuan Keseluruhan Siswa Murni Data Firestore
     const weeklyOverall: WeeklyOverallAttendancePoint[] = sortedWeeks.map((weekNum) => {
-      const weekRecords = allAttendance.filter(a => {
+      const weekRecords = allAttendance.filter((a) => {
         if (a.meetingNumber && a.meetingNumber === weekNum) return true;
         if (a.date) {
           const dStr = a.date.split('T')[0];
@@ -787,7 +802,7 @@ export function AdminDashboard() {
       let absent = 0;
       const total = weekRecords.length;
 
-      weekRecords.forEach(r => {
+      weekRecords.forEach((r) => {
         if (r.status === 'Hadir') present++;
         else if (r.status === 'Izin') permission++;
         else if (r.status === 'Sakit') sick++;
@@ -808,16 +823,15 @@ export function AdminDashboard() {
         sick,
         absent,
         total,
-        target: 80
+        target: 80,
       };
     });
 
-    // 3. Hitung Rincian Tiap Kelompok per Pekan Murni Data Riil
     const weeklyGroups: WeeklyGroupDataPoint[] = sortedWeeks.map((weekNum) => {
       const groupDataList: GroupAttendanceDetail[] = groups.map((g) => {
         const gNorm = normalizeGroupId(g.id);
         const mentorName = mentorMap.get(g.mentorId) || 'Ustadz / Ustadzah';
-        const gRecords = allAttendance.filter(a => {
+        const gRecords = allAttendance.filter((a) => {
           if (normalizeGroupId(a.groupId) !== gNorm) return false;
           if (a.meetingNumber && a.meetingNumber === weekNum) return true;
           if (a.date) {
@@ -833,7 +847,7 @@ export function AdminDashboard() {
         let gAbs = 0;
         const gTotal = gRecords.length;
 
-        gRecords.forEach(r => {
+        gRecords.forEach((r) => {
           if (r.status === 'Hadir') gPresent++;
           else if (r.status === 'Izin') gPerm++;
           else if (r.status === 'Sakit') gSick++;
@@ -851,7 +865,7 @@ export function AdminDashboard() {
           permission: gPerm,
           sick: gSick,
           absent: gAbs,
-          total: gTotal
+          total: gTotal,
         };
       });
 
@@ -862,15 +876,14 @@ export function AdminDashboard() {
         week: weekNum,
         label: displayLabel,
         dateLabel: dLabel,
-        groups: groupDataList
+        groups: groupDataList,
       };
     });
 
-    // 4. Hitung Kumulatif Tiap Kelompok Murni Data Riil
     const cumulativeGroups: GroupAttendanceDetail[] = groups.map((g) => {
       const gNorm = normalizeGroupId(g.id);
       const mentorName = mentorMap.get(g.mentorId) || 'Ustadz / Ustadzah';
-      const gRecords = allAttendance.filter(a => normalizeGroupId(a.groupId) === gNorm);
+      const gRecords = allAttendance.filter((a) => normalizeGroupId(a.groupId) === gNorm);
 
       let gPresent = 0;
       let gPerm = 0;
@@ -878,7 +891,7 @@ export function AdminDashboard() {
       let gAbs = 0;
       const gTotal = gRecords.length;
 
-      gRecords.forEach(r => {
+      gRecords.forEach((r) => {
         if (r.status === 'Hadir') gPresent++;
         else if (r.status === 'Izin') gPerm++;
         else if (r.status === 'Sakit') gSick++;
@@ -896,16 +909,16 @@ export function AdminDashboard() {
         permission: gPerm,
         sick: gSick,
         absent: gAbs,
-        total: gTotal
+        total: gTotal,
       };
     });
 
-    const validOverallWeeks = weeklyOverall.filter(w => w.total > 0);
-    const avgRate = validOverallWeeks.length 
-      ? Math.round(validOverallWeeks.reduce((sum, w) => sum + w.rate, 0) / validOverallWeeks.length) 
+    const validOverallWeeks = weeklyOverall.filter((w) => w.total > 0);
+    const avgRate = validOverallWeeks.length
+      ? Math.round(validOverallWeeks.reduce((sum, w) => sum + w.rate, 0) / validOverallWeeks.length)
       : 0;
-    const latRate = validOverallWeeks.length 
-      ? validOverallWeeks[validOverallWeeks.length - 1].rate 
+    const latRate = validOverallWeeks.length
+      ? validOverallWeeks[validOverallWeeks.length - 1].rate
       : 0;
 
     return {
@@ -913,17 +926,16 @@ export function AdminDashboard() {
       weeklyGroupAttendanceData: weeklyGroups,
       cumulativeGroupAttendanceData: cumulativeGroups,
       overallAverageRate: avgRate,
-      overallLatestRate: latRate
+      overallLatestRate: latRate,
     };
-  }, [allAttendance, journals, groups, mentorMap, totalStudents, groupDetails, groupCounts, holidays]);
+  }, [allAttendance, journals, groups, mentorMap, holidays]);
 
   // Dynamically compute real attention alerts based on actual database data
   const attentionAlerts: AttentionAlert[] = useMemo(() => {
     const alerts: AttentionAlert[] = [];
 
-    // 1. KELOMPOK DENGAN PROGRESS DI BAWAH KKM (75%) - hanya kelompok dengan data riil tersimpan
     const lowProgressGroups = [...groupDetails]
-      .filter((g) => g.progress > 0 && g.progress < 75)
+      .filter((g) => g.progress > 0 && g.progress < MIN_PROGRESS_SCORE_STANDARD)
       .sort((a, b) => a.progress - b.progress);
 
     if (lowProgressGroups.length > 0) {
@@ -932,27 +944,14 @@ export function AdminDashboard() {
         id: `progress-${lowest.id}`,
         type: lowest.progress < 65 ? 'danger' : 'warning',
         title: lowest.name,
-        description: `Progress BTQ ${lowest.progress}% — di bawah target KKM (75%).`,
+        description: `Rata-rata nilai BTQ ${lowest.progress} — di bawah target KKM (${MIN_PROGRESS_SCORE_STANDARD}).`,
         link: '/groups',
-        badge: 'KKM 75%'
+        badge: `KKM ${MIN_PROGRESS_SCORE_STANDARD}`,
       });
-
-      if (lowProgressGroups.length > 1) {
-        const second = lowProgressGroups[1];
-        alerts.push({
-          id: `progress-${second.id}`,
-          type: 'warning',
-          title: second.name,
-          description: `Progress BTQ ${second.progress}% — perlu pendampingan silabus.`,
-          link: '/groups',
-          badge: 'Capaian'
-        });
-      }
     }
 
-    // 2. KELOMPOK DENGAN KEHADIRAN DI BAWAH 80% - hanya kelompok dengan log presensi tersimpan
     const lowAttendanceGroups = [...groupDetails]
-      .filter((g) => g.attendance > 0 && g.attendance < 80)
+      .filter((g) => g.attendance > 0 && g.attendance < MIN_ATTENDANCE_RATE_STANDARD)
       .sort((a, b) => a.attendance - b.attendance);
 
     if (lowAttendanceGroups.length > 0) {
@@ -961,94 +960,59 @@ export function AdminDashboard() {
         id: `attendance-${lowestAtt.id}`,
         type: 'warning',
         title: lowestAtt.name,
-        description: `Kehadiran siswa menyentuh ${lowestAtt.attendance}% pada sesi ini.`,
+        description: `Kehadiran kelompok menyentuh ${lowestAtt.attendance}% (di bawah standar ${MIN_ATTENDANCE_RATE_STANDARD}%).`,
         link: '/attendance/students',
-        badge: 'Presensi'
+        badge: 'Presensi',
       });
     }
 
-    // 3. SISWA TERANCAM (KEHADIRAN KUMULATIF < 75% ATAU SKOR < 70)
-    const studentAttMap = new Map<string, { present: number; total: number }>();
-    allAttendance.forEach((att) => {
-      if (!att.studentId) return;
-      const cur = studentAttMap.get(att.studentId) || { present: 0, total: 0 };
-      cur.total += 1;
-      if (att.status === 'Hadir') cur.present += 1;
-      studentAttMap.set(att.studentId, cur);
-    });
-
-    let atRiskCount = 0;
-    studentAttMap.forEach(({ present, total }) => {
-      if (total > 0 && (present / total) < 0.75) {
-        atRiskCount++;
-      }
-    });
-
-    if (atRiskCount === 0 && allProgress.length > 0) {
-      const lowScores = new Set<string>();
-      allProgress.forEach((p) => {
-        if (typeof p.total === 'number' && p.total > 0 && p.total < 70) {
-          lowScores.add(p.studentId);
-        }
-      });
-      atRiskCount = lowScores.size;
-    }
-
-    if (atRiskCount > 0) {
+    if (examReadinessSummary.needsGuidanceCount > 0) {
       alerts.push({
         id: 'at-risk-students',
         type: 'warning',
-        title: `${atRiskCount} siswa terancam`,
-        description: `Memiliki tingkat kehadiran kumulatif di bawah 75%.`,
-        link: '/attendance/students',
-        badge: 'Evaluasi'
+        title: `${examReadinessSummary.needsGuidanceCount} santri perlu bimbingan`,
+        description: `Nilai rata-rata atau kehadiran di bawah standar minimal (${MIN_PROGRESS_SCORE_STANDARD}%).`,
+        link: '/progress',
+        badge: 'Evaluasi',
       });
     }
 
-    // 4. MENTOR / KELOMPOK BELUM CHECK-IN / MEREKAP JURNAL PEKAN TERAKHIR
-    const maxJournalMeeting = journals.reduce((max, j) => Math.max(max, j.meetingNumber || 0), 0);
-    const activeWeek = Math.max(2, maxJournalMeeting);
-
-    const recordedGroupIds = new Set(
-      journals
-        .filter((j) => j.meetingNumber === activeWeek)
-        .map((j) => normalizeGroupId(j.groupId))
-    );
-
-    const unrecordedGroups = groups.filter((g) => !recordedGroupIds.has(normalizeGroupId(g.id)));
-
-    if (unrecordedGroups.length > 0) {
-      if (unrecordedGroups.length === 1) {
-        alerts.push({
-          id: 'mentor-checkin-missing',
-          type: 'warning',
-          title: '1 mentor belum check-in',
-          description: `${unrecordedGroups[0].name} belum melakukan absensi & jurnal sesi.`,
-          link: '/session',
-          badge: 'Jurnal'
-        });
-      } else {
-        alerts.push({
-          id: 'mentor-checkin-missing',
-          type: 'warning',
-          title: `${unrecordedGroups.length} mentor belum check-in`,
-          description: `${unrecordedGroups.slice(0, 2).map((g) => g.name).join(', ')}${unrecordedGroups.length > 2 ? ' dll.' : ''} belum rekap jurnal pertemuan ${activeWeek}.`,
-          link: '/attendance/mentors',
-          badge: `Pertemuan ${activeWeek}`
-        });
-      }
+    const incompleteGroups = meetingCompliance.items.filter((i) => !i.isComplete);
+    if (incompleteGroups.length > 0) {
+      alerts.push({
+        id: 'mentor-checkin-missing',
+        type: 'warning',
+        title: `${incompleteGroups.length} kelompok belum lengkap`,
+        description: `${incompleteGroups
+          .slice(0, 2)
+          .map((g) => g.groupName)
+          .join(', ')}${
+          incompleteGroups.length > 2 ? ' dll.' : ''
+        } belum merampungkan presensi/nilai/jurnal P-${activeMeetingNumber}.`,
+        link: '/session',
+        badge: `Pertemuan ${activeMeetingNumber}`,
+      });
     }
 
     return alerts;
-  }, [groupDetails, allAttendance, allProgress, journals, groups]);
+  }, [groupDetails, examReadinessSummary.needsGuidanceCount, meetingCompliance, activeMeetingNumber]);
 
-  // Memoized date string
   const todayDateString = useMemo(() => {
     const date = new Date();
     const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
     const months = [
-      'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 
-      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+      'Januari',
+      'Februari',
+      'Maret',
+      'April',
+      'Mei',
+      'Juni',
+      'Juli',
+      'Agustus',
+      'September',
+      'Oktober',
+      'November',
+      'Desember',
     ];
     return `${days[date.getDay()]}, ${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
   }, []);
@@ -1068,204 +1032,463 @@ export function AdminDashboard() {
   }
 
   return (
-    <div className="flex flex-col gap-4 sm:gap-6 w-full">
-      
-      {/* 1. HEADER DASHBOARD ADMIN */}
-      <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pb-3 border-b border-slate-100">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="text-2xl">👋</span>
-            <h1 className={theme.typography.h1}>
-              Assalamu'alaikum, Admin
-            </h1>
-            <span className="px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wide bg-[#950415]/10 text-[#950415] border border-[#950415]/20">
-              Panel Pengelola
-            </span>
-          </div>
-          <p className="text-xs sm:text-sm text-slate-500 font-medium mt-1">
-            Pantau kehadiran institusi dan perkembangan pembelajaran BTQ seluruh siswa SMP Negeri 102 Jakarta.
-          </p>
-        </div>
+    <div className="flex flex-col gap-4 sm:gap-5 w-full pb-6">
+      {/* 1. EXECUTIVE COMMAND HERO (#172033) */}
+      <section className="relative overflow-hidden rounded-2xl bg-[#172033] text-white p-4 sm:p-6 shadow-md border border-slate-800">
+        <div className="pointer-events-none absolute -right-12 -top-12 h-52 w-52 rounded-full bg-[#0362D0]/20 blur-2xl" />
+        <div className="pointer-events-none absolute -bottom-16 left-1/3 h-44 w-44 rounded-full bg-[#C99A2E]/15 blur-2xl" />
 
-        {/* Calendar, Semester info & Time Range Selector */}
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3 self-stretch md:self-auto bg-white p-2 rounded-2xl border border-slate-100">
-          {/* Live Sync Status & Manual Refresh Button */}
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => loadData(true)}
-              disabled={isRefreshing}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-[#172033] border border-slate-200/90 rounded-xl text-xs font-bold transition-all shadow-2xs hover:shadow-xs active:scale-95 cursor-pointer disabled:opacity-50"
-              title="Ambil data terbaru langsung dari Cloud Firestore tanpa cache"
-            >
-              <RefreshCw size={13} className={cn("text-[#0362D0]", isRefreshing && "animate-spin")} />
-              <span>{isRefreshing ? 'Menyinkronkan...' : 'Sinkronkan Data Cloud'}</span>
-            </button>
+        <div className="relative z-10 flex flex-col gap-3.5">
+          {/* Top Bar: Live Firestore Sync Badge, Date, & Time Range Selector */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/10 pb-3">
+            <div className="flex items-center justify-between sm:justify-start gap-2">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-400/30 text-emerald-300 text-[11px] font-bold">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span>Real-Time Cloud{lastSyncTime ? ` • ${lastSyncTime}` : ''}</span>
+              </span>
+              <span className="hidden md:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/10 text-slate-200 text-[11px] font-semibold">
+                <Calendar size={12} className="text-[#60A5FA]" />
+                <span>{todayDateString}</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => loadData(true)}
+                disabled={isRefreshing}
+                className="sm:hidden inline-flex items-center gap-1.5 px-2.5 py-1 bg-white/10 hover:bg-white/20 text-white border border-white/15 rounded-lg text-[11px] font-bold transition-all active:scale-95 cursor-pointer disabled:opacity-50"
+                title="Ambil data terbaru langsung dari Cloud Firestore"
+              >
+                <RefreshCw size={12} className={cn('text-[#60A5FA]', isRefreshing && 'animate-spin')} />
+                <span>{isRefreshing ? 'Sinkron...' : 'Sinkronkan'}</span>
+              </button>
+            </div>
 
-            {lastSyncTime && (
-              <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-[10px] font-bold">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span>Live Firestore • {lastSyncTime}</span>
+            <div className="flex items-center justify-between sm:justify-end gap-2">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#C99A2E]/20 border border-[#C99A2E]/30 text-[#FDE68A] text-[11px] font-bold">
+                <span>TA {semesterInfo.academicYear} • {semesterInfo.semesterName}</span>
+              </span>
+
+              {/* Time Range Filter */}
+              <div className="flex items-center gap-1.5 bg-white/10 border border-white/15 rounded-lg px-2.5 py-1">
+                <Clock size={12} className="text-[#60A5FA]" />
+                <select
+                  id="admin-dashboard-timerange-select"
+                  value={timeRange}
+                  onChange={(e) => setTimeRange(e.target.value as DashboardTimeRange)}
+                  aria-label="Filter Batasan Rentang Waktu Rekap Dashboard"
+                  className="text-[11px] font-bold text-white bg-transparent outline-none cursor-pointer border-none p-0 focus:ring-0 [&>option]:text-[#172033]"
+                >
+                  <option value="semester">Semester Aktif ({semesterInfo.semesterName})</option>
+                  <option value="8weeks">8 Pertemuan Terakhir</option>
+                  <option value="4weeks">4 Pertemuan Terakhir</option>
+                </select>
+                {rangeLoading && <Loader2 size={11} className="animate-spin text-[#60A5FA]" />}
               </div>
-            )}
+
+              {/* Manual Cloud Sync Button (Desktop/Tablet) */}
+              <button
+                type="button"
+                onClick={() => loadData(true)}
+                disabled={isRefreshing}
+                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 bg-white/10 hover:bg-white/20 text-white border border-white/15 rounded-lg text-xs font-bold transition-all active:scale-95 cursor-pointer disabled:opacity-50"
+                title="Ambil data terbaru langsung dari Cloud Firestore"
+              >
+                <RefreshCw size={13} className={cn('text-[#60A5FA]', isRefreshing && 'animate-spin')} />
+                <span>{isRefreshing ? 'Sinkronisasi...' : 'Sinkronkan'}</span>
+              </button>
+            </div>
           </div>
 
-          <div className="flex items-center gap-1.5 px-3 py-1 bg-slate-50 rounded-xl text-[11px] font-bold text-[#172033] border border-slate-100/80">
-            <Calendar size={13} className="text-[#0362D0]" />
-            <span>{todayDateString}</span>
-          </div>
-          <div className="flex items-center gap-1.5 px-3 py-1 bg-slate-50 rounded-xl text-[11px] font-bold text-[#172033] border border-slate-100/80">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#C99A2E]" />
-            <span>Tahun {semesterInfo.academicYear} • {semesterInfo.semesterName}</span>
-          </div>
-          {/* Batas Rentang Waktu Rekap Presensi & Jurnal */}
-          <div className="flex items-center gap-1.5 bg-[#0362D0]/5 border border-[#0362D0]/20 rounded-xl px-2.5 py-1">
-            <Clock size={12} className="text-[#0362D0]" />
-            <label htmlFor="admin-dashboard-timerange-select" className="text-[10px] uppercase font-bold text-[#0362D0] tracking-wider hidden sm:inline">
-              Rekap:
-            </label>
-            <select 
-              id="admin-dashboard-timerange-select"
-              value={timeRange} 
-              onChange={(e) => setTimeRange(e.target.value as DashboardTimeRange)}
-              aria-label="Filter Batasan Rentang Waktu Rekap Dashboard"
-              className="text-[11px] font-bold text-[#0362D0] bg-transparent outline-none cursor-pointer border-none p-0 focus:ring-0"
-            >
-              <option value="semester">Semester Aktif ({semesterInfo.semesterName})</option>
-              <option value="8weeks">8 Pertemuan Terakhir</option>
-              <option value="4weeks">4 Pertemuan Terakhir</option>
-            </select>
-            {rangeLoading && <Loader2 size={11} className="animate-spin text-[#0362D0] ml-0.5" />}
+          {/* Middle Row: Title + Quick Action Buttons */}
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3.5">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-[#0362D0] text-white">
+                  Pusat Kendali Institusi
+                </span>
+                <span className="text-xs text-slate-300 font-semibold">
+                  Pertemuan Ke-{activeMeetingNumber}
+                </span>
+              </div>
+              <h1 className="text-lg sm:text-2xl font-black tracking-tight text-white mt-1">
+                Assalamu'alaikum, Administrator BTQ
+              </h1>
+              <p className="text-xs sm:text-sm text-slate-300 mt-0.5 max-w-2xl">
+                Pantau kehadiran santri, capaian nilai kurikulum, kesiapan ujian, dan kepatuhan jurnal 10 kelompok secara real-time.
+              </p>
+            </div>
+
+            {/* Integrated Compact Quick Actions */}
+            <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 shrink-0">
+              <Link
+                to="/session"
+                className="flex items-center justify-center sm:justify-start gap-2 px-3 py-2 rounded-xl bg-[#0362D0] hover:bg-[#024B9E] text-white font-bold text-xs shadow-sm transition-all"
+              >
+                <UserCheck size={14} />
+                <span>Sesi Mengajar</span>
+              </Link>
+              <Link
+                to="/reports"
+                className="flex items-center justify-center sm:justify-start gap-2 px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/15 font-bold text-xs transition-all"
+              >
+                <Edit3 size={14} className="text-[#FDE68A]" />
+                <span>Cetak Rapor</span>
+              </Link>
+              <Link
+                to="/attendance/mentors"
+                className="flex items-center justify-center sm:justify-start gap-2 px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/15 font-bold text-xs transition-all"
+              >
+                <Users size={14} className="text-emerald-300" />
+                <span>Presensi Mentor</span>
+              </Link>
+              <Link
+                to="/students"
+                className="flex items-center justify-center sm:justify-start gap-2 px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/15 font-bold text-xs transition-all"
+              >
+                <PlusCircle size={14} className="text-sky-300" />
+                <span>Data Santri</span>
+              </Link>
+            </div>
           </div>
         </div>
-      </header>
-
-      {/* ADMIN-ONLY CURRICULUM & SESSION CONSISTENCY ALERT */}
-      <CurriculumSyncAlert />
-
-      {/* BENTO QUICK ACTIONS HUB */}
-      <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Link 
-          to="/session"
-          className="relative overflow-hidden bg-gradient-to-br from-[#0362D0] to-[#024B9E] p-4 sm:p-5 rounded-2xl text-white hover:shadow-lg hover:-translate-y-1 transition-all group"
-        >
-          <div className="absolute top-0 right-0 p-4 opacity-10 transform group-hover:scale-125 transition-transform duration-500">
-            <UserCheck size={80} />
-          </div>
-          <div className="relative z-10">
-            <div className="w-10 h-10 bg-white/20 backdrop-blur-md rounded-xl flex items-center justify-center mb-3">
-              <UserCheck size={20} className="text-white" />
-            </div>
-            <h3 className="font-extrabold text-sm sm:text-lg mb-1">Mulai Sesi KBM</h3>
-            <p className="text-white/80 text-[10px] sm:text-xs font-medium">Buka form sesi mengajar & presensi</p>
-          </div>
-        </Link>
-
-        <Link 
-          to="/reports"
-          className="relative overflow-hidden bg-white border border-slate-100 p-4 sm:p-5 rounded-2xl hover:border-[#0362D0]/30 hover:shadow-md hover:-translate-y-1 transition-all group"
-        >
-          <div className="relative z-10">
-            <div className="w-10 h-10 bg-[#0362D0]/10 rounded-xl flex items-center justify-center mb-3 text-[#0362D0] group-hover:bg-[#0362D0] group-hover:text-white transition-colors">
-              <Edit3 size={20} />
-            </div>
-            <h3 className="font-extrabold text-[#172033] text-sm sm:text-lg mb-1">Laporan Nilai</h3>
-            <p className="text-slate-500 text-[10px] sm:text-xs font-medium">Unduh progres akademik santri</p>
-          </div>
-        </Link>
-
-        <Link 
-          to="/attendance/mentors"
-          className="relative overflow-hidden bg-white border border-slate-100 p-4 sm:p-5 rounded-2xl hover:border-[#C99A2E]/30 hover:shadow-md hover:-translate-y-1 transition-all group"
-        >
-          <div className="relative z-10">
-            <div className="w-10 h-10 bg-[#C99A2E]/10 rounded-xl flex items-center justify-center mb-3 text-[#C99A2E] group-hover:bg-[#C99A2E] group-hover:text-white transition-colors">
-              <Users size={20} />
-            </div>
-            <h3 className="font-extrabold text-[#172033] text-sm sm:text-lg mb-1">Presensi Mentor</h3>
-            <p className="text-slate-500 text-[10px] sm:text-xs font-medium">Kelola & pantau kehadiran staf</p>
-          </div>
-        </Link>
-
-        <Link 
-          to="/students"
-          className="relative overflow-hidden bg-white border border-slate-100 p-4 sm:p-5 rounded-2xl hover:border-emerald-500/30 hover:shadow-md hover:-translate-y-1 transition-all group"
-        >
-          <div className="relative z-10">
-            <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center mb-3 text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
-              <PlusCircle size={20} />
-            </div>
-            <h3 className="font-extrabold text-[#172033] text-sm sm:text-lg mb-1">Data Siswa</h3>
-            <p className="text-slate-500 text-[10px] sm:text-xs font-medium">Manajemen profil & mutasi santri</p>
-          </div>
-        </Link>
       </section>
 
-      {/* 2. SUMMARY STATISTICS INSTITUSI */}
-      <StatCardsGrid cards={statCards} />
+      {/* 2. 4-CARD BENTO INSTITUTIONAL KPI GRID (2x2 on Mobile, 4 Cols on Desktop) */}
+      <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        {/* KPI 1: Kapasitas Institusi */}
+        <div className="bg-white rounded-2xl p-3.5 sm:p-5 border border-slate-200/80 border-t-4 border-t-[#0362D0] shadow-xs flex flex-col justify-between">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <p className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-slate-500">
+                Total Santri Aktif
+              </p>
+              <div className="flex items-baseline gap-1.5 mt-1">
+                <span className="text-2xl sm:text-3xl font-black text-[#172033] tabular-nums">
+                  {kpiSummary.activeStudentsCount}
+                </span>
+                <span className="text-xs font-bold text-slate-500">Santri</span>
+              </div>
+            </div>
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-[#0362D0]/10 text-[#0362D0] flex items-center justify-center shrink-0">
+              <Users size={18} />
+            </div>
+          </div>
+          <div className="mt-3 pt-2.5 border-t border-slate-100 flex flex-wrap items-center justify-between gap-1 text-[11px] font-bold">
+            <span className="text-[#0362D0] bg-[#0362D0]/10 px-2 py-0.5 rounded-md">
+              {kpiSummary.totalKelompokVal} Kelompok
+            </span>
+            <span className="text-slate-600">{kpiSummary.totalMentorVal} Mentor Binaan</span>
+          </div>
+        </div>
 
-      {/* KALENDER AKADEMIK FLEKSIBEL (SINKRONISASI PERTEMUAN KE- & TANGGAL RIIL) */}
-      <AcademicCalendarCard 
-        allAttendance={allAttendance}
-        journals={journals}
-      />
+        {/* KPI 2: Kehadiran Institusi */}
+        <div className="bg-white rounded-2xl p-3.5 sm:p-5 border border-slate-200/80 border-t-4 border-t-emerald-600 shadow-xs flex flex-col justify-between">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <p className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-slate-500">
+                Kehadiran Sesi Ini
+              </p>
+              <div className="flex items-baseline gap-1.5 mt-1">
+                <span className="text-2xl sm:text-3xl font-black text-[#172033] tabular-nums">
+                  {kpiSummary.hasAttendanceThisWeek ? `${kpiSummary.attendanceThisWeekVal}%` : '-'}
+                </span>
+                {kpiSummary.hasAttendanceSemester && (
+                  <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">
+                    Sem: {kpiSummary.attendanceAvgVal}%
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+              <UserCheck size={18} />
+            </div>
+          </div>
+          <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between gap-1 text-[11px] font-semibold text-slate-500">
+            <span className="truncate">{thisWeekLabel}</span>
+            <span className="text-emerald-700 font-bold shrink-0">Standar ≥ 75%</span>
+          </div>
+        </div>
+
+        {/* KPI 3: Rata-rata Nilai & Progres KBM */}
+        <div className="bg-white rounded-2xl p-3.5 sm:p-5 border border-slate-200/80 border-t-4 border-t-[#C99A2E] shadow-xs flex flex-col justify-between">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <p className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-slate-500">
+                Rata-rata Nilai BTQ
+              </p>
+              <div className="flex items-baseline gap-1.5 mt-1">
+                <span className="text-2xl sm:text-3xl font-black text-[#172033] tabular-nums">
+                  {kpiSummary.groupsWithProgCount > 0 ? kpiSummary.progressAvgVal : '-'}
+                </span>
+                <span className="text-xs font-bold text-slate-400">/ 100</span>
+              </div>
+            </div>
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-[#C99A2E]/10 text-[#C99A2E] flex items-center justify-center shrink-0">
+              <TrendingUp size={18} />
+            </div>
+          </div>
+          <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between gap-1 text-[11px] font-bold">
+            <span className="text-[#C99A2E] bg-[#C99A2E]/10 px-2 py-0.5 rounded-md">
+              {kpiSummary.groupsOnTarget}/{kpiSummary.totalKelompokVal} Halaqah ≥ KKM
+            </span>
+            <span className="text-slate-500">KKM 75</span>
+          </div>
+        </div>
+
+        {/* KPI 4: Kesiapan Ujian Institusi (Nilai >= 75 & Kehadiran >= 75%) */}
+        <div className="bg-white rounded-2xl p-3.5 sm:p-5 border border-slate-200/80 border-t-4 border-t-indigo-600 shadow-xs flex flex-col justify-between">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <p className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-slate-500">
+                Santri Siap Ujian
+              </p>
+              <div className="flex items-baseline gap-1.5 mt-1">
+                <span className="text-2xl sm:text-3xl font-black text-[#172033] tabular-nums">
+                  {examReadinessSummary.examReadyCount}
+                </span>
+                <span className="text-xs font-extrabold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded">
+                  {examReadinessSummary.examReadyRatePercent}%
+                </span>
+              </div>
+            </div>
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+              <Award size={18} />
+            </div>
+          </div>
+          <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between gap-1 text-[11px] font-bold">
+            <span className="text-slate-500 truncate" title="Wajib Rata-rata Nilai ≥ 75 & Kehadiran ≥ 75%">
+              Nilai & Hadir ≥ 75%
+            </span>
+            {examReadinessSummary.needsGuidanceCount > 0 ? (
+              <span className="text-[#950415] bg-[#950415]/10 px-2 py-0.5 rounded-md shrink-0">
+                {examReadinessSummary.needsGuidanceCount} Bimbingan
+              </span>
+            ) : (
+              <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md shrink-0">
+                Tuntas
+              </span>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* ADMIN CURRICULUM & SESSION CONSISTENCY ALERT */}
+      <CurriculumSyncAlert />
+
+      {/* 3. TRACKER KEPATUHAN INPUT SESI & JURNAL MENTOR (PERTEMUAN AKTIF) */}
+      <section className="bg-white rounded-2xl border border-slate-200/80 p-4 sm:p-5 shadow-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3.5 border-b border-slate-100">
+          <div className="flex items-start sm:items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#0362D0]/10 text-[#0362D0] flex items-center justify-center shrink-0">
+              <ClipboardCheck size={20} />
+            </div>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="font-extrabold text-[#172033] text-sm sm:text-base">
+                  Status Kepatuhan Input KBM Mentor — Pertemuan Ke-{activeMeetingNumber}
+                </h2>
+                <span
+                  className={cn(
+                    'text-[10px] font-black uppercase px-2 py-0.5 rounded-md border',
+                    meetingCompliance.compliancePercent === 100
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      : 'bg-amber-50 text-amber-800 border-amber-200'
+                  )}
+                >
+                  {meetingCompliance.completedGroupsCount}/{meetingCompliance.totalGroups} Kelompok Selesai Lengkap
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Indikator kelengkapan 3 tahapan wajib setiap pertemuan: Presensi Kehadiran, Input Nilai, dan Jurnal Pengajaran
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            <button
+              type="button"
+              onClick={() => setShowCalendarSection((prev) => !prev)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200/70 text-[#172033] text-xs font-bold transition-colors cursor-pointer"
+            >
+              <Calendar size={13} className="text-[#0362D0]" />
+              <span>{showCalendarSection ? 'Tutup Kalender' : 'Kalender Akademik'}</span>
+              {showCalendarSection ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+            </button>
+            <Link
+              to="/journals"
+              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-[#0362D0]/10 hover:bg-[#0362D0]/15 text-[#0362D0] text-xs font-bold transition-colors"
+            >
+              <span>Cek Jurnal</span>
+              <ArrowUpRight size={13} />
+            </Link>
+          </div>
+        </div>
+
+        {/* 10 Groups Compliance Grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-5 lg:grid-cols-10 gap-2 pt-3.5">
+          {meetingCompliance.items.map((item) => {
+            const badgeStyle = item.isComplete
+              ? 'bg-emerald-50/70 border-emerald-200 text-emerald-900'
+              : item.completedSteps > 0
+              ? 'bg-amber-50/70 border-amber-200 text-amber-900'
+              : 'bg-slate-50 border-slate-200 text-slate-600';
+
+            return (
+              <div
+                key={item.groupId}
+                className={cn(
+                  'rounded-xl border p-2.5 flex flex-col justify-between gap-1.5 transition-all',
+                  badgeStyle
+                )}
+                title={`${item.groupName} (${item.mentorName}): ${item.statusLabel}`}
+              >
+                <div className="flex items-center justify-between gap-1">
+                  <span className="font-extrabold text-xs text-[#172033] truncate">
+                    {item.groupName.replace('Kelompok ', 'Kel. ')}
+                  </span>
+                  {item.isComplete ? (
+                    <CheckCircle2 size={13} className="text-emerald-600 shrink-0" />
+                  ) : (
+                    <AlertTriangle
+                      size={13}
+                      className={cn(
+                        'shrink-0',
+                        item.completedSteps > 0 ? 'text-amber-600' : 'text-slate-400'
+                      )}
+                    />
+                  )}
+                </div>
+                <p className="text-[10px] font-medium text-slate-500 truncate">{item.mentorName}</p>
+                {/* 3 Step Dots: Presensi (P), Nilai (N), Jurnal (J) */}
+                <div className="flex items-center gap-1 pt-1 border-t border-black/5">
+                  <span
+                    className={cn(
+                      'flex-1 text-center text-[9px] font-black py-0.5 rounded',
+                      item.hasAttendance
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-slate-200 text-slate-500'
+                    )}
+                    title="Presensi Kehadiran"
+                  >
+                    Absen
+                  </span>
+                  <span
+                    className={cn(
+                      'flex-1 text-center text-[9px] font-black py-0.5 rounded',
+                      item.hasProgress
+                        ? 'bg-[#0362D0] text-white'
+                        : 'bg-slate-200 text-slate-500'
+                    )}
+                    title="Input Nilai BTQ"
+                  >
+                    Nilai
+                  </span>
+                  <span
+                    className={cn(
+                      'flex-1 text-center text-[9px] font-black py-0.5 rounded',
+                      item.hasJournal
+                        ? 'bg-[#C99A2E] text-white'
+                        : 'bg-slate-200 text-slate-500'
+                    )}
+                    title="Jurnal Pengajaran"
+                  >
+                    Jurnal
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* COLLAPSIBLE ACADEMIC CALENDAR */}
+      {showCalendarSection && (
+        <AcademicCalendarCard allAttendance={allAttendance} journals={journals} />
+      )}
 
       {/* MOBILE ONLY: PANEL PERLU PERHATIAN */}
       <div className="block lg:hidden">
         <AttentionPanel alerts={attentionAlerts} isLoading={loading} />
       </div>
 
-      {/* 3 & 4. CHARTS SECTION (KEHADIRAN & PROGRES SEMUA KELOMPOK) */}
-      <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <AttendanceChartCard 
-          periodData={attendancePeriodData} 
-          totalStudents={totalStudents || 155} 
-          thisWeekMeetingLabel={thisWeekLabel}
-        />
-        <GroupProgressBarCard data={groupProgressBarData} />
+      {/* 4. UNIFIED INTERACTIVE ANALYTICS HUB (MENGURANGI TUMPUKAN GRAFIK BERLEBIH) */}
+      <section className="flex flex-col gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-xs">
+          <div>
+            <h2 className="font-extrabold text-[#172033] text-sm sm:text-base flex items-center gap-2">
+              <BarChart3 size={18} className="text-[#0362D0]" />
+              <span>Analitik Kehadiran & Capaian Kelompok</span>
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Pilih tampilan analitik untuk memantau tren pertemuan atau membandingkan performa antar kelompok
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 sm:flex items-center p-1 bg-slate-100 rounded-xl border border-slate-200/70">
+            <button
+              type="button"
+              onClick={() => setAnalyticsTab('trends')}
+              className={cn(
+                'flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-extrabold transition-all cursor-pointer',
+                analyticsTab === 'trends'
+                  ? 'bg-[#172033] text-white shadow-xs'
+                  : 'text-slate-600 hover:text-[#172033]'
+              )}
+            >
+              <PieChart size={14} />
+              <span>Tren & Distribusi Hadir</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setAnalyticsTab('groups')}
+              className={cn(
+                'flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-extrabold transition-all cursor-pointer',
+                analyticsTab === 'groups'
+                  ? 'bg-[#172033] text-white shadow-xs'
+                  : 'text-slate-600 hover:text-[#172033]'
+              )}
+            >
+              <Layers size={14} />
+              <span>Perbandingan 10 Kelompok</span>
+            </button>
+          </div>
+        </div>
+
+        {analyticsTab === 'trends' ? (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <WeeklyAttendanceSummaryCard
+              data={weeklyOverallAttendanceData}
+              averageRate={overallAverageRate}
+              latestRate={overallLatestRate}
+            />
+            <AttendanceChartCard
+              periodData={attendancePeriodData}
+              totalStudents={students.length || 155}
+              thisWeekMeetingLabel={thisWeekLabel}
+            />
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <GroupProgressBarCard data={groupProgressBarData} />
+            <GroupWeeklyAttendanceCard
+              weeklyData={weeklyGroupAttendanceData}
+              cumulativeGroups={cumulativeGroupAttendanceData}
+            />
+          </div>
+        )}
       </section>
 
-      {/* ANALISIS KEHADIRAN PER PERTEMUAN (RINGKASAN KESELURUHAN & RINCIAN KELOMPOK) */}
-      <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <WeeklyAttendanceSummaryCard 
-          data={weeklyOverallAttendanceData}
-          averageRate={overallAverageRate}
-          latestRate={overallLatestRate}
-        />
-        <GroupWeeklyAttendanceCard 
-          weeklyData={weeklyGroupAttendanceData}
-          cumulativeGroups={cumulativeGroupAttendanceData}
-        />
-      </section>
-
-      {/* 5. MAIN CONTENT & SIDEBAR */}
+      {/* 5. MAIN CONTENT & SIDEBAR: TABEL RINGKASAN KELOMPOK + PERLU PERHATIAN + AKTIVITAS REALTIME */}
       <section className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        
-        {/* LEFT / LARGE COLUMN: RINGKASAN SEMUA KELOMPOK BTQ */}
         <div className="lg:col-span-8 flex flex-col gap-6">
           <GroupSummaryTable groups={groupDetails} />
         </div>
 
-        {/* RIGHT / SIDEBAR COLUMN (ATTENTION, RECENT ACTIVITIES) */}
         <div className="lg:col-span-4 flex flex-col gap-6">
-
-          {/* DESKTOP ONLY: PANEL PERLU PERHATIAN */}
           <div className="hidden lg:block">
             <AttentionPanel alerts={attentionAlerts} isLoading={loading} />
           </div>
 
-          {/* WIDGET ATTENDANCE HISTORY (SESI AKTIF) */}
-          <AttendanceHistoryWidget 
-            students={students}
-            recentAttendances={allAttendance}
-          />
-
-          {/* RECENT ACTIVITIES */}
-          <RecentActivitiesCard 
-            activities={activities} 
-            onOpenModal={handleOpenLogModal} 
-          />
-
+          <RecentActivitiesCard activities={activities} onOpenModal={handleOpenLogModal} />
         </div>
       </section>
 

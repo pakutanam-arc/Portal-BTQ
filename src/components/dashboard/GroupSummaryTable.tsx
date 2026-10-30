@@ -43,6 +43,7 @@ export interface GroupDetailItem {
   studentsCount: number;
   progress: number;
   attendance: number;
+  examReadyCount?: number;
   status: 'Baik' | 'Perlu Dipantau' | 'Perlu Pendampingan' | 'Belum Diinput';
   weeklyProgress?: WeeklyProgressPoint[];
 }
@@ -131,7 +132,7 @@ const WeeklyProgressTooltip = ({ active, payload }: any) => {
 export const GroupSummaryTable = React.memo(function GroupSummaryTable({ groups }: GroupSummaryTableProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
-  const [isChartExpanded, setIsChartExpanded] = useState(true);
+  const [isChartExpanded, setIsChartExpanded] = useState(false);
   const [hoveredWeek, setHoveredWeek] = useState<{ groupId: string; week: number } | null>(null);
 
   const filteredGroups = useMemo(() => {
@@ -535,15 +536,15 @@ export const GroupSummaryTable = React.memo(function GroupSummaryTable({ groups 
             Tidak ada kelompok yang cocok dengan kriteria pencarian.
           </div>
         ) : (
-          <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[760px]">
+          <table className="w-full text-left text-xs border-collapse">
             <thead>
-              <tr className="text-slate-400 border-b border-transparent shadow-sm text-[10px] uppercase tracking-wider font-extrabold bg-slate-50/50 whitespace-nowrap">
-                <th className="py-3.5 px-5">Kelompok</th>
-                <th className="py-3.5 px-3">Mentor</th>
-                <th className="py-3.5 px-3 text-center">Siswa</th>
-                <th className="py-3.5 px-3 text-center">Kehadiran</th>
-                <th className="py-3.5 px-4">Tren Sesi Mingguan (Data Riil)</th>
-                <th className="py-3.5 px-5 text-right">Status</th>
+              <tr className="text-slate-400 border-b border-slate-100 text-[10px] uppercase tracking-wider font-extrabold bg-slate-50/50 whitespace-nowrap">
+                <th className="py-3 pl-4 pr-2">Kelompok</th>
+                <th className="py-3 px-2">Mentor</th>
+                <th className="py-3 px-1.5 text-center">Siswa</th>
+                <th className="py-3 px-1.5 text-center">Hadir</th>
+                <th className="py-3 px-2">Rata-rata & Tren</th>
+                <th className="py-3 pl-2 pr-4 text-right">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -565,34 +566,34 @@ export const GroupSummaryTable = React.memo(function GroupSummaryTable({ groups 
 
                 return (
                   <tr key={item.id} className="hover:bg-slate-50/60 transition-colors">
-                    <td className="py-3.5 px-5 whitespace-nowrap">
-                      <div className="font-semibold text-[#172033]">{item.name}</div>
-                      <div className="text-xs font-medium text-[#0362D0] bg-[#0362D0]/10 px-2 py-0.5 rounded w-fit mt-1 whitespace-nowrap">
-                        {getGradeForGroup({ id: item.id, name: item.name }).name} - {getGradeForGroup({ id: item.id, name: item.name }).programName}
+                    <td className="py-3 pl-4 pr-2">
+                      <div className="font-bold text-[#172033]">{item.name}</div>
+                      <div className="text-[10px] font-semibold text-[#0362D0] bg-[#0362D0]/10 px-1.5 py-0.5 rounded w-fit mt-0.5 truncate max-w-[145px]">
+                        {getGradeForGroup({ id: item.id, name: item.name }).name} • {getGradeForGroup({ id: item.id, name: item.name }).programName}
                       </div>
                     </td>
-                    <td className="py-3.5 px-3 text-[#172033] whitespace-nowrap font-medium">{item.mentorName}</td>
-                    <td className="py-3.5 px-3 text-center font-medium text-slate-700 whitespace-nowrap">{item.studentsCount} siswa</td>
-                    <td className="py-3.5 px-3 text-center font-bold text-[#0362D0] whitespace-nowrap">
+                    <td className="py-3 px-2 text-[#172033] font-medium truncate max-w-[115px]">{item.mentorName}</td>
+                    <td className="py-3 px-1.5 text-center font-semibold text-slate-700 whitespace-nowrap">{item.studentsCount}</td>
+                    <td className="py-3 px-1.5 text-center font-extrabold text-[#0362D0] whitespace-nowrap">
                       {item.attendance > 0 ? `${item.attendance}%` : '-'}
                     </td>
                     
-                    {/* Weekly Progress Graphic Column (P1 & P2 Real Data) */}
-                    <td className="py-3.5 px-4 whitespace-nowrap">
+                    {/* Weekly Progress Graphic Column */}
+                    <td className="py-3 px-2 whitespace-nowrap">
                       {validWeekly.length === 0 ? (
-                        <span className="text-slate-400 text-xs italic">Belum ada nilai sesi</span>
+                        <span className="text-slate-400 text-xs italic">Belum ada nilai</span>
                       ) : (
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
                           {/* Mini Sparkline Bar Chart for valid weeks */}
                           <div 
-                            className="flex items-end gap-1.5 h-9 w-24 bg-slate-50 p-1.5 rounded-lg border border-transparent shadow-sm relative"
+                            className="flex items-end gap-0.5 h-7 w-16 bg-slate-50 p-1 rounded-lg border border-slate-200/70 relative shrink-0"
                             title="Grafik tren progres riil"
                           >
                             <div 
                               className="absolute left-1 right-1 border-b border-dashed border-[#93C5FD] pointer-events-none" 
                               style={{ bottom: '75%' }} 
                             />
-                            {validWeekly.map((pt) => {
+                            {validWeekly.slice(-6).map((pt) => {
                               const heightPercent = Math.max(14, Math.min(100, pt.progress));
                               return (
                                 <div 
@@ -617,20 +618,20 @@ export const GroupSummaryTable = React.memo(function GroupSummaryTable({ groups 
 
                           {/* Percentage & Trend Delta */}
                           <div className="flex flex-col">
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-1">
                               <span className="text-xs font-black text-[#172033]">{item.progress > 0 ? `${item.progress}%` : '-'}</span>
                               {latestDelta !== 0 && (
-                                <span className={`text-[10px] font-bold flex items-center px-1 py-0.2 rounded border ${
+                                <span className={`text-[9px] font-bold flex items-center px-1 py-0.2 rounded border ${
                                   latestDelta > 0 ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-rose-700 bg-rose-50 border-rose-200'
                                 }`}>
-                                  <TrendingUp size={10} className="mr-0.5" />
+                                  <TrendingUp size={9} className="mr-0.5" />
                                   {latestDelta > 0 ? `+${latestDelta}%` : `${latestDelta}%`}
                                 </span>
                               )}
                             </div>
                             {latestWeekNumber && (
-                              <span className="text-[9px] text-slate-400 font-semibold mt-0.5">
-                                Pertemuan {latestWeekNumber} (Aktif)
+                              <span className="text-[9px] text-slate-400 font-semibold">
+                                P-{latestWeekNumber} Aktif
                               </span>
                             )}
                           </div>
@@ -638,8 +639,8 @@ export const GroupSummaryTable = React.memo(function GroupSummaryTable({ groups 
                       )}
                     </td>
 
-                    <td className="py-3.5 px-5 text-right whitespace-nowrap">
-                      <span className={`px-2.5 py-1 rounded-md text-xs font-semibold whitespace-nowrap border ${statusBadge}`}>
+                    <td className="py-3 pl-2 pr-4 text-right whitespace-nowrap">
+                      <span className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold whitespace-nowrap border ${statusBadge}`}>
                         {item.status}
                       </span>
                     </td>
@@ -722,7 +723,7 @@ export const GroupSummaryTable = React.memo(function GroupSummaryTable({ groups 
                     </div>
                   </div>
 
-                  {/* 2-Week Real Bar Graphic */}
+                  {/* Real Bar Graphic (Clean No-Wrap Mobile Labels) */}
                   <div className="bg-white rounded-lg p-2.5 border border-transparent shadow-sm relative">
                     <div 
                       className="absolute left-2 right-2 border-b border-dashed border-[#93C5FD] z-10 pointer-events-none" 
@@ -730,11 +731,11 @@ export const GroupSummaryTable = React.memo(function GroupSummaryTable({ groups 
                     />
 
                     <div 
-                      className="grid gap-2.5 items-end h-16 pt-1 max-w-[260px] mx-auto"
-                      style={{ gridTemplateColumns: `repeat(${item.weekly.length}, minmax(0, 1fr))` }}
+                      className="grid gap-1.5 items-end h-16 pt-2 mx-auto"
+                      style={{ gridTemplateColumns: `repeat(${Math.max(1, item.weekly.slice(-6).length)}, minmax(0, 1fr))` }}
                     >
-                      {item.weekly.map((pt) => {
-                        const heightPercent = Math.max(12, Math.min(100, pt.progress));
+                      {item.weekly.slice(-6).map((pt) => {
+                        const heightPercent = pt.progress > 0 ? Math.max(18, Math.min(100, pt.progress)) : 8;
                         const isCurrent = pt.isCurrent;
                         const isHovered = hoveredWeek?.groupId === item.id && hoveredWeek?.week === pt.week;
 
@@ -752,21 +753,27 @@ export const GroupSummaryTable = React.memo(function GroupSummaryTable({ groups 
                               </div>
                             )}
 
-                            <div className="w-full bg-slate-50 rounded-t-sm h-full flex flex-col justify-end overflow-hidden">
+                            <span className="text-[9px] font-bold text-slate-600 mb-0.5 tabular-nums">
+                              {pt.progress > 0 ? `${pt.progress}` : '-'}
+                            </span>
+
+                            <div className="w-full bg-slate-100 rounded-t-sm h-full flex flex-col justify-end overflow-hidden">
                               <div 
                                 className={`w-full rounded-t-sm transition-all duration-300 ${
-                                  isCurrent 
-                                    ? 'bg-[#0362D0] ring-1 ring-[#0362D0]' 
-                                    : item.status === 'Perlu Pendampingan'
-                                      ? 'bg-[#950415]/75 group-hover:bg-[#950415]'
-                                      : 'bg-[#0362D0]/60 group-hover:bg-[#0362D0]'
+                                  pt.progress === 0
+                                    ? 'bg-slate-200'
+                                    : isCurrent 
+                                      ? 'bg-[#0362D0] ring-1 ring-[#0362D0]' 
+                                      : item.status === 'Perlu Pendampingan'
+                                        ? 'bg-[#950415]/75 group-hover:bg-[#950415]'
+                                        : 'bg-[#0362D0]/60 group-hover:bg-[#0362D0]'
                                 }`}
                                 style={{ height: `${heightPercent}%` }}
                               />
                             </div>
 
-                            <span className={`text-[9px] font-bold mt-1 ${isCurrent ? 'text-[#0362D0] font-black' : 'text-slate-400'}`}>
-                              {pt.label} ({pt.progress}%)
+                            <span className={`text-[9px] font-bold mt-1 whitespace-nowrap ${isCurrent ? 'text-[#0362D0] font-black' : 'text-slate-400'}`}>
+                              {pt.label}
                             </span>
                           </div>
                         );

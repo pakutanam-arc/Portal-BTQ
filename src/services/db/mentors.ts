@@ -2,6 +2,7 @@ import {
   collection,
   doc,
   getDocs,
+  onSnapshot,
   setDoc,
   query,
 } from 'firebase/firestore';
@@ -9,6 +10,7 @@ import { db } from '../firebase';
 import {
   fetchWithSWR,
   invalidateDbCache,
+  setCached,
   STATIC_CACHE_TTL_MS,
 } from '../cacheService';
 import { Mentor, OperationType, handleFirestoreError } from './types';
@@ -42,6 +44,38 @@ export async function getMentors(forceFresh = false): Promise<Mentor[]> {
       return [];
     }
   }, { forceFresh, freshTtlMs: STATIC_CACHE_TTL_MS });
+}
+
+// Real-time Firestore listener for mentors
+export function subscribeToMentors(
+  callback: (mentors: Mentor[]) => void
+): () => void {
+  const q = query(collection(db, 'mentors'));
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const items = snapshot.docs.map((docSnap) => {
+        const data = docSnap.data() as Mentor;
+        const mapEntry = mentorMappingData.find(
+          (m) => m.id === docSnap.id || m.groupId === data.groupId
+        );
+        return {
+          id: docSnap.id,
+          ...data,
+          name: data.name || (mapEntry ? mapEntry.name : 'Mentor'),
+          email: data.email || (mapEntry ? mapEntry.newEmail : 'mentor@smpn102.sch.id'),
+          role: 'mentor',
+          status: 'Aktif',
+          signature: data.signature || (mapEntry as any)?.signature || '',
+        } as Mentor;
+      });
+      setCached('mentors', items);
+      callback(items);
+    },
+    (error) => {
+      console.warn('Real-time mentors listener error:', error);
+    }
+  );
 }
 
 /**

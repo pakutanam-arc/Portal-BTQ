@@ -3,9 +3,9 @@ import { motion, AnimatePresence } from 'motion/react';
 import { theme } from '../theme';
 import { 
   Calendar, Save, Loader2, BookOpen, Users, UserCheck, AlertCircle, 
-  MessageSquare, MessageCircle, CheckCircle, ChevronRight, Award, ChevronDown, 
+  MessageSquare, MessageCircle, CheckCircle, ChevronRight, ChevronLeft, Award, ChevronDown, 
   Hash, CheckSquare, Edit3, PlusCircle, Camera, Sliders, Search, CheckCircle2, 
-  Sparkles, Check, X, CalendarOff, UserPlus, UserMinus, Trash2, ShieldAlert
+  Sparkles, Check, X, CalendarOff, UserPlus, UserMinus, FileText, Filter
 } from 'lucide-react';
 import { Select } from '../components/ui/Select';
 import { Input } from '../components/ui/Input';
@@ -18,6 +18,7 @@ import { StudentTableSkeleton } from '../components/students/StudentTableSkeleto
 import { StudentActionModal } from '../components/students/StudentActionModal';
 import { ModalPortal } from '../components/ui/ModalPortal';
 import { sortStudents } from '../utils/studentUtils';
+import { computeLiveSessionMetrics, calculateStudentTotalScore } from '../utils/sessionMetrics';
 
 const QRScanner = React.lazy(() => import('../components/QRScanner').then(m => ({ default: m.QRScanner })));
 import { 
@@ -25,11 +26,9 @@ import {
   getMentors, 
   getStudentsByGroup, getStudents, 
   getStudentAttendance, 
-  getStudentProgressBySession,
   getStudentProgressByMeeting,
   getTeachingJournals,
   saveStudentAttendance,
-  saveStudentProgress,
   saveMultipleStudentProgress,
   saveTeachingJournal,
   createNotification,
@@ -39,14 +38,15 @@ import {
   activateStudent,
   Group, 
   Student, 
-  Mentor,
   StudentProgress,
   TeachingJournal
 } from '../services/db';
-import { masterGrades, masterSessions, getGradeForGroup, JUZ_30_SURAHS } from '../services/curriculumData';
+import { masterSessions, getGradeForGroup, JUZ_30_SURAHS } from '../services/curriculumData';
 import { recordSuccessfulScan } from '../services/scanHistory';
 import { getMeetingRealDate, formatShortDateID } from '../services/academicCalendar';
 import { getAcademicHolidays, subscribeAcademicHolidays, AcademicHoliday } from '../services/db/calendar';
+
+type WizardStep = 1 | 2 | 3;
 
 export function LiveSession() {
   const { currentUser, userData, userRole } = useAuth();
@@ -56,6 +56,15 @@ export function LiveSession() {
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [selectedSemester, setSelectedSemester] = useState<number>(1);
   
+  // Wizard step state: 1 = Presensi, 2 = Nilai KBM, 3 = Jurnal Mengajar
+  const [activeStep, setActiveStep] = useState<WizardStep>(1);
+  // Step 2 filter: show only Hadir students by default for focused grading, or all students
+  const [showOnlyPresentInGrading, setShowOnlyPresentInGrading] = useState<boolean>(true);
+  // Attendance filter in Step 1
+  const [attendanceFilter, setAttendanceFilter] = useState<string>('ALL');
+  // Mobile collapsible session configuration panel
+  const [showMobileConfig, setShowMobileConfig] = useState<boolean>(false);
+
   // Real meeting counter & edit mode state
   const [meetingNumber, setMeetingNumber] = useState<number>(1);
   const [completedMeetingCount, setCompletedMeetingCount] = useState<number>(0);
@@ -206,7 +215,6 @@ export function LiveSession() {
         setSelectedDate(matchedJournal.date);
       }
 
-      // Sync Tahap Kurikulum based on matched journal or meeting number
       let targetSessIds: string[] = [];
       if (matchedJournal.sessionIds && Array.isArray(matchedJournal.sessionIds)) {
         targetSessIds = matchedJournal.sessionIds.filter(id => availableSessions.some(s => s.id === id));
@@ -217,7 +225,6 @@ export function LiveSession() {
         }
       }
 
-      // Fallback matching by sessionNumber (e.g. meeting 1 -> sessionNumber 1, meeting 2 -> sessionNumber 2)
       if (targetSessIds.length === 0) {
         const sessByNum = availableSessions.find(s => s.sessionNumber === targetMeetingNum);
         if (sessByNum) {
@@ -236,7 +243,6 @@ export function LiveSession() {
       setJournalObstacles(matchedJournal.studentObstacles || '');
       setJournalNextPlan(matchedJournal.nextPlan || '');
     } else {
-      // New meeting number
       setEditingJournalId(null);
       const fallbackRealDate = getMeetingRealDate(targetMeetingNum);
       setSelectedDate(fallbackRealDate || new Date().toISOString().split('T')[0]);
@@ -264,7 +270,6 @@ export function LiveSession() {
       const journals = res.data || [];
       setGroupJournals(journals);
       
-      // 1. Identify completed Tahap IDs
       const finishedSet = new Set<string>();
       journals.forEach(j => {
         if (j.sessionId) finishedSet.add(j.sessionId);
@@ -273,7 +278,6 @@ export function LiveSession() {
         }
       });
 
-      // Add seed completed Tahaps for Semester 1 (Tahap 1 & 2) if first time
       if (finishedSet.size === 0 && selectedSemester === 1) {
         masterSessions
           .filter(s => s.semester === 1 && s.sessionNumber <= 2 && s.gradeId === currentGradeId)
@@ -282,12 +286,10 @@ export function LiveSession() {
 
       setCompletedSessionIds(Array.from(finishedSet));
 
-      // 2. Calculate count of completed meetings so far
       const maxMeetingNum = journals.reduce((max, j) => Math.max(max, j.meetingNumber || 0), 0);
       const count = Math.max(journals.length, maxMeetingNum, finishedSet.size);
       setCompletedMeetingCount(count);
 
-      // Auto-sync meeting data
       const activeMeetingNum = editingJournalId 
         ? meetingNumber 
         : (count + 1);
@@ -312,7 +314,6 @@ export function LiveSession() {
         const stds = sortStudents(rawStds);
         setStudents(stds);
         
-        // 1. Load Attendance for Meeting Number & Date (Default 'Alpa' for new unrecorded meetings)
         const attendanceRecords = await getStudentAttendance(selectedGroup, selectedDate, meetingNumber);
         const newAtt: Record<string, { status: string, notes: string }> = {};
         stds.forEach(s => {
@@ -321,7 +322,6 @@ export function LiveSession() {
         });
         setAttendance(newAtt);
         
-        // 2. Load Progress for Meeting Number & Sync with Attendance Status
         const primarySessionId = selectedSessionIds[0] || `session_${meetingNumber}`;
         const progRecords = await getStudentProgressByMeeting(selectedGroup, meetingNumber, primarySessionId);
         const newProg: Record<string, Partial<StudentProgress>> = {};
@@ -329,14 +329,12 @@ export function LiveSession() {
           const pr = progRecords.find(p => p.studentId === s.id);
           const attStatus = newAtt[s.id]?.status || 'Alpa';
 
-          // Preserve any saved or baseline values for restoration when student is marked Hadir
           const savedR = (pr?.reading && pr.reading > 0) ? pr.reading : 0;
           const savedT = (pr?.tajwid && pr.tajwid > 0) ? pr.tajwid : 0;
           const savedW = (pr?.writing && pr.writing > 0) ? pr.writing : 0;
           const savedM = currentGradeId === 'grade3' ? ((pr?.memorization && pr.memorization > 0) ? pr.memorization : 0) : 0;
 
           if (attStatus !== 'Hadir') {
-            // Absent students (default Alpa/Izin/Sakit) automatically receive 0 progress scores for this meeting
             newProg[s.id] = {
               ...(pr || {}),
               reading: 0,
@@ -350,7 +348,6 @@ export function LiveSession() {
               _savedMemorization: savedM,
             } as any;
           } else {
-            // Present students load saved progress or default base score 0
             newProg[s.id] = pr || { 
               reading: savedR, 
               tajwid: savedT, 
@@ -375,6 +372,26 @@ export function LiveSession() {
     loadSessionData();
   }, [selectedGroup, selectedDate, selectedSessionIds, meetingNumber]);
 
+  // Real-time Live Session Statistics & Progress Bar Calculations
+  const sessionStats = useMemo(() => {
+    const metrics = computeLiveSessionMetrics(
+      students.map(s => s.id),
+      attendance,
+      progress
+    );
+    return {
+      total: metrics.totalStudents,
+      hadir: metrics.hadirCount,
+      izin: metrics.izinCount,
+      sakit: metrics.sakitCount,
+      alpa: metrics.alpaCount,
+      hadirPercent: metrics.presentRatePercent,
+      scoredPresent: metrics.scoredPresentCount,
+      scoredPercent: metrics.scoringProgressPercent,
+      avgScore: metrics.averageClassScore
+    };
+  }, [students, attendance, progress]);
+
   // Handle Attendance Change with automatic Progress sync based on meetingNumber
   const handleAttendanceChange = (studentId: string, status: string) => {
     setAttendance(prev => ({ ...prev, [studentId]: { ...prev[studentId], status } }));
@@ -382,13 +399,11 @@ export function LiveSession() {
     setProgress(prev => {
       const current = (prev[studentId] || {}) as any;
       if (status !== 'Hadir') {
-        // Cache current non-zero scores before zeroing out
         const savedR = (current.reading && current.reading > 0) ? current.reading : (current._savedReading || 0);
         const savedT = (current.tajwid && current.tajwid > 0) ? current.tajwid : (current._savedTajwid || 0);
         const savedW = (current.writing && current.writing > 0) ? current.writing : (current._savedWriting || 0);
         const savedM = (current.memorization && current.memorization > 0) ? current.memorization : (current._savedMemorization || 0);
 
-        // Automatically zero out progress for absent students in this meeting
         return {
           ...prev,
           [studentId]: {
@@ -405,7 +420,6 @@ export function LiveSession() {
           }
         };
       } else {
-        // Restore previous scores or standard base score (0) if returning to Hadir
         const r = (current.reading && current.reading > 0) ? current.reading : (current._savedReading || 0);
         const t = (current.tajwid && current.tajwid > 0) ? current.tajwid : (current._savedTajwid || 0);
         const w = (current.writing && current.writing > 0) ? current.writing : (current._savedWriting || 0);
@@ -413,11 +427,7 @@ export function LiveSession() {
           ? ((current.memorization && current.memorization > 0) ? current.memorization : (current._savedMemorization || 0)) 
           : 0;
         
-        const scores: number[] = [];
-        if (currentGradeId === 'grade3' && r > 0) scores.push(r);
-        if (t > 0) scores.push(t);
-        if (w > 0) scores.push(w);
-        const calculatedTotal = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
+        const calculatedTotal = calculateStudentTotalScore({ reading: r, tajwid: t, writing: w, memorization: m });
 
         return {
           ...prev,
@@ -441,20 +451,7 @@ export function LiveSession() {
         ...current,
         [field]: value
       };
-      
-      const scores: number[] = [];
-      const r = typeof updated.reading === 'number' ? updated.reading : parseInt(updated.reading as any) || 0;
-      const t = typeof updated.tajwid === 'number' ? updated.tajwid : parseInt(updated.tajwid as any) || 0;
-      const w = typeof updated.writing === 'number' ? updated.writing : parseInt(updated.writing as any) || 0;
-      const m = typeof updated.memorization === 'number' ? updated.memorization : parseInt(updated.memorization as any) || 0;
-      
-      if (r > 0) scores.push(r);
-      if (t > 0) scores.push(t);
-      if (w > 0) scores.push(w);
-      if (m > 0) scores.push(m);
-
-      const calculatedTotal = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
-      updated.total = calculatedTotal;
+      updated.total = calculateStudentTotalScore(updated);
 
       return {
         ...prev,
@@ -503,9 +500,10 @@ export function LiveSession() {
             : 0;
           
           const scores: number[] = [];
-          if (currentGradeId === 'grade3' && r > 0) scores.push(r);
+          if (r > 0) scores.push(r);
           if (t > 0) scores.push(t);
           if (w > 0) scores.push(w);
+          if (m > 0) scores.push(m);
           const calculatedTotal = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
 
           nextProg[s.id] = {
@@ -522,6 +520,35 @@ export function LiveSession() {
     });
   };
 
+  // Fill default baseline score for unscored present students
+  const applyBaselineScoreToUnscored = (baseline: number) => {
+    setProgress(prev => {
+      const next = { ...prev };
+      students.forEach(s => {
+        const isHadir = (attendance[s.id]?.status || 'Alpa') === 'Hadir';
+        if (!isHadir) return;
+        const curr = next[s.id] || {};
+        if (!curr.total || curr.total === 0) {
+          next[s.id] = {
+            ...curr,
+            tajwid: baseline,
+            reading: baseline,
+            writing: baseline,
+            memorization: currentGradeId === 'grade3' ? baseline : (curr.memorization || 0),
+            total: baseline
+          };
+        }
+      });
+      return next;
+    });
+    setToast({
+      show: true,
+      type: 'info',
+      message: `Nilai Dasar ${baseline} Diterapkan`,
+      description: `Santri hadir yang belum dinilai telah diisi nilai awal ${baseline}.`
+    });
+  };
+
   const handleScanSuccess = async (decodedText: string) => {
     try {
       const parts = decodedText.split('/');
@@ -534,7 +561,6 @@ export function LiveSession() {
           [scannedId]: { ...prev[scannedId], status: 'Hadir' }
         }));
 
-        // Record successful scan in current session's attendance history
         try {
           const currentGroupObj = groups.find(g => g.id === selectedGroup);
           recordSuccessfulScan({
@@ -552,7 +578,6 @@ export function LiveSession() {
           console.warn('Failed to record scan in session history', e);
         }
         
-        // Play success beep using Web Audio API
         try {
           const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
           if (AudioContext) {
@@ -574,7 +599,6 @@ export function LiveSession() {
           console.warn("Audio feedback failed");
         }
 
-        // Ensure progress is also restored/set for Hadir
         setProgress(prev => {
           const nextProg = { ...prev };
           const current = (nextProg[scannedId] || {}) as any;
@@ -586,9 +610,10 @@ export function LiveSession() {
             : 0;
           
           const scores: number[] = [];
-          if (currentGradeId === 'grade3' && r > 0) scores.push(r);
+          if (r > 0) scores.push(r);
           if (t > 0) scores.push(t);
           if (w > 0) scores.push(w);
+          if (m > 0) scores.push(m);
           const calculatedTotal = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
 
           nextProg[scannedId] = {
@@ -602,7 +627,6 @@ export function LiveSession() {
           return nextProg;
         });
       } else {
-        // Find out which group the student belongs to
         try {
           const allStudents = await getStudents();
           const trueStudent = allStudents.find(s => s.id === scannedId);
@@ -610,7 +634,6 @@ export function LiveSession() {
             const allGroups = await getGroups();
             const trueGroup = allGroups.find(g => g.id === trueStudent.groupId);
             
-            // Play error beep
             try {
               const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
               if (AudioContext) {
@@ -660,7 +683,6 @@ export function LiveSession() {
     setSaving(true);
     
     try {
-      // 1. Prepare Attendance (synced with meetingNumber)
       const attToSave = students.map(s => ({
         studentId: s.id,
         groupId: selectedGroup,
@@ -670,7 +692,6 @@ export function LiveSession() {
         notes: attendance[s.id]?.notes || ''
       }));
       
-      // 2. Prepare Progress for each selected Tahap (synced with meetingNumber)
       const progsToSave: StudentProgress[] = [];
       for (const sessId of selectedSessionIds) {
         for (const s of students) {
@@ -697,7 +718,6 @@ export function LiveSession() {
         }
       }
 
-      // 3. Construct multi-stage title & Prepare Journal (Update if editing, create if new)
       const mentorName = userData?.name || currentUser?.displayName || 'Mentor';
       const selectedTahapObjects = availableSessions.filter(s => selectedSessionIds.includes(s.id));
       const sessionTitleStr = selectedTahapObjects.map(s => `Tahap ${s.sessionNumber}: ${s.topic}`).join(' & ');
@@ -720,17 +740,14 @@ export function LiveSession() {
         createdAt: new Date().toISOString()
       };
 
-      // 4. Execute atomic batch writes concurrently for instant save (reduced from 80+ roundtrips to 3)
       await Promise.all([
         saveStudentAttendance(attToSave),
         saveMultipleStudentProgress(progsToSave),
         saveTeachingJournal(journalObj)
       ]);
       
-      // Reload stats to reflect changes in meeting list
       await loadGroupJournalStats();
 
-      // 4. Notifications
       const isEdit = !!editingJournalId;
       await createNotification({
         title: `Pertemuan Ke-${meetingNumber} (${currentGroupObj?.name}) ${isEdit ? 'Diperbarui' : 'Selesai'}`,
@@ -747,7 +764,7 @@ export function LiveSession() {
         show: true, 
         type: 'success', 
         message: isEdit ? `Perubahan Pertemuan Ke-${meetingNumber} Berhasil Diperbarui!` : `Pertemuan Ke-${meetingNumber} Berhasil Disimpan!`,
-        description: `Absensi, Progress & Jurnal tercatat.` 
+        description: `Absensi (${sessionStats.hadir} Hadir), Nilai & Jurnal telah tercatat di database.` 
       });
 
       if (typeof window !== 'undefined') {
@@ -793,7 +810,6 @@ export function LiveSession() {
     window.open(`https://api.whatsapp.com/send?text=${encoded}`, '_blank');
   };
 
-  // Helper reload students after CRUD operations in LiveSession
   const reloadSessionStudents = async () => {
     if (!selectedGroup) return;
     const stds = await getStudentsByGroup(selectedGroup, true);
@@ -823,7 +839,6 @@ export function LiveSession() {
         status: 'Aktif'
       });
 
-      // Default attendance to 'Hadir' and initial progress
       setAttendance(prev => ({
         ...prev,
         [newId]: { status: 'Hadir', notes: '' }
@@ -849,7 +864,6 @@ export function LiveSession() {
         description: `Santri "${trimmedName}" telah terdaftar ke kelompok ini dan tersinkronisasi ke Firebase.`
       });
 
-      // Reset form
       setNewStudentForm({
         name: '',
         nis: '',
@@ -925,7 +939,6 @@ export function LiveSession() {
     try {
       await deleteStudent(student.id);
       
-      // Clean local attendance and progress states
       setAttendance(prev => {
         const next = { ...prev };
         delete next[student.id];
@@ -960,33 +973,128 @@ export function LiveSession() {
 
   const selectedTahapObjects = availableSessions.filter(s => selectedSessionIds.includes(s.id));
 
-  return (
-    <div className="flex flex-col gap-4 sm:gap-6 w-full pb-12">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-[#172033] via-[#0362D0] to-[#172033] rounded-3xl p-6 lg:p-8 text-white shadow-md border border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-6 relative overflow-hidden">
-        <div className="relative z-10 max-w-2xl">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md text-slate-100 text-xs font-bold mb-3 border border-white/10">
-            <BookOpen size={14} className="text-[#C99A2E]" /> Manajemen Kelas & Sesi Mengajar
-          </div>
-          <h1 className={theme.typography.h1.replace('text-[#172033]', 'text-white')}>
-            Sesi Mengajar Terpadu
-          </h1>
-          <p className="text-slate-200 text-xs sm:text-sm mt-1.5 leading-relaxed font-medium">
-            Merekam absensi, capaian Tahap kurikulum, dan jurnal pertemuan secara fleksibel. Bisa membuat pertemuan baru atau mengedit pertemuan lalu tanpa menambah jumlah pertemuan.
-          </p>
-        </div>
+  // Filtered students for Step 1 (Presensi)
+  const filteredAttendanceStudents = useMemo(() => {
+    return students.filter(st => {
+      if (studentSearch.trim()) {
+        const q = studentSearch.toLowerCase();
+        const matchesText = st.name.toLowerCase().includes(q) || (st.nis && st.nis.toLowerCase().includes(q));
+        if (!matchesText) return false;
+      }
+      if (attendanceFilter !== 'ALL') {
+        const status = attendance[st.id]?.status || 'Alpa';
+        if (status !== attendanceFilter) return false;
+      }
+      return true;
+    });
+  }, [students, studentSearch, attendanceFilter, attendance]);
 
-        {/* Counter Badge */}
-        <div className="relative z-10 bg-white/10 p-4 rounded-2xl border border-white/15 backdrop-blur-md flex items-center gap-3 shrink-0">
-          <div className="w-10 h-10 rounded-xl bg-[#C99A2E] text-slate-950 flex items-center justify-center font-black">
-            <Hash size={20} />
+  // Filtered students for Step 2 (Nilai KBM)
+  const filteredGradingStudents = useMemo(() => {
+    return students.filter(st => {
+      if (studentSearch.trim()) {
+        const q = studentSearch.toLowerCase();
+        const matchesText = st.name.toLowerCase().includes(q) || (st.nis && st.nis.toLowerCase().includes(q));
+        if (!matchesText) return false;
+      }
+      if (showOnlyPresentInGrading) {
+        return (attendance[st.id]?.status || 'Alpa') === 'Hadir';
+      }
+      return true;
+    });
+  }, [students, studentSearch, showOnlyPresentInGrading, attendance]);
+
+  const wizardSteps: { step: WizardStep; title: string; shortTitle: string; subtitle: string; icon: React.ElementType; metric: string }[] = [
+    {
+      step: 1,
+      title: '1. Presensi Kehadiran',
+      shortTitle: '1. Presensi',
+      subtitle: 'Absensi & Scan QR',
+      icon: UserCheck,
+      metric: `${sessionStats.hadir}/${sessionStats.total} Hadir`
+    },
+    {
+      step: 2,
+      title: '2. Input Nilai KBM',
+      shortTitle: '2. Nilai KBM',
+      subtitle: 'Tabel Nilai Langsung',
+      icon: Award,
+      metric: `${sessionStats.scoredPresent}/${sessionStats.hadir} Dinilai`
+    },
+    {
+      step: 3,
+      title: '3. Jurnal & Simpan',
+      shortTitle: '3. Jurnal',
+      subtitle: 'Catatan & Finalisasi',
+      icon: BookOpen,
+      metric: journalMaterial.trim() ? 'Terisi ✓' : 'Belum Diisi'
+    }
+  ];
+
+  const activeGroupName = currentGroupObj?.name || 'Kelompok';
+  const activeTahapSummary = selectedTahapObjects.length === 0
+    ? 'Pilih Tahap'
+    : selectedTahapObjects.length === 1
+    ? `Tahap ${selectedTahapObjects[0].sessionNumber}: ${selectedTahapObjects[0].topic}`
+    : `${selectedTahapObjects.length} Tahap (${selectedTahapObjects.map(s => 'T' + s.sessionNumber).join(', ')})`;
+
+  return (
+    <div className="flex flex-col gap-2.5 sm:gap-4 w-full pb-10">
+      {/* 1. UNIFIED COMPACT COMMAND HEADER + MOBILE SESSION SUMMARY */}
+      <div className="bg-[#172033] rounded-2xl p-3.5 sm:p-5 text-white border border-slate-800 space-y-2.5">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5">
+          <div className="max-w-2xl">
+            <div className="flex flex-wrap items-center gap-1.5 text-[11px] sm:text-xs font-semibold text-[#C99A2E] mb-0.5">
+              <span>{activeGroupName}</span>
+              <span aria-hidden="true">·</span>
+              <span>{currentGradeObj.programName}</span>
+              <span aria-hidden="true">·</span>
+              <span className="text-slate-300">{formatShortDateID(selectedDate)}</span>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <h1 className="text-base sm:text-xl font-bold text-white tracking-tight">
+                Sesi Mengajar Terpadu
+              </h1>
+              <div className="flex lg:hidden items-center gap-1.5 shrink-0">
+                <span className={cn(
+                  "px-2 py-1 rounded-lg text-[11px] font-bold tabular-nums border",
+                  editingJournalId
+                    ? "bg-amber-500/20 text-amber-300 border-amber-500/30"
+                    : "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
+                )}>
+                  {editingJournalId ? `Edit Ke-${meetingNumber}` : `Pertemuan Ke-${meetingNumber}`}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowMobileConfig(prev => !prev)}
+                  className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                >
+                  <span>{showMobileConfig ? 'Tutup' : 'Atur Sesi'}</span>
+                  <ChevronDown size={13} className={cn("transition-transform", showMobileConfig && "rotate-180")} />
+                </button>
+              </div>
+            </div>
+            {/* Compact syllabus target line on mobile & desktop */}
+            <div className="text-[11px] sm:text-xs text-slate-300 truncate mt-0.5">
+              Silabus: <strong className="text-white">{activeTahapSummary}</strong>
+            </div>
           </div>
-          <div>
-            <span className="text-[10px] text-slate-300 font-extrabold uppercase block tracking-wider">
-              Total Pertemuan Kelompok
-            </span>
-            <div className="text-lg font-black text-white">
-              {completedMeetingCount} Pertemuan Terlaksana
+
+          <div className="hidden lg:flex items-center gap-3 text-xs shrink-0">
+            <div className="bg-slate-800/90 px-3.5 py-2 rounded-xl border border-slate-700">
+              <span className="text-slate-400 block text-[11px]">Riwayat Kelompok</span>
+              <span className="text-white font-bold text-sm tabular-nums">
+                {completedMeetingCount} Pertemuan Terlaksana
+              </span>
+            </div>
+            <div className="bg-slate-800/90 px-3.5 py-2 rounded-xl border border-slate-700">
+              <span className="text-slate-400 block text-[11px]">Status Sesi Ini</span>
+              <span className={cn(
+                "font-bold text-sm tabular-nums",
+                editingJournalId ? "text-amber-400" : "text-emerald-400"
+              )}>
+                {editingJournalId ? `Edit Pertemuan Ke-${meetingNumber}` : `Pertemuan Baru Ke-${meetingNumber}`}
+              </span>
             </div>
           </div>
         </div>
@@ -995,21 +1103,22 @@ export function LiveSession() {
       {/* ADMIN-ONLY CURRICULUM CONSISTENCY ALERT */}
       <CurriculumSyncAlert groupIdFilter={selectedGroup} />
 
-      {/* Configuration Cards */}
-      <div className="bg-white rounded-3xl p-5 border border-slate-100 shadow-xs space-y-4">
-        
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-          
+      {/* 2. SESSION CONFIGURATION BAR (Hidden on mobile unless "Atur Sesi" is toggled, always visible on >= md) */}
+      <div className={cn(
+        "bg-white rounded-2xl p-3.5 sm:p-4 border border-slate-200 space-y-2.5",
+        !showMobileConfig && "hidden md:block"
+      )}>
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-2.5 sm:gap-3">
           {/* Kelompok */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-black text-[#172033] uppercase tracking-wider">Kelompok Binaan</label>
+          <div className="space-y-1">
+            <label className="text-[11px] sm:text-xs font-bold text-slate-700">Kelompok Binaan</label>
             <Select 
               value={selectedGroup} 
               onChange={(e) => {
                 setSelectedGroup(e.target.value);
                 setEditingJournalId(null);
               }} 
-              className="w-full font-bold text-xs h-12 bg-slate-50 border-transparent focus:bg-white focus:border-slate-200"
+              className="w-full font-bold text-xs h-9 sm:h-10 bg-slate-50 border-slate-200 focus:bg-white"
             >
               {groups.map(g => (
                 <option key={g.id} value={g.id}>{g.name}</option>
@@ -1018,21 +1127,21 @@ export function LiveSession() {
           </div>
 
           {/* Tanggal Sesi */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-black text-[#172033] uppercase tracking-wider">Tanggal Kegiatan</label>
+          <div className="space-y-1">
+            <label className="text-[11px] sm:text-xs font-bold text-slate-700">Tanggal Kegiatan</label>
             <Input 
               type="date" 
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
-              className="h-12 font-bold text-xs"
+              className="h-9 sm:h-10 font-bold text-xs tabular-nums"
             />
           </div>
 
-          {/* Pertemuan Ke- (Auto Sync) */}
-          <div className="space-y-1.5">
+          {/* Pertemuan Ke- */}
+          <div className="space-y-1">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-black text-[#172033] uppercase tracking-wider">Pertemuan Ke-</label>
-              <span className="text-[10px] text-[#0362D0] font-extrabold">
+              <label className="text-[11px] sm:text-xs font-bold text-slate-700">Pertemuan Ke-</label>
+              <span className="text-[10px] sm:text-[11px] text-[#0362D0] font-semibold tabular-nums">
                 {completedMeetingCount}x Selesai
               </span>
             </div>
@@ -1040,8 +1149,8 @@ export function LiveSession() {
               value={meetingNumber.toString()}
               onChange={(e) => syncMeetingData(parseInt(e.target.value) || 1)}
               className={cn(
-                "h-12 font-black text-xs cursor-pointer",
-                editingJournalId ? "bg-orange-50 text-orange-800 border-orange-300 font-extrabold" : "text-[#0362D0]"
+                "h-9 sm:h-10 font-bold text-xs cursor-pointer tabular-nums",
+                editingJournalId ? "bg-amber-50 text-amber-900 border-amber-300" : "text-[#0362D0]"
               )}
             >
               {Array.from({ length: 32 }, (_, i) => i + 1).map((num) => {
@@ -1058,24 +1167,28 @@ export function LiveSession() {
           </div>
 
           {/* Semester */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-black text-[#172033] uppercase tracking-wider">Semester</label>
-            <Select value={selectedSemester.toString()} onChange={(e) => setSelectedSemester(parseInt(e.target.value))} className="w-full font-bold text-xs h-12 bg-slate-50 border-transparent focus:bg-white focus:border-slate-200">
+          <div className="space-y-1">
+            <label className="text-[11px] sm:text-xs font-bold text-slate-700">Semester</label>
+            <Select
+              value={selectedSemester.toString()}
+              onChange={(e) => setSelectedSemester(parseInt(e.target.value))}
+              className="w-full font-bold text-xs h-9 sm:h-10 bg-slate-50 border-slate-200 focus:bg-white"
+            >
               <option value="1">Semester 1 (Tahap 1 – 16)</option>
               <option value="2">Semester 2 (Tahap 17 – 32)</option>
             </Select>
           </div>
 
-          {/* Tahap Kurikulum / Silabus (Multi-Select Popup) */}
-          <div className="space-y-1.5 relative">
+          {/* Tahap Kurikulum / Silabus */}
+          <div className="col-span-2 lg:col-span-1 space-y-1 relative">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-black text-[#172033] uppercase tracking-wider">Tahap Kurikulum</label>
-              <span className="text-[10px] text-amber-600 font-extrabold">Bisa Pilih &gt;1</span>
+              <label className="text-[11px] sm:text-xs font-bold text-slate-700">Tahap Kurikulum</label>
+              <span className="text-[10px] sm:text-[11px] text-slate-500 font-medium">Multi-pilih</span>
             </div>
             <button
               type="button"
               onClick={() => setShowTahapDropdown(!showTahapDropdown)}
-              className="w-full flex items-center justify-between px-3 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-100 rounded-xl text-xs font-bold text-[#172033] h-12 transition-colors cursor-pointer text-left"
+              className="w-full flex items-center justify-between px-3 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-bold text-[#172033] h-9 sm:h-10 transition-colors cursor-pointer text-left"
             >
               <span className="truncate pr-1">
                 {selectedTahapObjects.length === 0 ? 'Pilih Tahap...' :
@@ -1085,7 +1198,6 @@ export function LiveSession() {
               <ChevronDown size={14} className="text-slate-500 shrink-0" />
             </button>
 
-            {/* Dropdown Multi-Select Menu */}
             <AnimatePresence>
               {showTahapDropdown && (
                 <motion.div 
@@ -1093,9 +1205,9 @@ export function LiveSession() {
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: -6, scale: 0.98 }}
                   transition={{ duration: 0.15 }}
-                  className="absolute right-0 z-50 mt-1 w-full sm:w-[380px] bg-white border border-slate-100 rounded-2xl shadow-xl p-3 max-h-80 overflow-y-auto divide-y divide-slate-100"
+                  className="absolute right-0 z-50 mt-1 w-full sm:w-[380px] bg-white border border-slate-200 rounded-2xl shadow-xl p-3 max-h-80 overflow-y-auto divide-y divide-slate-100"
                 >
-                  <div className="text-[10px] font-black uppercase text-slate-400 pb-2 px-1 flex justify-between items-center">
+                  <div className="text-xs font-bold text-slate-600 pb-2 px-1 flex justify-between items-center">
                     <span>Pilih Tahap Kurikulum</span>
                     <button 
                       type="button"
@@ -1124,16 +1236,16 @@ export function LiveSession() {
                             className="mt-0.5 rounded text-[#0362D0] focus:ring-[#0362D0] w-4 h-4 cursor-pointer"
                           />
                           <div className="flex-1 text-xs">
-                            <div className="font-extrabold flex items-center justify-between gap-1">
+                            <div className="font-bold flex items-center justify-between gap-1">
                               <span>Tahap {s.sessionNumber}: {s.topic}</span>
                               {isFinished && (
-                                <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-800 text-[9px] font-black rounded flex items-center gap-1 shrink-0 ml-1">
-                                  <CheckCircle size={10} /> Selesai
+                                <span className="text-[11px] text-emerald-700 font-semibold shrink-0 ml-1">
+                                  · Selesai
                                 </span>
                               )}
                             </div>
                             {s.pageRef && (
-                              <div className="text-[10px] text-slate-400 font-medium mt-0.5">Materi: Hal. {s.pageRef}</div>
+                              <div className="text-[11px] text-slate-500 mt-0.5">Materi: Hal. {s.pageRef}</div>
                             )}
                           </div>
                         </label>
@@ -1144,409 +1256,1060 @@ export function LiveSession() {
               )}
             </AnimatePresence>
           </div>
+        </div>
 
+        {/* Desktop Syllabus Metadata Line */}
+        <div className="hidden md:flex pt-2 border-t border-slate-100 flex-wrap items-center justify-between gap-2 text-xs text-slate-600">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="font-bold text-[#172033]">Target Silabus Hari Ini:</span>
+            <span>
+              {selectedTahapObjects.map(s => `Tahap ${s.sessionNumber} (${s.topic})`).join(' · ') || 'Belum dipilih'}
+            </span>
+          </div>
+          <span className="text-slate-500">
+            {currentGradeId === 'grade3' ? 'Fokus: Tahsin, Tajwid & Hafalan Juz 30' : 'Fokus: Tilawati, Tajwid & Menulis'}
+          </span>
         </div>
       </div>
 
-      {/* Selected Tahap Summary Chips */}
-      <div className="flex flex-wrap items-center gap-2 bg-slate-50 px-4 py-3 rounded-2xl border border-slate-100">
-        <span className="text-xs font-black text-[#172033] flex items-center gap-1.5">
-          <CheckSquare size={14} className="text-[#0362D0]" /> Tahap Terpilih Hari Ini:
-        </span>
-        <AnimatePresence mode="popLayout">
-          {selectedTahapObjects.map((s, idx) => (
-            <motion.span 
-              key={`selected_session_${s.id}_${idx}`}
-              initial={{ opacity: 0, scale: 0.8, x: -6 }}
-              animate={{ opacity: 1, scale: 1, x: 0 }}
-              exit={{ opacity: 0, scale: 0.8, x: 6 }}
-              transition={{ duration: 0.2 }}
-              className="px-3 py-1 bg-white text-[#0362D0] border border-[#0362D0]/30 rounded-xl text-xs font-black shadow-2xs flex items-center gap-1.5"
-            >
-              Tahap {s.sessionNumber}: {s.topic}
-              {completedSessionIds.includes(s.id) && (
-                <span className="text-[10px] text-emerald-600 font-bold">(Sudah Pernah)</span>
+      {/* 3. HORIZONTAL 3-STEP WIZARD BAR (Zero truncation on 390px mobile & desktop) */}
+      <div className="grid grid-cols-3 gap-1.5 sm:gap-2.5 bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
+        {wizardSteps.map((item) => {
+          const Icon = item.icon;
+          const isActive = activeStep === item.step;
+          const isCompleted =
+            (item.step === 1 && sessionStats.hadir > 0) ||
+            (item.step === 2 && sessionStats.hadir > 0 && sessionStats.scoredPresent === sessionStats.hadir) ||
+            (item.step === 3 && Boolean(journalMaterial.trim()));
+
+          return (
+            <button
+              key={item.step}
+              type="button"
+              onClick={() => setActiveStep(item.step)}
+              className={cn(
+                "flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-3 px-2.5 py-2 sm:px-4 sm:py-2.5 rounded-xl text-left transition-all cursor-pointer",
+                isActive
+                  ? "bg-white text-[#172033] shadow-xs border border-slate-200/80"
+                  : "text-slate-600 hover:text-[#172033] hover:bg-white/50"
               )}
-            </motion.span>
-          ))}
-        </AnimatePresence>
+            >
+              <div className="flex items-center gap-1.5 sm:gap-2.5 min-w-0">
+                <div
+                  className={cn(
+                    "w-5 h-5 sm:w-8 sm:h-8 rounded-md sm:rounded-lg flex items-center justify-center shrink-0 font-bold text-xs transition-colors",
+                    isActive
+                      ? "bg-[#0362D0] text-white"
+                      : isCompleted
+                      ? "bg-emerald-100 text-emerald-700"
+                      : "bg-slate-200 text-slate-600"
+                  )}
+                >
+                  {isCompleted && !isActive ? <Check size={12} /> : <Icon size={12} />}
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[11px] sm:text-xs font-bold leading-tight">
+                    <span className="sm:hidden">{item.shortTitle}</span>
+                    <span className="hidden sm:inline">{item.title}</span>
+                  </div>
+                  <div className="hidden sm:block text-[11px] text-slate-500 truncate">{item.subtitle}</div>
+                </div>
+              </div>
+              <span
+                className={cn(
+                  "text-[10px] sm:text-[11px] font-bold tabular-nums shrink-0",
+                  isActive ? "text-[#0362D0]" : isCompleted ? "text-emerald-700" : "text-slate-500"
+                )}
+              >
+                {item.metric}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
-      {/* Banner Peringatan Hari Libur Terkonfirmasi */}
+      {/* 4. DESKTOP LIVE ATTENDANCE & GRADING STATS BAR (Hidden on mobile so student cards appear immediately above the fold) */}
+      <div className="hidden md:grid bg-white rounded-2xl p-4 border border-slate-200 grid-cols-1 lg:grid-cols-12 gap-4 items-center">
+        {/* Left: 4 Interactive Status Pills + Progress Bar */}
+        <div className="lg:col-span-7 space-y-2">
+          <div className="flex items-center justify-between text-xs">
+            <span className="font-bold text-[#172033]">
+              Rekap Presensi ({sessionStats.total} Santri)
+            </span>
+            <span className="font-bold text-emerald-700 tabular-nums">
+              {sessionStats.hadirPercent}% Hadir
+            </span>
+          </div>
+
+          <div className="grid grid-cols-4 gap-2">
+            {[
+              { label: 'Hadir', count: sessionStats.hadir, bg: 'bg-emerald-50/80 border-emerald-200 text-emerald-800', activeBg: 'bg-emerald-100 border-emerald-500 ring-1 ring-emerald-500/30', numColor: 'text-emerald-700' },
+              { label: 'Izin', count: sessionStats.izin, bg: 'bg-amber-50/80 border-amber-200 text-amber-800', activeBg: 'bg-amber-100 border-amber-500 ring-1 ring-amber-500/30', numColor: 'text-amber-700' },
+              { label: 'Sakit', count: sessionStats.sakit, bg: 'bg-blue-50/80 border-blue-200 text-blue-800', activeBg: 'bg-blue-100 border-blue-500 ring-1 ring-blue-500/30', numColor: 'text-blue-700' },
+              { label: 'Alpa', count: sessionStats.alpa, bg: 'bg-rose-50/80 border-rose-200 text-rose-800', activeBg: 'bg-rose-100 border-rose-500 ring-1 ring-rose-500/30', numColor: 'text-rose-700' }
+            ].map(st => (
+              <button
+                key={st.label}
+                type="button"
+                onClick={() => {
+                  setActiveStep(1);
+                  setAttendanceFilter(prev => prev === st.label ? 'ALL' : st.label);
+                }}
+                className={cn(
+                  "px-2.5 py-1.5 rounded-xl border flex items-center justify-between transition-all cursor-pointer",
+                  attendanceFilter === st.label ? st.activeBg : st.bg
+                )}
+                title={`Klik untuk filter santri ${st.label}`}
+              >
+                <span className="text-xs font-bold">{st.label}</span>
+                <span className={cn("text-sm font-black tabular-nums", st.numColor)}>{st.count}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Right: Grading Progress & Class Average */}
+        <div className="lg:col-span-5 lg:border-l lg:border-slate-200 lg:pl-4 pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-100 space-y-1.5">
+          <div className="flex items-center justify-between text-xs">
+            <span className="font-bold text-[#172033]">Progres Nilai KBM</span>
+            <span className="font-bold text-[#0362D0] tabular-nums">
+              {sessionStats.scoredPresent}/{sessionStats.hadir} Santri Hadir ({sessionStats.scoredPercent}%)
+            </span>
+          </div>
+
+          <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+            <div
+              style={{ width: `${sessionStats.scoredPercent}%` }}
+              className="h-full bg-[#0362D0] transition-all duration-300 rounded-full"
+            />
+          </div>
+
+          <div className="flex items-center justify-between text-[11px] text-slate-600">
+            <span>
+              Rata-rata Kelas: <strong className="text-[#172033] tabular-nums">{sessionStats.avgScore > 0 ? sessionStats.avgScore : '-'}</strong>
+            </span>
+            {sessionStats.hadir === 0 ? (
+              <span className="text-amber-700 font-semibold">Tandai Hadir dulu</span>
+            ) : sessionStats.scoredPresent === sessionStats.hadir ? (
+              <span className="text-emerald-700 font-bold">Semua dinilai ✓</span>
+            ) : (
+              <span className="text-slate-500 tabular-nums">
+                Sisa {sessionStats.hadir - sessionStats.scoredPresent} belum dinilai
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Holiday Warning Banner */}
       {activeHoliday && (
-        <div className="p-4 bg-amber-50 border border-amber-300 rounded-3xl flex items-start gap-3.5 text-amber-950 shadow-xs animate-in fade-in">
+        <div className="p-4 bg-amber-50 border border-amber-300 rounded-2xl flex items-start gap-3.5 text-amber-950">
           <div className="w-8 h-8 rounded-xl bg-amber-100 border border-amber-200 flex items-center justify-center shrink-0 text-amber-800">
             <CalendarOff size={18} />
           </div>
           <div className="flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="font-black text-[11px] uppercase tracking-wider bg-amber-200/90 text-amber-950 px-2 py-0.5 rounded-md border border-amber-300">
-                Sesi Diliburkan Admin
-              </span>
-              <span className="font-bold text-xs text-amber-900">
-                &ldquo;{activeHoliday.reason}&rdquo;
-              </span>
+            <div className="font-bold text-xs text-amber-950">
+              Sesi Diliburkan Admin · &ldquo;{activeHoliday.reason}&rdquo;
             </div>
-            <p className="text-xs text-slate-600 mt-1.5 leading-relaxed">
-              Tanggal ini telah ditandai sebagai hari libur resmi oleh Admin. Pembelajaran KBM dan presensi ditiadakan dan tidak diperhitungkan dalam evaluasi kehadiran santri. Sesi pertemuan telah otomatis digeser ke Sabtu berikutnya di Kalender Akademik.
+            <p className="text-xs text-slate-600 mt-1">
+              Tanggal ini ditandai sebagai hari libur resmi. Pembelajaran KBM dan presensi ditiadakan dan telah digeser otomatis ke pekan berikutnya.
             </p>
           </div>
         </div>
       )}
 
-      {/* Main Student List with Smooth Transition */}
+      {/* 5. WIZARD STEP CONTENT VIEWPORT */}
       <AnimatePresence mode="wait">
-        <motion.div 
-          key={`session_${meetingNumber}_${selectedSessionIds.join('_')}`}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -10 }}
-          transition={{ duration: 0.22, ease: "easeOut" }}
-          className="bg-white rounded-3xl border border-slate-100 shadow-xs overflow-hidden"
-        >
-          <div className="p-4 sm:p-5 border-b border-slate-100 bg-slate-50 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-            <div>
-              <div className="flex flex-wrap items-center gap-2 mb-1">
-                <h3 className="font-extrabold text-[#172033] text-sm sm:text-base">Daftar Santri & Evaluasi KBM</h3>
-                <span className="text-[10px] font-bold bg-[#0362D0]/10 text-[#0362D0] px-2.5 py-0.5 rounded-full border border-[#0362D0]/20">
-                  Materi: {currentGradeObj.programName}
-                </span>
+        {activeStep === 1 && (
+          <motion.div
+            key="wizard-step-1-attendance"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.16 }}
+            className="bg-white rounded-2xl border border-slate-200 overflow-hidden"
+          >
+            {/* Step 1 Compact Toolbar Above Student Cards ("Bagian Atas Daftar Kartu Siswa") */}
+            <div className="p-3 sm:p-4 border-b border-slate-200 bg-slate-50/70 space-y-2">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex items-center justify-between gap-2">
+                  <h2 className="text-xs sm:text-base font-bold text-[#172033]">
+                    Presensi Kehadiran ({sessionStats.hadir}/{sessionStats.total} Hadir)
+                  </h2>
+                  {/* Mobile Inline Status Summary Pills */}
+                  <div className="flex md:hidden items-center gap-1 text-[10px] font-bold tabular-nums">
+                    <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">H:{sessionStats.hadir}</span>
+                    <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">I:{sessionStats.izin}</span>
+                    <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-800">S:{sessionStats.sakit}</span>
+                    <span className="px-1.5 py-0.5 rounded bg-rose-100 text-rose-800">A:{sessionStats.alpa}</span>
+                  </div>
+                </div>
+
+                {/* Single-Row Quick Action Buttons */}
+                <div className="grid grid-cols-4 sm:flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setAllAttendance('Hadir')}
+                    className="px-2.5 py-1.5 bg-emerald-600 text-white rounded-xl text-[11px] sm:text-xs font-bold hover:bg-emerald-700 transition-colors cursor-pointer inline-flex items-center justify-center gap-1 whitespace-nowrap"
+                  >
+                    <Check size={12} /> Hadir Semua
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowScanner(true)}
+                    className="px-2.5 py-1.5 bg-[#172033] text-white rounded-xl text-[11px] sm:text-xs font-bold hover:bg-slate-800 transition-colors cursor-pointer inline-flex items-center justify-center gap-1 whitespace-nowrap"
+                  >
+                    <Camera size={12} /> Scan QR
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAllAttendance('Alpa')}
+                    className="px-2 py-1.5 bg-white text-rose-700 border border-rose-200 rounded-xl text-[11px] sm:text-xs font-bold hover:bg-rose-50 transition-colors cursor-pointer inline-flex items-center justify-center gap-1 whitespace-nowrap"
+                  >
+                    <X size={12} /> Reset
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsAddStudentOpen(true)}
+                    className="px-2 py-1.5 bg-white text-[#0362D0] border border-[#0362D0]/30 rounded-xl text-[11px] sm:text-xs font-bold hover:bg-blue-50 transition-colors cursor-pointer inline-flex items-center justify-center gap-1 whitespace-nowrap"
+                  >
+                    <PlusCircle size={12} /> + Santri
+                  </button>
+                </div>
               </div>
-              <p className="text-xs text-slate-500">
-                Pertemuan Ke-<strong>{meetingNumber}</strong> • Target: <strong className="text-[#172033]">{selectedTahapObjects.map(s => `Tahap ${s.sessionNumber}`).join(', ')}</strong> • {currentGradeId === 'grade3' ? 'Penilaian tahsin & hafalan Juz 30' : 'Materi seragam tilawati & tajwid'}
-              </p>
-            </div>
 
-            <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
-              {/* Search Filter */}
-              <div className="relative flex-1 sm:w-56 min-w-[180px]">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Cari nama / NIS..."
-                  value={studentSearch}
-                  onChange={(e) => setStudentSearch(e.target.value)}
-                  className="w-full pl-8 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-[#172033] placeholder:text-slate-400 focus:ring-2 focus:ring-[#0362D0] outline-none"
-                />
-              </div>
+              {/* Search & Status Filter Strip */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5 sm:gap-2">
+                <div className="relative flex-1">
+                  <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Cari nama atau NIS santri..."
+                    value={studentSearch}
+                    onChange={(e) => setStudentSearch(e.target.value)}
+                    className="w-full pl-8 pr-3 py-1 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-[#172033] placeholder:text-slate-400 focus:ring-2 focus:ring-[#0362D0] outline-none h-8 sm:h-9"
+                  />
+                </div>
 
-              {/* Tombol Tambah Santri Kelompok Binaan */}
-              <button
-                type="button"
-                onClick={() => setIsAddStudentOpen(true)}
-                className="px-3.5 py-2 bg-[#0362D0] hover:bg-[#0250AA] text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs hover:shadow-sm"
-                title="Tambah santri baru khusus ke kelompok binaan ini"
-              >
-                <PlusCircle size={15} />
-                <span className="whitespace-nowrap">Tambah Santri</span>
-              </button>
-
-              <button 
-                onClick={() => setShowScanner(true)} 
-                className="px-3.5 py-2 bg-[#172033] text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition-colors cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
-              >
-                <Camera size={14} /> Scan
-              </button>
-              <button 
-                onClick={() => setAllAttendance('Hadir')} 
-                className="px-3.5 py-2 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-bold hover:bg-emerald-100 transition-colors cursor-pointer flex items-center justify-center gap-1"
-                title="Tandai semua santri hadir"
-              >
-                <Check size={14} /> Semua Hadir
-              </button>
-              <button 
-                onClick={() => setAllAttendance('Alpa')} 
-                className="px-3.5 py-2 bg-rose-50 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold hover:bg-rose-100 transition-colors cursor-pointer flex items-center justify-center gap-1"
-                title="Tandai semua santri Alpa (default tidak hadir)"
-              >
-                <X size={14} /> Semua Alpa
-              </button>
-            </div>
-          </div>
-
-          {loading ? (
-            <div className="p-6">
-              <StudentTableSkeleton rowCount={6} variant="attendance" />
-            </div>
-          ) : students.length === 0 ? (
-            <div className="p-16 text-center text-slate-500">
-              <Users size={40} className="mx-auto mb-3 text-slate-300" />
-              <h4 className="text-base font-extrabold text-[#172033]">Belum ada santri di kelompok ini</h4>
-              <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-                Silakan tambahkan santri binaan baru untuk kelompok ini langsung dari sesi mengajar.
-              </p>
-              <button
-                type="button"
-                onClick={() => setIsAddStudentOpen(true)}
-                className="mt-4 px-4 py-2.5 bg-[#0362D0] hover:bg-[#0250AA] text-white rounded-xl text-xs font-bold transition-all inline-flex items-center gap-2 shadow-xs cursor-pointer"
-              >
-                <PlusCircle size={15} />
-                <span>+ Tambah Santri Pertama</span>
-              </button>
-            </div>
-          ) : (
-            <div className="p-4 sm:p-5 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {students
-                .filter(st => {
-                  if (!studentSearch.trim()) return true;
-                  const query = studentSearch.toLowerCase();
-                  return st.name.toLowerCase().includes(query) || (st.nis && st.nis.toLowerCase().includes(query));
-                })
-                .map((student, idx) => {
-                  const currentStatus = attendance[student.id]?.status || 'Alpa';
-                  const p = progress[student.id] || {};
-                  const isHadir = currentStatus === 'Hadir';
-                  const scoreTotal = p.total ?? (isHadir ? 80 : 0);
-
-                  const scoreBadge = !isHadir 
-                    ? { label: currentStatus, color: 'bg-slate-100 text-slate-600 border-slate-200' }
-                    : scoreTotal >= 85 
-                    ? { label: `${scoreTotal}% • Sangat Baik`, color: 'bg-emerald-50 text-emerald-700 border-emerald-200' }
-                    : scoreTotal >= 75
-                    ? { label: `${scoreTotal}% • Baik`, color: 'bg-[#0362D0]/10 text-[#0362D0] border-[#0362D0]/20' }
-                    : { label: `${scoreTotal}% • Perlu Bimbingan`, color: 'bg-rose-50 text-rose-700 border-rose-200' };
-
-                  return (
-                    <div 
-                      key={student.id} 
+                <div className="grid grid-cols-5 sm:inline-flex items-center bg-slate-200/70 p-0.5 rounded-xl text-[11px] sm:text-xs">
+                  {(['ALL', 'Hadir', 'Izin', 'Sakit', 'Alpa'] as const).map(st => (
+                    <button
+                      key={st}
+                      type="button"
+                      onClick={() => setAttendanceFilter(st)}
                       className={cn(
-                        "p-4 rounded-2xl border transition-all duration-200 flex flex-col justify-between gap-3 bg-white",
-                        isHadir ? "border-slate-200/80 shadow-2xs hover:shadow-md hover:border-[#0362D0]/40" : "border-slate-100 bg-slate-50/60 opacity-80"
+                        "px-2 py-1 rounded-lg font-bold transition-colors cursor-pointer text-center whitespace-nowrap",
+                        attendanceFilter === st
+                          ? "bg-white text-[#172033] shadow-2xs"
+                          : "text-slate-600 hover:text-[#172033]"
                       )}
                     >
-                      {/* Top: Student Info & Quick WA */}
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-center gap-3">
-                          <div className={cn(
-                            "w-9 h-9 rounded-xl flex items-center justify-center font-black text-xs shrink-0",
-                            isHadir ? "bg-[#0362D0]/10 text-[#0362D0]" : "bg-slate-200 text-slate-500"
-                          )}>
-                            {idx + 1}
-                          </div>
-                          <div>
-                            <h4 className="font-black text-[#172033] text-sm leading-tight line-clamp-1">
-                              {student.name}
-                            </h4>
-                            <div className="flex items-center gap-2 mt-0.5">
-                              <span className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded-md text-[10px] font-black border border-slate-200">
-                                Kelas {student.class}
-                              </span>
-                              <span className="text-[10px] text-slate-400 font-semibold">
-                                {student.nis ? `NIS ${student.nis}` : 'Santri Aktif'}
-                              </span>
+                      {st === 'ALL' ? 'Semua' : st}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {loading ? (
+              <div className="p-6">
+                <StudentTableSkeleton rowCount={6} variant="attendance" />
+              </div>
+            ) : students.length === 0 ? (
+              <div className="p-12 text-center text-slate-500">
+                <Users size={36} className="mx-auto mb-3 text-slate-300" />
+                <h4 className="text-sm font-bold text-[#172033]">Belum ada santri di kelompok ini</h4>
+                <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+                  Tambahkan santri binaan baru ke kelompok ini untuk mulai mencatat presensi dan nilai.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setIsAddStudentOpen(true)}
+                  className="mt-4 px-4 py-2 bg-[#0362D0] hover:bg-[#0250AA] text-white rounded-xl text-xs font-bold transition-all inline-flex items-center gap-2 cursor-pointer"
+                >
+                  <PlusCircle size={15} />
+                  <span>Tambah Santri Pertama</span>
+                </button>
+              </div>
+            ) : (
+              <>
+                {/* MOBILE STUDENT CARDS FOR STEP 1 (md:hidden) */}
+                <div className="md:hidden p-2.5 space-y-2.5 bg-slate-50/60">
+                  {filteredAttendanceStudents.map((student, idx) => {
+                    const currentStatus = attendance[student.id]?.status || 'Alpa';
+                    const isHadir = currentStatus === 'Hadir';
+                    const noteVal = progress[student.id]?.notes || attendance[student.id]?.notes || '';
+
+                    const borderAccent =
+                      currentStatus === 'Hadir' ? 'border-l-emerald-600' :
+                      currentStatus === 'Izin' ? 'border-l-amber-500' :
+                      currentStatus === 'Sakit' ? 'border-l-blue-600' : 'border-l-rose-500';
+
+                    const statusBadgeStyle =
+                      currentStatus === 'Hadir' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' :
+                      currentStatus === 'Izin' ? 'bg-amber-50 text-amber-800 border-amber-200' :
+                      currentStatus === 'Sakit' ? 'bg-blue-50 text-blue-800 border-blue-200' : 'bg-rose-50 text-rose-800 border-rose-200';
+
+                    return (
+                      <div
+                        key={student.id}
+                        className={cn(
+                          "bg-white rounded-xl border border-slate-200 border-l-4 p-3 shadow-2xs space-y-2.5 transition-all",
+                          borderAccent
+                        )}
+                      >
+                        {/* BAGIAN ATAS KARTU SISWA (Eye-Catching Tinted Card Header) */}
+                        <div className="bg-slate-50/90 -mx-3 -mt-3 px-3 py-2 rounded-t-xl border-b border-slate-100 flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="w-6 h-6 rounded-lg bg-[#172033] text-white font-black text-[11px] flex items-center justify-center shrink-0 tabular-nums">
+                              {idx + 1}
+                            </span>
+                            <div className="min-w-0">
+                              <div className="font-bold text-[#172033] text-xs leading-snug truncate">
+                                {student.name}
+                              </div>
+                              <div className="text-[10px] text-slate-500 tabular-nums">
+                                Kelas {student.class} · {student.nis ? `NIS ${student.nis}` : 'Aktif'}
+                              </div>
                             </div>
                           </div>
+
+                          {/* Right of Card Header: Active Status Badge + WA & Manage Icons */}
+                          <div className="flex items-center gap-1 shrink-0">
+                            <span className={cn("px-2 py-0.5 rounded-md text-[10px] font-bold border", statusBadgeStyle)}>
+                              {currentStatus}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleSendWA(student, currentStatus, progress[student.id])}
+                              className="p-1.5 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors cursor-pointer"
+                              title="Kirim WA ke Orang Tua"
+                            >
+                              <MessageCircle size={13} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setActionStudent(student)}
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                              title="Kelola Santri"
+                            >
+                              <UserMinus size={13} />
+                            </button>
+                          </div>
                         </div>
 
-                        <div className="flex items-center gap-1 shrink-0">
-                          <button
-                            onClick={() => handleSendWA(student, currentStatus, p)}
-                            className="p-2 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-xl transition-colors cursor-pointer"
-                            title="Kirim Laporan WA ke Wali Santri"
-                          >
-                            <MessageCircle size={15} />
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => setActionStudent(student)}
-                            className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
-                            title="Kelola / Hapus Santri dari Kelompok Ini"
-                          >
-                            <UserMinus size={15} />
-                          </button>
+                        {/* 4-Column Thumb-Friendly Status Buttons */}
+                        <div className="grid grid-cols-4 gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200/70">
+                          {[
+                            { label: 'Hadir', active: 'bg-emerald-600 text-white shadow-2xs' },
+                            { label: 'Izin', active: 'bg-amber-500 text-white shadow-2xs' },
+                            { label: 'Sakit', active: 'bg-blue-600 text-white shadow-2xs' },
+                            { label: 'Alpa', active: 'bg-rose-600 text-white shadow-2xs' }
+                          ].map(opt => (
+                            <button
+                              key={opt.label}
+                              type="button"
+                              onClick={() => handleAttendanceChange(student.id, opt.label)}
+                              className={cn(
+                                "py-1.5 px-2 text-xs font-bold rounded-lg transition-all text-center cursor-pointer",
+                                currentStatus === opt.label
+                                  ? opt.active
+                                  : "text-slate-600 hover:text-[#172033]"
+                              )}
+                            >
+                              {opt.label}
+                            </button>
+                          ))}
                         </div>
+
+                        {/* Compact Note Input */}
+                        <input
+                          type="text"
+                          placeholder={isHadir ? "Catatan kehadiran / evaluasi singkat..." : `Keterangan alasan ${currentStatus.toLowerCase()}...`}
+                          value={noteVal}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            handleProgressChange(student.id, 'notes', val);
+                            setAttendance(prev => ({
+                              ...prev,
+                              [student.id]: { ...prev[student.id], notes: val }
+                            }));
+                          }}
+                          className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-[#172033] placeholder:text-slate-400 focus:bg-white focus:border-[#0362D0] outline-none"
+                        />
                       </div>
+                    );
+                  })}
+                </div>
 
-                      {/* Segmented Control for Attendance */}
-                      <div className="bg-slate-100/80 p-1 rounded-xl flex items-center gap-1 border border-slate-200/50">
-                        {[
-                          { label: 'Hadir', active: 'bg-emerald-600 text-white shadow-2xs' },
-                          { label: 'Izin', active: 'bg-amber-500 text-white shadow-2xs' },
-                          { label: 'Sakit', active: 'bg-blue-600 text-white shadow-2xs' },
-                          { label: 'Alpa', active: 'bg-rose-600 text-white shadow-2xs' }
-                        ].map(opt => (
-                          <button
-                            key={opt.label}
-                            onClick={() => handleAttendanceChange(student.id, opt.label)}
+                {/* DESKTOP COMPACT TABLE FOR STEP 1 (hidden md:block) */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-200 bg-slate-50/80 text-[11px] font-bold text-slate-500">
+                        <th className="py-3 px-4 w-12 text-center">#</th>
+                        <th className="py-3 px-4 min-w-[200px]">Nama Santri</th>
+                        <th className="py-3 px-4 w-72 text-center">Status Kehadiran</th>
+                        <th className="py-3 px-4 min-w-[220px]">Keterangan / Catatan Singkat</th>
+                        <th className="py-3 px-4 w-24 text-right">Aksi</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-xs">
+                      {filteredAttendanceStudents.map((student, idx) => {
+                        const currentStatus = attendance[student.id]?.status || 'Alpa';
+                        const isHadir = currentStatus === 'Hadir';
+                        const noteVal = progress[student.id]?.notes || attendance[student.id]?.notes || '';
+
+                        return (
+                          <tr
+                            key={student.id}
                             className={cn(
-                              "flex-1 py-1 text-xs font-black rounded-lg transition-all text-center cursor-pointer",
-                              currentStatus === opt.label 
-                                ? opt.active 
-                                : "text-slate-500 hover:text-slate-800"
+                              "transition-colors hover:bg-slate-50/80",
+                              isHadir ? "bg-white" : "bg-slate-50/40"
                             )}
                           >
-                            {opt.label}
-                          </button>
-                        ))}
-                      </div>
+                            <td className="py-2.5 px-4 text-center font-bold text-slate-400 tabular-nums">
+                              {idx + 1}
+                            </td>
+                            <td className="py-2.5 px-4">
+                              <div className="font-bold text-[#172033] text-xs sm:text-sm">
+                                {student.name}
+                              </div>
+                              <div className="text-[11px] text-slate-500 tabular-nums">
+                                Kelas {student.class} · {student.nis ? `NIS ${student.nis}` : 'Aktif'}
+                              </div>
+                            </td>
+                            <td className="py-2.5 px-4">
+                              <div className="bg-slate-100 p-1 rounded-xl flex items-center gap-1 border border-slate-200/70 max-w-[280px] mx-auto">
+                                {[
+                                  { label: 'Hadir', active: 'bg-emerald-600 text-white' },
+                                  { label: 'Izin', active: 'bg-amber-500 text-white' },
+                                  { label: 'Sakit', active: 'bg-blue-600 text-white' },
+                                  { label: 'Alpa', active: 'bg-rose-600 text-white' }
+                                ].map(opt => (
+                                  <button
+                                    key={opt.label}
+                                    type="button"
+                                    onClick={() => handleAttendanceChange(student.id, opt.label)}
+                                    className={cn(
+                                      "flex-1 py-1.5 px-2 text-xs font-bold rounded-lg transition-all text-center cursor-pointer whitespace-nowrap",
+                                      currentStatus === opt.label
+                                        ? opt.active
+                                        : "text-slate-600 hover:text-[#172033]"
+                                    )}
+                                  >
+                                    {opt.label}
+                                  </button>
+                                ))}
+                              </div>
+                            </td>
+                            <td className="py-2.5 px-4">
+                              <input
+                                type="text"
+                                placeholder={isHadir ? "Catatan kehadiran / evaluasi..." : `Alasan ${currentStatus.toLowerCase()}...`}
+                                value={noteVal}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  handleProgressChange(student.id, 'notes', val);
+                                  setAttendance(prev => ({
+                                    ...prev,
+                                    [student.id]: { ...prev[student.id], notes: val }
+                                  }));
+                                }}
+                                className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-[#172033] placeholder:text-slate-400 focus:bg-white focus:border-[#0362D0] outline-none"
+                              />
+                            </td>
+                            <td className="py-2.5 px-4 text-right">
+                              <div className="inline-flex items-center justify-end gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleSendWA(student, currentStatus, progress[student.id])}
+                                  className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
+                                  title="Kirim WA ke Orang Tua"
+                                >
+                                  <MessageCircle size={15} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setActionStudent(student)}
+                                  className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                                  title="Kelola / Nonaktifkan Santri"
+                                >
+                                  <UserMinus size={15} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </motion.div>
+        )}
 
-                      {/* Score Inputs, Juz 30 Surah, & Student Notes Directly on Card */}
-                      {isHadir ? (
-                        <div className="pt-2.5 border-t border-slate-100 flex flex-col gap-3">
-                          {/* Header Nilai & Status Evaluasi */}
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1">
-                              <Sparkles size={11} className="text-[#0362D0]" /> Input Nilai KBM
+        {activeStep === 2 && (
+          <motion.div
+            key="wizard-step-2-grading"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.16 }}
+            className="bg-white rounded-2xl border border-slate-200 overflow-hidden"
+          >
+            {/* Step 2 Compact Toolbar Above Student Cards ("Bagian Atas Daftar Kartu Siswa") */}
+            <div className="p-3 sm:p-4 border-b border-slate-200 bg-slate-50/70 space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-xs sm:text-base font-bold text-[#172033]">
+                    Input Nilai KBM
+                  </h2>
+                  <span className="px-2 py-0.5 rounded-md bg-blue-50 text-[#0362D0] border border-blue-200 text-[10px] sm:text-xs font-bold tabular-nums">
+                    {sessionStats.scoredPresent}/{sessionStats.hadir} Dinilai {sessionStats.avgScore > 0 ? `· Rerata ${sessionStats.avgScore}` : ''}
+                  </span>
+                </div>
+
+                {/* Quick Fill Unscored Baseline */}
+                <div className="inline-flex items-center gap-1.5 bg-white border border-slate-200 px-2.5 py-1 rounded-xl text-[11px] sm:text-xs">
+                  <span className="text-slate-600 font-semibold whitespace-nowrap">Isi Nilai Awal:</span>
+                  <div className="flex items-center gap-1">
+                    {[75, 80, 85].map(val => (
+                      <button
+                        key={val}
+                        type="button"
+                        onClick={() => applyBaselineScoreToUnscored(val)}
+                        className="px-2 py-0.5 rounded-md bg-slate-100 hover:bg-[#0362D0] hover:text-white text-[#172033] font-bold tabular-nums transition-colors cursor-pointer"
+                        title={`Isi nilai awal ${val} untuk santri hadir yang belum dinilai`}
+                      >
+                        {val}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Combined Search + Filter Strip (Single row on mobile & desktop!) */}
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <div className="relative flex-1 min-w-0">
+                  <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Cari santri..."
+                    value={studentSearch}
+                    onChange={(e) => setStudentSearch(e.target.value)}
+                    className="w-full pl-7 pr-2.5 py-1 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-[#172033] placeholder:text-slate-400 focus:ring-2 focus:ring-[#0362D0] outline-none h-8 sm:h-9"
+                  />
+                </div>
+
+                <div className="inline-flex items-center bg-slate-200/70 p-0.5 rounded-xl text-[11px] sm:text-xs shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setShowOnlyPresentInGrading(true)}
+                    className={cn(
+                      "px-2.5 py-1 rounded-lg font-bold transition-colors cursor-pointer whitespace-nowrap text-center",
+                      showOnlyPresentInGrading
+                        ? "bg-white text-[#172033] shadow-2xs"
+                        : "text-slate-600 hover:text-[#172033]"
+                    )}
+                  >
+                    Hadir ({sessionStats.hadir})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowOnlyPresentInGrading(false)}
+                    className={cn(
+                      "px-2.5 py-1 rounded-lg font-bold transition-colors cursor-pointer whitespace-nowrap text-center",
+                      !showOnlyPresentInGrading
+                        ? "bg-white text-[#172033] shadow-2xs"
+                        : "text-slate-600 hover:text-[#172033]"
+                    )}
+                  >
+                    Semua ({sessionStats.total})
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {sessionStats.hadir === 0 && showOnlyPresentInGrading ? (
+              <div className="p-10 sm:p-12 text-center">
+                <UserCheck size={36} className="mx-auto mb-3 text-amber-500" />
+                <h4 className="text-sm font-bold text-[#172033]">Belum Ada Santri Berstatus Hadir</h4>
+                <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
+                  Silakan tandai kehadiran santri pada Langkah 1 terlebih dahulu, atau klik tombol di bawah untuk menandai semua santri hadir.
+                </p>
+                <div className="mt-4 flex flex-wrap items-center justify-center gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setActiveStep(1)}
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-[#172033] rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                  >
+                    ← Ke Langkah 1 (Presensi)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAllAttendance('Hadir')}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                  >
+                    Tandai Semua Hadir Sekarang
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                {/* MOBILE STUDENT CARDS FOR STEP 2 (md:hidden) */}
+                <div className="md:hidden p-2.5 space-y-2.5 bg-slate-50/60">
+                  {filteredGradingStudents.map((student, idx) => {
+                    const currentStatus = attendance[student.id]?.status || 'Alpa';
+                    const isHadir = currentStatus === 'Hadir';
+                    const p = progress[student.id] || {};
+                    const totalScore = p.total || 0;
+
+                    const gradeText = !isHadir
+                      ? currentStatus
+                      : totalScore >= 85
+                      ? 'Sangat Baik'
+                      : totalScore >= 75
+                      ? 'Baik'
+                      : totalScore > 0
+                      ? 'Bimbingan'
+                      : 'Belum Dinilai';
+
+                    const borderAccent = !isHadir
+                      ? 'border-l-slate-300 opacity-75'
+                      : totalScore >= 85
+                      ? 'border-l-emerald-600'
+                      : totalScore >= 75
+                      ? 'border-l-[#0362D0]'
+                      : totalScore > 0
+                      ? 'border-l-rose-600'
+                      : 'border-l-amber-500';
+
+                    const scoreBadgeClass = !isHadir
+                      ? 'bg-slate-100 text-slate-500 border-slate-200'
+                      : totalScore >= 85
+                      ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                      : totalScore >= 75
+                      ? 'bg-blue-50 text-[#0362D0] border-blue-200'
+                      : totalScore > 0
+                      ? 'bg-rose-50 text-rose-800 border-rose-200'
+                      : 'bg-amber-50 text-amber-800 border-amber-200';
+
+                    return (
+                      <div
+                        key={student.id}
+                        className={cn(
+                          "bg-white rounded-xl border border-slate-200 border-l-4 p-3 shadow-2xs space-y-2.5",
+                          borderAccent
+                        )}
+                      >
+                        {/* BAGIAN ATAS KARTU SISWA (Eye-Catching Tinted Card Header) */}
+                        <div className="bg-slate-50/90 -mx-3 -mt-3 px-3 py-2 rounded-t-xl border-b border-slate-100 flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="w-6 h-6 rounded-lg bg-[#172033] text-white font-black text-[11px] flex items-center justify-center shrink-0 tabular-nums">
+                              {idx + 1}
                             </span>
-                            <span className={cn("px-2 py-0.5 rounded-lg text-[10px] font-black border shadow-2xs", scoreBadge.color)}>
-                              {scoreBadge.label}
-                            </span>
+                            <div className="min-w-0">
+                              <div className="font-bold text-[#172033] text-xs leading-snug truncate">
+                                {student.name}
+                              </div>
+                              <div className="text-[10px] text-slate-500 tabular-nums">
+                                Kelas {student.class} · <span className={isHadir ? "text-emerald-700 font-semibold" : "text-rose-600 font-semibold"}>{currentStatus}</span>
+                              </div>
+                            </div>
                           </div>
 
-                          {/* 4 Komponen Nilai Angka Langsung */}
-                          <div className="grid grid-cols-4 gap-1.5 text-center">
-                            {/* 1. Tajwid */}
-                            <div className="p-1.5 bg-amber-50/60 rounded-xl border border-amber-200/80 flex flex-col">
-                              <span className="text-[9px] text-amber-900 font-extrabold uppercase mb-1">Tajwid</span>
+                          {/* Right of Card Header: Prominent Average Score Pill + Rubric Drawer & WA */}
+                          <div className="flex items-center gap-1 shrink-0">
+                            <div className={cn("px-2 py-0.5 rounded-lg border text-right tabular-nums", scoreBadgeClass)}>
+                              <span className="text-[11px] font-black block leading-tight">
+                                {isHadir && totalScore > 0 ? `${totalScore}/100` : '-'}
+                              </span>
+                              <span className="text-[9px] font-bold block leading-tight">
+                                {gradeText}
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedStudentForDrawer(student)}
+                              className="p-1.5 bg-white border border-slate-200 hover:bg-blue-50 text-slate-700 hover:text-[#0362D0] rounded-lg transition-colors cursor-pointer"
+                              title="Buka Slider Rubrik Detail"
+                            >
+                              <Sliders size={13} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleSendWA(student, currentStatus, p)}
+                              className="p-1.5 bg-emerald-50 border border-emerald-200/70 hover:bg-emerald-100 text-emerald-700 rounded-lg transition-colors cursor-pointer"
+                              title="Kirim Laporan via WA"
+                            >
+                              <MessageCircle size={13} />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* 4-COLUMN DIRECT NUMERIC SCORE GRID (Fits 100% on 390px phone!) */}
+                        <div className="grid grid-cols-4 gap-1.5">
+                          {[
+                            { field: 'tajwid' as const, label: 'Tajwid', val: p.tajwid },
+                            { field: 'reading' as const, label: 'Baca', val: p.reading },
+                            { field: 'writing' as const, label: 'Tulis', val: p.writing },
+                            { field: 'memorization' as const, label: 'Hafalan', val: p.memorization }
+                          ].map(item => (
+                            <div key={item.field} className="bg-slate-50 border border-slate-200/80 rounded-lg p-1.5 text-center">
+                              <label className="block text-[10px] font-bold text-slate-500 mb-1">
+                                {item.label}
+                              </label>
                               <input
                                 type="number"
                                 min="0"
                                 max="100"
+                                disabled={!isHadir}
+                                placeholder="0"
+                                value={item.val ?? ''}
+                                onChange={(e) => {
+                                  const val = e.target.value === '' ? 0 : Math.min(100, Math.max(0, parseInt(e.target.value) || 0));
+                                  handleProgressChange(student.id, item.field, val);
+                                }}
+                                className="w-full h-8 text-center font-black text-xs rounded-md bg-white border border-slate-200 text-[#172033] focus:border-[#0362D0] focus:ring-1 focus:ring-[#0362D0] outline-none tabular-nums disabled:opacity-50"
+                              />
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Setoran Juz 30 & Ayat Row */}
+                        <div className="grid grid-cols-12 gap-1.5">
+                          <select
+                            disabled={!isHadir}
+                            value={p.memorizedSurah || ''}
+                            onChange={(e) => handleProgressChange(student.id, 'memorizedSurah', e.target.value)}
+                            className="col-span-7 h-8 px-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-[#172033] focus:bg-white focus:border-[#0362D0] outline-none cursor-pointer disabled:opacity-50"
+                          >
+                            <option value="">- Setoran Surat Juz 30 -</option>
+                            {JUZ_30_SURAHS.map((s) => (
+                              <option key={s} value={s}>{s}</option>
+                            ))}
+                          </select>
+                          <input
+                            type="text"
+                            disabled={!isHadir}
+                            placeholder="Ayat (mis: 1-15)"
+                            value={p.ayatRange || ''}
+                            onChange={(e) => handleProgressChange(student.id, 'ayatRange', e.target.value)}
+                            className="col-span-5 h-8 px-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-[#172033] placeholder:text-slate-400 focus:bg-white focus:border-[#0362D0] outline-none disabled:opacity-50"
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* DESKTOP COMPACT SCORE TABLE FOR STEP 2 (hidden md:block) */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-200 bg-slate-50/80 text-[11px] font-bold text-slate-500">
+                        <th className="py-3 px-3 w-10 text-center">#</th>
+                        <th className="py-3 px-3 min-w-[180px]">Nama Santri</th>
+                        <th className="py-3 px-2 w-24 text-center">Tajwid</th>
+                        <th className="py-3 px-2 w-24 text-center">Baca</th>
+                        <th className="py-3 px-2 w-24 text-center">Tulis</th>
+                        <th className="py-3 px-2 w-24 text-center">Hafalan</th>
+                        <th className="py-3 px-3 min-w-[230px]">Setoran Juz 30 & Ayat</th>
+                        <th className="py-3 px-3 w-28 text-center">Rata-rata</th>
+                        <th className="py-3 px-3 w-24 text-right">Detail / WA</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-xs">
+                      {filteredGradingStudents.map((student, idx) => {
+                        const currentStatus = attendance[student.id]?.status || 'Alpa';
+                        const isHadir = currentStatus === 'Hadir';
+                        const p = progress[student.id] || {};
+                        const totalScore = p.total || 0;
+
+                        const gradeText = !isHadir
+                          ? currentStatus
+                          : totalScore >= 85
+                          ? 'Sangat Baik'
+                          : totalScore >= 75
+                          ? 'Baik'
+                          : totalScore > 0
+                          ? 'Bimbingan'
+                          : 'Belum';
+
+                        return (
+                          <tr
+                            key={student.id}
+                            className={cn(
+                              "transition-colors hover:bg-slate-50/90",
+                              !isHadir && "bg-slate-50/50 opacity-60"
+                            )}
+                          >
+                            <td className="py-2.5 px-3 text-center font-bold text-slate-400 tabular-nums">
+                              {idx + 1}
+                            </td>
+                            <td className="py-2.5 px-3">
+                              <div className="font-bold text-[#172033] truncate max-w-[200px]" title={student.name}>
+                                {student.name}
+                              </div>
+                              <div className="text-[11px] text-slate-500 tabular-nums">
+                                Kelas {student.class} · {isHadir ? 'Hadir' : currentStatus}
+                              </div>
+                            </td>
+
+                            {/* Tajwid */}
+                            <td className="py-2 px-2 text-center">
+                              <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                disabled={!isHadir}
                                 placeholder="0"
                                 value={p.tajwid ?? ''}
                                 onChange={(e) => {
                                   const val = e.target.value === '' ? 0 : Math.min(100, Math.max(0, parseInt(e.target.value) || 0));
                                   handleProgressChange(student.id, 'tajwid', val);
                                 }}
-                                className="w-full text-center font-black text-xs py-1 rounded-lg bg-white border border-amber-300 text-amber-950 focus:ring-1 focus:ring-amber-500 outline-none"
+                                className="w-16 h-9 text-center font-bold text-xs rounded-lg bg-slate-50 border border-slate-200 text-[#172033] focus:bg-white focus:border-[#0362D0] focus:ring-1 focus:ring-[#0362D0] outline-none tabular-nums disabled:opacity-50"
                               />
-                            </div>
+                            </td>
 
-                            {/* 2. Membaca */}
-                            <div className="p-1.5 bg-blue-50/60 rounded-xl border border-blue-200/80 flex flex-col">
-                              <span className="text-[9px] text-[#0362D0] font-extrabold uppercase mb-1">Baca</span>
+                            {/* Baca */}
+                            <td className="py-2 px-2 text-center">
                               <input
                                 type="number"
                                 min="0"
                                 max="100"
+                                disabled={!isHadir}
                                 placeholder="0"
                                 value={p.reading ?? ''}
                                 onChange={(e) => {
                                   const val = e.target.value === '' ? 0 : Math.min(100, Math.max(0, parseInt(e.target.value) || 0));
                                   handleProgressChange(student.id, 'reading', val);
                                 }}
-                                className="w-full text-center font-black text-xs py-1 rounded-lg bg-white border border-blue-300 text-[#0362D0] focus:ring-1 focus:ring-[#0362D0] outline-none"
+                                className="w-16 h-9 text-center font-bold text-xs rounded-lg bg-slate-50 border border-slate-200 text-[#172033] focus:bg-white focus:border-[#0362D0] focus:ring-1 focus:ring-[#0362D0] outline-none tabular-nums disabled:opacity-50"
                               />
-                            </div>
+                            </td>
 
-                            {/* 3. Menulis */}
-                            <div className="p-1.5 bg-slate-100/70 rounded-xl border border-slate-200/80 flex flex-col">
-                              <span className="text-[9px] text-slate-700 font-extrabold uppercase mb-1">Tulis</span>
+                            {/* Tulis */}
+                            <td className="py-2 px-2 text-center">
                               <input
                                 type="number"
                                 min="0"
                                 max="100"
+                                disabled={!isHadir}
                                 placeholder="0"
                                 value={p.writing ?? ''}
                                 onChange={(e) => {
                                   const val = e.target.value === '' ? 0 : Math.min(100, Math.max(0, parseInt(e.target.value) || 0));
                                   handleProgressChange(student.id, 'writing', val);
                                 }}
-                                className="w-full text-center font-black text-xs py-1 rounded-lg bg-white border border-slate-300 text-slate-900 focus:ring-1 focus:ring-slate-500 outline-none"
+                                className="w-16 h-9 text-center font-bold text-xs rounded-lg bg-slate-50 border border-slate-200 text-[#172033] focus:bg-white focus:border-[#0362D0] focus:ring-1 focus:ring-[#0362D0] outline-none tabular-nums disabled:opacity-50"
                               />
-                            </div>
+                            </td>
 
-                            {/* 4. Hafalan */}
-                            <div className="p-1.5 bg-emerald-50/60 rounded-xl border border-emerald-200/80 flex flex-col">
-                              <span className="text-[9px] text-emerald-900 font-extrabold uppercase mb-1">Hafal</span>
+                            {/* Hafalan */}
+                            <td className="py-2 px-2 text-center">
                               <input
                                 type="number"
                                 min="0"
                                 max="100"
+                                disabled={!isHadir}
                                 placeholder="0"
                                 value={p.memorization ?? ''}
                                 onChange={(e) => {
                                   const val = e.target.value === '' ? 0 : Math.min(100, Math.max(0, parseInt(e.target.value) || 0));
                                   handleProgressChange(student.id, 'memorization', val);
                                 }}
-                                className="w-full text-center font-black text-xs py-1 rounded-lg bg-white border border-emerald-300 text-emerald-950 focus:ring-1 focus:ring-emerald-500 outline-none"
+                                className="w-16 h-9 text-center font-bold text-xs rounded-lg bg-slate-50 border border-slate-200 text-[#172033] focus:bg-white focus:border-[#0362D0] focus:ring-1 focus:ring-[#0362D0] outline-none tabular-nums disabled:opacity-50"
                               />
-                            </div>
-                          </div>
+                            </td>
 
-                          {/* Setoran Hafalan Surat Juz 30 & Rentang Ayat */}
-                          <div className="p-2.5 bg-slate-50/90 rounded-xl border border-slate-200/70 space-y-2">
-                            <div className="flex items-center justify-between text-[11px] font-bold text-slate-700">
-                              <span className="flex items-center gap-1.5 text-[#172033]">
-                                <BookOpen size={12} className="text-emerald-600" />
-                                Setoran Surat (Juz 30)
-                              </span>
-                              {p.memorizedSurah && (
-                                <span className="text-[10px] text-emerald-700 font-extrabold">Terpilih</span>
-                              )}
-                            </div>
+                            {/* Setoran Surah Juz 30 & Ayat */}
+                            <td className="py-2 px-3">
+                              <div className="flex items-center gap-1.5">
+                                <select
+                                  disabled={!isHadir}
+                                  value={p.memorizedSurah || ''}
+                                  onChange={(e) => handleProgressChange(student.id, 'memorizedSurah', e.target.value)}
+                                  className="w-36 h-9 px-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-[#172033] focus:bg-white focus:border-[#0362D0] outline-none cursor-pointer disabled:opacity-50"
+                                >
+                                  <option value="">- Pilih Surat -</option>
+                                  {JUZ_30_SURAHS.map((s) => (
+                                    <option key={s} value={s}>{s}</option>
+                                  ))}
+                                </select>
+                                <input
+                                  type="text"
+                                  disabled={!isHadir}
+                                  placeholder="Ayat"
+                                  value={p.ayatRange || ''}
+                                  onChange={(e) => handleProgressChange(student.id, 'ayatRange', e.target.value)}
+                                  className="w-20 h-9 px-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-[#172033] placeholder:text-slate-400 focus:bg-white focus:border-[#0362D0] outline-none disabled:opacity-50"
+                                />
+                              </div>
+                            </td>
 
-                            <div className="grid grid-cols-1 sm:grid-cols-5 gap-1.5">
-                              <select
-                                value={p.memorizedSurah || ''}
-                                onChange={(e) => handleProgressChange(student.id, 'memorizedSurah', e.target.value)}
-                                className="sm:col-span-3 px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-[#172033] focus:border-[#0362D0] focus:ring-1 focus:ring-[#0362D0] outline-none cursor-pointer"
-                              >
-                                <option value="">-- Pilih Surat Juz 30 --</option>
-                                {JUZ_30_SURAHS.map((s) => (
-                                  <option key={s} value={s}>
-                                    {s}
-                                  </option>
-                                ))}
-                              </select>
+                            {/* Rata-rata (Total) */}
+                            <td className="py-2 px-3 text-center">
+                              <div className="font-black text-sm text-[#172033] tabular-nums">
+                                {isHadir ? (totalScore > 0 ? totalScore : '-') : '-'}
+                              </div>
+                              <div className={cn(
+                                "text-[10px] font-bold",
+                                !isHadir ? "text-slate-400" :
+                                totalScore >= 85 ? "text-emerald-700" :
+                                totalScore >= 75 ? "text-[#0362D0]" :
+                                totalScore > 0 ? "text-rose-600" : "text-slate-400"
+                              )}>
+                                {gradeText}
+                              </div>
+                            </td>
 
-                              <input
-                                type="text"
-                                placeholder="Ayat (cth: 1-15)"
-                                value={p.ayatRange || ''}
-                                onChange={(e) => handleProgressChange(student.id, 'ayatRange', e.target.value)}
-                                className="sm:col-span-2 px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-[#172033] placeholder:text-slate-400 focus:border-[#0362D0] focus:ring-1 focus:ring-[#0362D0] outline-none"
-                              />
-                            </div>
-                          </div>
+                            {/* Actions: Drawer Slider & WA */}
+                            <td className="py-2 px-3 text-right">
+                              <div className="inline-flex items-center justify-end gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedStudentForDrawer(student)}
+                                  className="p-2 bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-[#0362D0] rounded-lg transition-colors cursor-pointer"
+                                  title="Buka Slider Rubrik & Catatan Santri"
+                                >
+                                  <Sliders size={14} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleSendWA(student, currentStatus, p)}
+                                  className="p-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg transition-colors cursor-pointer"
+                                  title="Kirim Laporan Nilai via WhatsApp"
+                                >
+                                  <MessageCircle size={14} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </motion.div>
+        )}
 
-                          {/* Catatan Evaluasi Tiap Santri */}
-                          <div className="space-y-1">
-                            <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1">
-                              <Edit3 size={11} className="text-slate-400" /> Catatan Santri
-                            </label>
-                            <textarea
-                              rows={2}
-                              placeholder="Catatan perkembangan KBM / evaluasi santri..."
-                              value={p.notes || ''}
-                              onChange={(e) => {
-                                handleProgressChange(student.id, 'notes', e.target.value);
-                                setAttendance(prev => ({
-                                  ...prev,
-                                  [student.id]: { ...prev[student.id], notes: e.target.value }
-                                }));
-                              }}
-                              className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-[#172033] placeholder:text-slate-400 focus:bg-white focus:border-[#0362D0] focus:ring-1 focus:ring-[#0362D0] outline-none resize-none"
-                            />
-                          </div>
+        {activeStep === 3 && (
+          <motion.div
+            key="wizard-step-3-journal"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.16 }}
+            className="bg-white rounded-2xl border border-slate-200 overflow-hidden"
+          >
+            <div className="p-4 sm:p-5 border-b border-slate-200 bg-slate-50/70 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <h2 className="text-sm sm:text-base font-bold text-[#172033]">
+                  Langkah 3: Jurnal Mengajar & Evaluasi Sesi
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Dokumentasikan materi yang dibahas, pencapaian halaman/surat, dan rencana untuk pertemuan berikutnya sebelum menyimpan.
+                </p>
+              </div>
+              <div className="text-xs text-slate-600 font-semibold tabular-nums">
+                Pertemuan Ke-{meetingNumber} · {selectedDate}
+              </div>
+            </div>
 
-                          {/* Tombol Opsi Lanjutan / Rubrik Detail Drawer */}
-                          <div className="pt-0.5">
-                            <button
-                              type="button"
-                              onClick={() => setSelectedStudentForDrawer(student)}
-                              className="w-full py-1.5 bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-[#0362D0] border border-slate-200/80 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-                              title="Buka slider rubrik detail penilaian"
-                            >
-                              <Sliders size={12} />
-                              <span>Rubrik Detail / Preset Slider</span>
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="pt-2 border-t border-slate-100 text-center py-2">
-                          <span className="text-[11px] font-bold text-slate-400">
-                            Presensi {currentStatus} • Nilai dinonaktifkan
-                          </span>
-                        </div>
+            <div className="p-4 sm:p-6 space-y-5">
+              {/* Session Readiness Summary Box */}
+              <div className="p-3.5 sm:p-4 rounded-xl bg-slate-50 border border-slate-200 grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 text-xs">
+                <div>
+                  <span className="text-slate-500 block">Rekap Presensi Sesi Ini</span>
+                  <span className="font-bold text-[#172033] text-sm tabular-nums mt-0.5 block">
+                    {sessionStats.hadir} Hadir · {sessionStats.izin} Izin · {sessionStats.sakit} Sakit · {sessionStats.alpa} Alpa
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block">Kelengkapan Nilai KBM</span>
+                  <span className="font-bold text-[#0362D0] text-sm tabular-nums mt-0.5 block">
+                    {sessionStats.scoredPresent} dari {sessionStats.hadir} Santri Hadir Dinilai (Rata-rata: {sessionStats.avgScore || 0})
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block">Tahap Silabus Tercatat</span>
+                  <span className="font-bold text-[#172033] text-sm mt-0.5 block truncate">
+                    {selectedTahapObjects.map(s => `Tahap ${s.sessionNumber}`).join(', ') || '-'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Journal Form Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
+                <div className="space-y-4">
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-xs font-bold text-[#172033]">
+                        Materi yang Dibahas
+                      </label>
+                      {selectedTahapObjects.length > 0 && !journalMaterial && (
+                        <button
+                          type="button"
+                          onClick={() => setJournalMaterial(selectedTahapObjects.map(s => `Tahap ${s.sessionNumber}: ${s.topic}`).join(' & '))}
+                          className="text-[11px] font-bold text-[#0362D0] hover:underline cursor-pointer"
+                        >
+                          + Isi Otomatis dari Silabus
+                        </button>
                       )}
                     </div>
-                  );
-                })}
+                    <textarea 
+                      value={journalMaterial}
+                      onChange={e => setJournalMaterial(e.target.value)}
+                      placeholder="Contoh: Pengenalan Makharijul Huruf, Praktik Tilawati Jilid 3"
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:ring-2 focus:ring-[#0362D0] outline-none min-h-[85px]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-[#172033] mb-1.5">
+                      Kendala / Catatan Evaluasi Kelas
+                    </label>
+                    <textarea 
+                      value={journalObstacles}
+                      onChange={e => setJournalObstacles(e.target.value)}
+                      placeholder="Contoh: Sebagian santri masih perlu bimbingan membedakan huruf dzal dan zai..."
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:ring-2 focus:ring-[#0362D0] outline-none min-h-[85px]"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-[#172033] mb-1.5">
+                      Pencapaian Halaman / Surat
+                    </label>
+                    <input 
+                      value={journalPages}
+                      onChange={e => setJournalPages(e.target.value)}
+                      placeholder="Contoh: Tilawati Hal. 20-25 / QS. An-Naba 1-15"
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:ring-2 focus:ring-[#0362D0] outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-[#172033] mb-1.5">
+                      Rencana Pertemuan Berikutnya
+                    </label>
+                    <textarea 
+                      value={journalNextPlan}
+                      onChange={e => setJournalNextPlan(e.target.value)}
+                      placeholder="Contoh: Melanjutkan halaman 26 dan evaluasi bacaan bergilir"
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:ring-2 focus:ring-[#0362D0] outline-none min-h-[85px]"
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
-          )}
-        </motion.div>
+          </motion.div>
+        )}
       </AnimatePresence>
 
       {/* Student Score Input Drawer Component */}
@@ -1585,92 +2348,70 @@ export function LiveSession() {
         onSendWA={(st, stStatus, stProg) => handleSendWA(st, stStatus, stProg)}
       />
 
-      {/* Journal Section with Smooth Motion */}
-      <AnimatePresence mode="wait">
-        <motion.div 
-          key={`journal_${meetingNumber}`}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -10 }}
-          transition={{ duration: 0.22, delay: 0.05, ease: "easeOut" }}
-          className="bg-white rounded-3xl border border-slate-100 shadow-xs overflow-hidden mt-2"
-        >
-          <div className="p-4 sm:p-5 border-b border-slate-100 bg-slate-50">
-            <h3 className="font-extrabold text-[#172033] text-sm sm:text-base">Jurnal Mengajar & Catatan Sesi</h3>
-            <p className="text-xs text-slate-500 mt-0.5">Dokumentasi materi, kendala, dan rencana target untuk Pertemuan Ke-{meetingNumber}.</p>
-          </div>
-          <div className="p-4 sm:p-6 grid grid-cols-1 md:grid-cols-2 gap-5">
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-black text-[#172033] mb-1.5 uppercase tracking-wider">Materi yang Dibahas</label>
-                <textarea 
-                  value={journalMaterial}
-                  onChange={e => setJournalMaterial(e.target.value)}
-                  placeholder="Contoh: Pengenalan Makharijul Huruf, Praktik Tilawati Jilid 3"
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-medium focus:ring-2 focus:ring-[#0362D0] outline-none min-h-[80px]"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-black text-[#172033] mb-1.5 uppercase tracking-wider">Kendala / Catatan Santri</label>
-                <textarea 
-                  value={journalObstacles}
-                  onChange={e => setJournalObstacles(e.target.value)}
-                  placeholder="Contoh: Sebagian santri kesulitan membedakan huruf dzal dan zai..."
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-medium focus:ring-2 focus:ring-[#0362D0] outline-none min-h-[80px]"
-                />
-              </div>
-            </div>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-black text-[#172033] mb-1.5 uppercase tracking-wider">Pencapaian Halaman / Surat</label>
-                <input 
-                  value={journalPages}
-                  onChange={e => setJournalPages(e.target.value)}
-                  placeholder="Hal 20-25 / Al-Fatihah"
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-medium focus:ring-2 focus:ring-[#0362D0] outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-black text-[#172033] mb-1.5 uppercase tracking-wider">Rencana Tahap Berikutnya</label>
-                <textarea 
-                  value={journalNextPlan}
-                  onChange={e => setJournalNextPlan(e.target.value)}
-                  placeholder="Contoh: Lanjut ujian jilid 3 dan pengenalan hukum nun mati"
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-medium focus:ring-2 focus:ring-[#0362D0] outline-none min-h-[80px]"
-                />
-              </div>
-            </div>
-          </div>
-        </motion.div>
-      </AnimatePresence>
-
-      {/* Floating Save Action (Positioned safely above mobile BottomNav) */}
-      <div className="sticky bottom-20 sm:bottom-4 z-40 bg-white/95 backdrop-blur-xl border border-slate-100 p-3.5 sm:p-4 rounded-3xl shadow-xl flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4">
-        <div className="text-xs font-bold text-slate-600 text-center sm:text-left">
-          {editingJournalId ? (
-            <span className="text-orange-700 font-extrabold flex items-center gap-1.5">
-              <Edit3 size={14} /> Memperbarui Data Pertemuan Ke-{meetingNumber} (Tanggal {selectedDate})
-            </span>
+      {/* Responsive Wizard Navigation & Save Action Bar (Never overflows on 390px mobile) */}
+      <div className="bg-white border border-slate-200 p-3.5 sm:p-4 rounded-2xl shadow-xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-3">
+        {/* Left: Previous Step or Session Info */}
+        <div className="flex items-center justify-between sm:justify-start gap-2">
+          {activeStep > 1 ? (
+            <button
+              type="button"
+              onClick={() => setActiveStep((prev) => (prev - 1) as WizardStep)}
+              className="w-full sm:w-auto px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-[#172033] rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              <ChevronLeft size={15} />
+              <span>Langkah Sebelumnya</span>
+            </button>
           ) : (
-            <span>Merekam data untuk <strong>Pertemuan Ke-{meetingNumber}</strong> ({selectedTahapObjects.length} Tahap Kurikulum Terpilih).</span>
+            <div className="text-xs text-slate-600 font-medium">
+              {editingJournalId ? (
+                <span className="text-amber-700 font-bold flex items-center gap-1.5">
+                  <Edit3 size={14} /> Mode Edit Pertemuan Ke-{meetingNumber}
+                </span>
+              ) : (
+                <span>Pertemuan Ke-<strong>{meetingNumber}</strong> · {sessionStats.hadir} Hadir</span>
+              )}
+            </div>
           )}
         </div>
-        <button
-          onClick={handleSave}
-          disabled={saving || students.length === 0 || !!activeHoliday}
-          className={cn(
-            "w-full sm:w-auto px-8 py-3.5 text-white rounded-2xl text-sm font-black transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-md cursor-pointer",
-            activeHoliday ? "bg-amber-600 hover:bg-amber-600 opacity-60 cursor-not-allowed" : editingJournalId ? "bg-orange-500 hover:bg-orange-600 shadow-orange-500/25" : "bg-[#0362D0] hover:bg-[#024a9e] shadow-[#0362D0]/20"
+
+        {/* Right: Next Step & Save Buttons (Responsive Grid on Mobile) */}
+        <div className={cn(
+          "grid gap-2 sm:flex sm:items-center sm:justify-end",
+          activeStep < 3 ? "grid-cols-2" : "grid-cols-1"
+        )}>
+          {activeStep < 3 && (
+            <button
+              type="button"
+              onClick={() => setActiveStep((prev) => (prev + 1) as WizardStep)}
+              className="px-3.5 sm:px-5 py-2.5 bg-[#172033] hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1 cursor-pointer"
+            >
+              <span className="truncate">{activeStep === 1 ? 'Lanjut Nilai' : 'Lanjut Jurnal'}</span>
+              <ChevronRight size={14} className="shrink-0" />
+            </button>
           )}
-        >
-          {saving ? (
-            <><Loader2 size={18} className="animate-spin" /> Menyimpan Data...</>
-          ) : activeHoliday ? (
-            <><CalendarOff size={18} /> Sesi Pertemuan Diliburkan</>
-          ) : (
-            <><Save size={18} /> {editingJournalId ? 'Update Sesi Mengajar' : 'Simpan Sesi Mengajar'}</>
-          )}
-        </button>
+
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving || students.length === 0 || !!activeHoliday}
+            className={cn(
+              "px-4 sm:px-6 py-2.5 text-white rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed shadow-xs cursor-pointer",
+              activeHoliday
+                ? "bg-amber-600 opacity-60 cursor-not-allowed"
+                : editingJournalId
+                ? "bg-amber-600 hover:bg-amber-700"
+                : "bg-[#0362D0] hover:bg-[#024a9e]"
+            )}
+          >
+            {saving ? (
+              <><Loader2 size={15} className="animate-spin shrink-0" /> <span>Menyimpan...</span></>
+            ) : activeHoliday ? (
+              <><CalendarOff size={15} className="shrink-0" /> <span>Sesi Diliburkan</span></>
+            ) : (
+              <><Save size={15} className="shrink-0" /> <span className="truncate">{editingJournalId ? 'Update Sesi' : 'Simpan Sesi'}</span></>
+            )}
+          </button>
+        </div>
       </div>
 
       {toast.show && (
@@ -1718,7 +2459,6 @@ export function LiveSession() {
             className="bg-white rounded-3xl max-w-lg w-full border border-slate-100 shadow-2xl p-6 space-y-5 max-h-[calc(100dvh-3rem)] sm:max-h-[calc(100dvh-4rem)] overflow-y-auto animate-in zoom-in-95 duration-150 my-auto flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Header */}
             <div className="flex justify-between items-center border-b border-slate-100 pb-4">
               <div className="flex items-center gap-2.5">
                 <div className="p-2 bg-[#0362D0]/10 text-[#0362D0] rounded-xl border border-[#0362D0]/20">
@@ -1743,9 +2483,7 @@ export function LiveSession() {
               </button>
             </div>
 
-            {/* Form */}
             <form onSubmit={handleAddStudent} className="space-y-4">
-              {/* Kelompok Info Box (Terkunci) */}
               <div className="p-3 bg-slate-50 border border-slate-200/70 rounded-2xl flex items-center justify-between">
                 <div>
                   <span className="text-[10px] font-black uppercase text-slate-400 block tracking-wider">
@@ -1755,12 +2493,11 @@ export function LiveSession() {
                     {currentGroupObj?.name || 'Kelompok Binaan'}
                   </span>
                 </div>
-                <span className="px-2.5 py-1 bg-[#0362D0]/10 text-[#0362D0] text-[10px] font-black rounded-lg border border-[#0362D0]/20">
+                <span className="text-xs font-bold text-[#0362D0]">
                   Terkunci Khusus Kelompok Ini
                 </span>
               </div>
 
-              {/* Nama Lengkap */}
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-700 block">
                   Nama Lengkap Santri <span className="text-rose-500">*</span>
@@ -1776,7 +2513,6 @@ export function LiveSession() {
                 />
               </div>
 
-              {/* NIS & Jenis Kelamin */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-700 block">
@@ -1809,7 +2545,6 @@ export function LiveSession() {
                 </div>
               </div>
 
-              {/* Kelas */}
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-700 block">
                   Kelas SMPN 102 <span className="text-rose-500">*</span>
@@ -1837,7 +2572,6 @@ export function LiveSession() {
                 </select>
               </div>
 
-              {/* Actions */}
               <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
                 <button
                   type="button"
