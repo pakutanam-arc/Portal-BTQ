@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Student, Group, Mentor, StudentAttendance, StudentProgress, getStudentAttendanceByStudent, getStudentProgressHistory, getGroups, getMentors } from '../../services/db';
+import { query, collection, where, onSnapshot } from 'firebase/firestore';
+import { db } from '../../services/firebase';
+import { handleFirestoreError, OperationType } from '../../services/db/types';
+import { Student, Group, Mentor, StudentAttendance, StudentProgress, getGroups, getMentors } from '../../services/db';
 import { OfficialReportSheet } from './OfficialReportSheet';
 import { X, Printer, Loader2, Sparkles, UserCheck } from 'lucide-react';
 import { getStoredSchoolConfig, getSchoolConfig } from '../../services/schoolConfig';
@@ -33,20 +36,19 @@ export function OfficialReportModal({
   const [kkm, setKkm] = useState(initialConfig.kkm);
 
   useEffect(() => {
-    async function loadStudentData() {
-      if (!student) return;
-      setLoading(true);
+    if (!isOpen || !student) return;
+    setLoading(true);
+
+    let unsubscribeProgress: (() => void) | null = null;
+    let unsubscribeAttendance: (() => void) | null = null;
+
+    async function initModal() {
       try {
-        const [att, prog, groups, mentors, freshCfg] = await Promise.all([
-          getStudentAttendanceByStudent(student.id),
-          getStudentProgressHistory(student.id),
+        const [groups, mentors, freshCfg] = await Promise.all([
           getGroups(true),
           getMentors(true),
           getSchoolConfig(),
         ]);
-
-        setAttendance(att);
-        setProgress(prog);
 
         if (freshCfg) {
           setHeadmasterName(freshCfg.headmasterName);
@@ -61,17 +63,46 @@ export function OfficialReportModal({
           const foundMentor = mentors.find((m) => m.id === foundGroup.mentorId) || null;
           setMentor(foundMentor);
         }
+
+        // Real-time Firestore listener for student_progress
+        const qProg = query(
+          collection(db, 'student_progress'),
+          where('studentId', '==', student.id)
+        );
+        unsubscribeProgress = onSnapshot(qProg, (snap) => {
+          const items = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as StudentProgress));
+          setProgress(items);
+          setLoading(false);
+        }, (err) => {
+          handleFirestoreError(err, OperationType.LIST, 'student_progress');
+          setLoading(false);
+        });
+
+        // Real-time Firestore listener for student_attendance
+        const qAtt = query(
+          collection(db, 'student_attendance'),
+          where('studentId', '==', student.id)
+        );
+        unsubscribeAttendance = onSnapshot(qAtt, (snap) => {
+          const items = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as StudentAttendance));
+          setAttendance(items);
+        }, (err) => {
+          handleFirestoreError(err, OperationType.LIST, 'student_attendance');
+        });
+
       } catch (err) {
-        console.error('Error loading report data for student:', err);
-      } finally {
+        console.error('Error initializing report modal:', err);
         setLoading(false);
       }
     }
 
-    if (isOpen && student) {
-      loadStudentData();
-    }
-  }, [isOpen, student]);
+    initModal();
+
+    return () => {
+      if (unsubscribeProgress) unsubscribeProgress();
+      if (unsubscribeAttendance) unsubscribeAttendance();
+    };
+  }, [isOpen, student?.id]);
 
   if (!isOpen || !student) return null;
 

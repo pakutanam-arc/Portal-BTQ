@@ -8,6 +8,7 @@ import {
   setDoc,
   limit,
   writeBatch,
+  onSnapshot,
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import {
@@ -41,6 +42,27 @@ export async function getAllStudentProgress(limitCount = 2000, forceFresh = fals
       return [];
     }
   }, { forceFresh, freshTtlMs: DYNAMIC_CACHE_TTL_MS });
+}
+
+/**
+ * Real-time subscription to all student progress records from Cloud Firestore
+ */
+export function subscribeToAllStudentProgress(
+  callback: (records: StudentProgress[]) => void,
+  limitCount = 2000
+): () => void {
+  const q = query(
+    collection(db, 'student_progress'),
+    limit(limitCount)
+  );
+
+  return onSnapshot(q, (snapshot) => {
+    const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as StudentProgress));
+    callback(items);
+  }, (error) => {
+    handleFirestoreError(error, OperationType.LIST, 'student_progress');
+    callback([]);
+  });
 }
 
 export async function getStudentProgressByGroup(groupId: string, limitCount = 100, forceFresh = false): Promise<StudentProgress[]> {

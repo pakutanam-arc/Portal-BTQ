@@ -9,15 +9,11 @@ import {
   ArrowRight, 
   ShieldCheck, 
   Sparkles, 
-  HelpCircle, 
   AlertCircle, 
-  Building2,
-  KeyRound,
-  X
+  Building2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { APP_LOGO, APP_NAME, APP_SUBTITLE, APP_DESC } from '../assets/logo';
-import { ModalPortal } from '../components/ui/ModalPortal';
 
 export function Login() {
   const [username, setUsername] = useState('');
@@ -25,7 +21,6 @@ export function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [showHelpModal, setShowHelpModal] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -202,7 +197,7 @@ export function Login() {
                   <input
                     type="text"
                     required
-                    placeholder="Masukkan username (contoh: alumni1, alumni2)"
+                    placeholder="Masukkan username atau email Anda"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-100 rounded-2xl text-xs sm:text-sm font-medium text-[#172033] placeholder:text-slate-400 focus:bg-white focus:border-[#0362D0] focus:ring-4 focus:ring-[#0362D0]/15 outline-none transition-all"
@@ -216,13 +211,6 @@ export function Login() {
                   <label className="block text-xs font-bold text-[#172033]">
                     Kata Sandi
                   </label>
-                  <button
-                    type="button"
-                    onClick={() => setShowHelpModal(true)}
-                    className="text-[11px] font-bold text-[#0362D0] hover:underline transition-colors flex items-center gap-1"
-                  >
-                    <HelpCircle size={12} /> Bantuan Akun
-                  </button>
                 </div>
                 <div className="relative group">
                   <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-[#0362D0] transition-colors">
@@ -283,61 +271,6 @@ export function Login() {
           </div>
         </div>
       </motion.div>
-
-      {/* Help / Password Guide Modal */}
-      {showHelpModal && (
-        <ModalPortal isOpen={showHelpModal} onClose={() => setShowHelpModal(false)}>
-          <div 
-            className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 animate-in zoom-in-95 max-h-[calc(100dvh-3rem)] sm:max-h-[calc(100dvh-4rem)] overflow-y-auto my-auto flex flex-col"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex justify-between items-center mb-4 pb-2 border-b border-slate-100">
-              <div className="flex items-center gap-2 text-[#0362D0] font-extrabold text-sm">
-                <KeyRound size={18} /> Panduan Akses Akun
-              </div>
-              <button 
-                onClick={() => setShowHelpModal(false)}
-                className="text-slate-400 hover:text-[#172033] p-1 rounded-lg"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="space-y-3 text-xs text-slate-600 leading-relaxed">
-              <p>
-                Akses Portal BTQ diperuntukkan bagi <strong>Koordinator BTQ</strong>, <strong>Administrator</strong>, dan <strong>Mentor Pembimbing</strong> resmi SMP Negeri 102 Jakarta.
-              </p>
-              <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-100 space-y-2">
-                <div className="font-extrabold text-[#172033]">
-                  Daftar Kredensial Login:
-                </div>
-                <div className="space-y-1.5 text-[11px] text-slate-600 font-medium">
-                  <div className="p-2 bg-white rounded-xl border border-slate-200">
-                    <span className="font-bold text-[#0362D0]">Akun Mentor:</span>
-                    <div>Username: <code className="bg-slate-100 px-1 py-0.5 rounded font-mono text-slate-800 font-bold">alumni1</code> s.d. <code className="bg-slate-100 px-1 py-0.5 rounded font-mono text-slate-800 font-bold">alumni10</code></div>
-                    <div>Kata Sandi: <code className="bg-slate-100 px-1 py-0.5 rounded font-mono text-slate-800 font-bold">12345678</code></div>
-                  </div>
-                  <div className="p-2 bg-white rounded-xl border border-slate-200">
-                    <span className="font-bold text-[#950415]">Akun Admin:</span>
-                    <div>Username: <code className="bg-slate-100 px-1 py-0.5 rounded font-mono text-slate-800 font-bold">admin</code></div>
-                    <div>Kata Sandi: <code className="bg-slate-100 px-1 py-0.5 rounded font-mono text-slate-800 font-bold">12345678</code></div>
-                  </div>
-                </div>
-                <div className="text-[10px] text-slate-400 pt-1">
-                  *Cukup masukkan username tanpa perlu mengetikkan @smpn102.sch.id
-                </div>
-              </div>
-            </div>
-
-            <button
-              onClick={() => setShowHelpModal(false)}
-              className="btn btn-primary w-full mt-4"
-            >
-              Mengerti
-            </button>
-          </div>
-        </ModalPortal>
-      )}
     </div>
   );
 }

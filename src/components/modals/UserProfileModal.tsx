@@ -301,8 +301,8 @@ export function UserProfileModal({ isOpen, onClose, onSaved }: UserProfileModalP
 
     getSchoolConfig().then(schoolCfg => {
       if (isAdmin) {
-        setAdminName(userData?.name || schoolCfg.coordinatorName || 'H. Ahmad Fauzi, S.Pd.I');
-        setAdminNip(userData?.nip || schoolCfg.coordinatorNip || '19790415 200801 1 012');
+        setAdminName(userData?.name || schoolCfg.coordinatorName || 'Muhamad Sulkhi, S.Pd.I.');
+        setAdminNip(userData?.nip || schoolCfg.coordinatorNip || '199403112023211010');
         setAdminSignature(userData?.signature || schoolCfg.coordinatorSignature || '');
         setHeadmasterName(schoolCfg.headmasterName || 'Dra. Hj. Sri Rahayu, M.Pd.');
         setHeadmasterNip(schoolCfg.headmasterNip || '19680512 199412 2 001');
@@ -527,7 +527,7 @@ export function UserProfileModal({ isOpen, onClose, onSaved }: UserProfileModalP
                       type="text"
                       value={adminName}
                       onChange={(e) => setAdminName(e.target.value)}
-                      placeholder="Contoh: H. Ahmad Fauzi, S.Pd.I"
+                      placeholder="Contoh: Muhamad Sulkhi, S.Pd.I."
                       className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:border-[#0362D0] focus:ring-2 focus:ring-[#0362D0]/10 outline-none transition-all"
                       required
                     />
@@ -541,7 +541,7 @@ export function UserProfileModal({ isOpen, onClose, onSaved }: UserProfileModalP
                       type="text"
                       value={adminNip}
                       onChange={(e) => setAdminNip(e.target.value)}
-                      placeholder="Contoh: 19790415 200801 1 012"
+                      placeholder="Contoh: 199403112023211010"
                       className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-semibold text-slate-900 focus:bg-white focus:border-[#0362D0] focus:ring-2 focus:ring-[#0362D0]/10 outline-none transition-all"
                     />
                   </div>

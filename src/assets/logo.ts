@@ -1,6 +1,5 @@
-import { APP_LOGO_BASE64 } from './cardAssetsBase64';
-
-export const APP_LOGO = APP_LOGO_BASE64;
+export const APP_LOGO = "/rohis-102.png";
+export const SCHOOL_LOGO = "/smp102-logo.jpg";
 export const APP_NAME = "PORTAL BTQ";
 export const APP_SUBTITLE = "SMP Negeri 102 Jakarta";
 export const APP_DESC = "Portal Administrasi dan Pembelajaran Baca Tulis Al-Qur'an";

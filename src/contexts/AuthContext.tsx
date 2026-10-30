@@ -3,7 +3,7 @@ import { onAuthStateChanged, User } from 'firebase/auth';
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../services/firebase';
 import { mockMentors } from '../services/mockData';
-import { getStoredSchoolConfig } from '../services/schoolConfig';
+import { getStoredSchoolConfig, getSchoolConfig } from '../services/schoolConfig';
 
 interface AuthContextType {
   currentUser: User | null;
@@ -48,6 +48,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
     window.addEventListener('user_profile_updated', handleProfileUpdated);
 
+    // Listener untuk pembaruan konfigurasi sekolah (rapor / admin)
+    const handleSchoolConfigUpdated = (e: any) => {
+      const detail = e.detail;
+      if (!detail) return;
+      setUserData((prev: any) => {
+        if (!prev || prev.role !== 'admin') return prev;
+        return {
+          ...prev,
+          name: detail.coordinatorName || prev.name,
+          nip: detail.coordinatorNip !== undefined ? detail.coordinatorNip : prev.nip,
+          signature: detail.coordinatorSignature !== undefined ? detail.coordinatorSignature : prev.signature,
+        };
+      });
+    };
+    window.addEventListener('school_config_updated', handleSchoolConfigUpdated);
+
     // Safety timeout: ensure loading state never hangs indefinitely
     const timeoutId = setTimeout(() => {
       if (isMounted) {
@@ -67,12 +83,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setUserRole('admin');
             const schoolCfg = getStoredSchoolConfig();
             setUserData({ 
-              name: schoolCfg.coordinatorName || 'Administrator', 
+              name: schoolCfg.coordinatorName || 'Muhamad Sulkhi, S.Pd.I.', 
               email: user.email, 
               role: 'admin',
-              nip: schoolCfg.coordinatorNip || '',
+              nip: schoolCfg.coordinatorNip || '199403112023211010',
               signature: schoolCfg.coordinatorSignature || ''
             });
+
+            // Asynchronously fetch latest remote configuration from Firestore
+            getSchoolConfig().then(remoteCfg => {
+              if (isMounted) {
+                setUserData((prev: any) => ({
+                  ...prev,
+                  name: remoteCfg.coordinatorName || 'Muhamad Sulkhi, S.Pd.I.',
+                  nip: remoteCfg.coordinatorNip || '199403112023211010',
+                  signature: remoteCfg.coordinatorSignature || prev?.signature || ''
+                }));
+              }
+            }).catch(() => {});
           } else {
             // Check mock mentors first as immediate fallback
             const matchedMentor = mockMentors.find(m => m.email.toLowerCase() === emailLower);
@@ -170,6 +198,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isMounted = false;
       clearTimeout(timeoutId);
       window.removeEventListener('user_profile_updated', handleProfileUpdated);
+      window.removeEventListener('school_config_updated', handleSchoolConfigUpdated);
       unsubscribe();
     };
   }, []);

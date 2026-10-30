@@ -10,7 +10,9 @@ import {
   Edit3, 
   PlusCircle, 
   UserCheck2, 
-  CheckSquare 
+  CheckSquare,
+  RefreshCw,
+  CheckCircle2
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { 
@@ -34,8 +36,14 @@ import {
   TeachingJournal,
   getActiveSemesterInfo,
   getRecentWeeksStartDate,
-  SemesterInfo
+  SemesterInfo,
+  subscribeToAllStudentAttendance,
+  subscribeToAllStudentProgress,
+  subscribeToTeachingJournals,
+  subscribeToStudents,
+  invalidateDbCache
 } from '../../services/db';
+import { cn } from '../../utils/cn';
 import { ActivityLogModal } from '../modals/ActivityLogModal';
 import { theme } from '../../theme';
 import { StatCardsGrid, StatCardItem } from './StatCardsGrid';
@@ -60,6 +68,8 @@ export function AdminDashboard() {
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
   const [timeRange, setTimeRange] = useState<DashboardTimeRange>('semester');
   const [rangeLoading, setRangeLoading] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastSyncTime, setLastSyncTime] = useState<string>('');
   const [groups, setGroups] = useState<Group[]>([]);
   const [totalStudents, setTotalStudents] = useState(0);
   const [groupCounts, setGroupCounts] = useState<Record<string, number>>({});
@@ -105,104 +115,127 @@ export function AdminDashboard() {
     };
   }, [timeRange, semesterInfo]);
 
+  // Fungsi pemanggilan data murni dari Cloud Firestore (forceFresh: true)
+  const loadData = useCallback(async (isManualRefresh = false) => {
+    if (isManualRefresh) setIsRefreshing(true);
+    try {
+      if (isManualRefresh) {
+        invalidateDbCache(); // Bersihkan seluruh cache lokal untuk memastikan pembacaan live
+      }
+      const [
+        groupsData, 
+        mentorsData, 
+        activitiesData,
+        progressData,
+        studentsData,
+        journalsRes,
+        attendanceData,
+        holidaysData
+      ] = await Promise.all([
+        getGroups(true),
+        getMentors(true),
+        getSystemActivities(100),
+        getAllStudentProgress(2000, true),
+        getStudents(true),
+        getTeachingJournals(undefined, 100),
+        getAllStudentAttendance(activeRangeConfig.startDate, 2000, true),
+        getAcademicHolidays(true)
+      ]);
+
+      const sortedGroups = [...groupsData].sort((a, b) => getGroupNumber(a) - getGroupNumber(b));
+      setGroups(sortedGroups);
+      setTotalStudents(studentsData.length);
+      setMentors(mentorsData);
+      setActivities(activitiesData);
+      setAllProgress(progressData);
+      setStudents(studentsData);
+      setJournals(journalsRes?.data || []);
+      setAllAttendance(attendanceData || []);
+      setHolidays(holidaysData || []);
+
+      // Hitung santri per kelompok dengan normalisasi ID yang konsisten
+      const counts: Record<string, number> = {};
+      sortedGroups.forEach((g) => {
+        counts[g.id] = studentsData.filter(
+          s => normalizeGroupId(s.groupId) === normalizeGroupId(g.id)
+        ).length;
+      });
+      setGroupCounts(counts);
+
+      const now = new Date();
+      setLastSyncTime(now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+    } catch (error) {
+      console.error("Error fetching live dashboard data:", error);
+    } finally {
+      setLoading(false);
+      if (isManualRefresh) setIsRefreshing(false);
+    }
+  }, [activeRangeConfig.startDate]);
+
   useEffect(() => {
     let isMounted = true;
 
-    async function loadData() {
-      try {
-        const [
-          groupsData, 
-          mentorsData, 
-          activitiesData,
-          progressData,
-          studentsData,
-          journalsRes,
-          attendanceData,
-          holidaysData
-        ] = await Promise.all([
-          getGroups(),
-          getMentors(),
-          getSystemActivities(),
-          getAllStudentProgress(),
-          getStudents(),
-          getTeachingJournals(undefined, 80, undefined, activeRangeConfig.startDate),
-          getAllStudentAttendance(activeRangeConfig.startDate, 2000),
-          getAcademicHolidays()
-        ]);
-        
-        if (!isMounted) return;
+    // 1. Pemuatan awal data murni dari Cloud Firestore
+    loadData(false);
 
-        const sortedGroups = [...groupsData].sort((a, b) => getGroupNumber(a) - getGroupNumber(b));
-        setGroups(sortedGroups);
-        setTotalStudents(studentsData.length);
-        setMentors(mentorsData);
-        setActivities(activitiesData);
-        setAllProgress(progressData);
-        setStudents(studentsData);
-        setJournals(journalsRes?.data || []);
-        setAllAttendance(attendanceData || []);
-        setHolidays(holidaysData || []);
-
-        // Pre-calculate group counts directly in memory (Eliminates 20+ N+1 queries)
-        const counts: Record<string, number> = {};
-        sortedGroups.forEach((g) => {
-          counts[g.id] = studentsData.filter(
-            s => s.groupId === g.id || (g.id === 'g1' && s.groupId === 'group_1') || (g.id === 'g2' && s.groupId === 'group_2') || (g.id === 'g3' && s.groupId === 'group_3') || (g.id === 'g4' && s.groupId === 'group_4') || (g.id === 'g5' && s.groupId === 'group_5') || (g.id === 'g6' && s.groupId === 'group_6') || (g.id === 'g7' && s.groupId === 'group_7') || (g.id === 'g8' && s.groupId === 'group_8') || (g.id === 'g9' && s.groupId === 'group_9') || (g.id === 'g10' && s.groupId === 'group_10')
-          ).length;
-        });
-
-        if (isMounted) {
-          setGroupCounts(counts);
-        }
-      } catch (error) {
-        console.error("Error fetching dashboard data:", error);
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
-      }
-    }
-
-    loadData();
-
-    // Dengarkan event pembaruan presensi, progress, kalender, & jurnal realtime
-    const handleDataUpdated = () => {
-      loadData();
-    };
-
-    const handleCalendarUpdated = async () => {
-      try {
-        const freshHolidays = await getAcademicHolidays(true);
-        if (isMounted) {
-          setHolidays(freshHolidays);
-        }
-      } catch (err) {
-        console.warn("Gagal memperbarui kalender:", err);
-      }
-    };
-
-    const unsubHolidays = subscribeAcademicHolidays((fresh) => {
-      if (isMounted) setHolidays(fresh);
+    // 2. Real-time Firestore Subscriptions: Multi-perangkat & multi-browser sinkron instan
+    const unsubAttendance = subscribeToAllStudentAttendance((freshAttendance) => {
+      if (!isMounted) return;
+      setAllAttendance(freshAttendance);
+      const now = new Date();
+      setLastSyncTime(now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
     });
+
+    const unsubProgress = subscribeToAllStudentProgress((freshProgress) => {
+      if (!isMounted) return;
+      setAllProgress(freshProgress);
+      const now = new Date();
+      setLastSyncTime(now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+    });
+
+    const unsubJournals = subscribeToTeachingJournals((freshJournals) => {
+      if (!isMounted) return;
+      setJournals(freshJournals);
+      const now = new Date();
+      setLastSyncTime(now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+    });
+
+    const unsubStudents = subscribeToStudents((freshStudents) => {
+      if (!isMounted) return;
+      setStudents(freshStudents);
+      setTotalStudents(freshStudents.length);
+    });
+
+    const unsubHolidays = subscribeAcademicHolidays((freshHolidays) => {
+      if (!isMounted) return;
+      setHolidays(freshHolidays);
+    });
+
+    // Event lokal untuk tab yang sama
+    const handleDataUpdated = () => {
+      loadData(false);
+    };
 
     window.addEventListener('attendance-updated', handleDataUpdated);
     window.addEventListener('progress-updated', handleDataUpdated);
     window.addEventListener('journal-updated', handleDataUpdated);
     window.addEventListener('db-cache-invalidated', handleDataUpdated);
-    window.addEventListener('calendar-updated', handleCalendarUpdated);
     window.addEventListener('storage', handleDataUpdated);
 
     return () => {
       isMounted = false;
+      unsubAttendance();
+      unsubProgress();
+      unsubJournals();
+      unsubStudents();
       unsubHolidays();
       window.removeEventListener('attendance-updated', handleDataUpdated);
       window.removeEventListener('progress-updated', handleDataUpdated);
       window.removeEventListener('journal-updated', handleDataUpdated);
       window.removeEventListener('db-cache-invalidated', handleDataUpdated);
-      window.removeEventListener('calendar-updated', handleCalendarUpdated);
       window.removeEventListener('storage', handleDataUpdated);
     };
-  }, []);
+  }, [loadData]);
 
   // Memperbarui presensi & jurnal ketika rentang waktu rekap diubah oleh admin
   const isInitialMount = React.useRef(true);
@@ -1056,6 +1089,27 @@ export function AdminDashboard() {
 
         {/* Calendar, Semester info & Time Range Selector */}
         <div className="flex flex-wrap items-center gap-2 sm:gap-3 self-stretch md:self-auto bg-white p-2 rounded-2xl border border-slate-100">
+          {/* Live Sync Status & Manual Refresh Button */}
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => loadData(true)}
+              disabled={isRefreshing}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-[#172033] border border-slate-200/90 rounded-xl text-xs font-bold transition-all shadow-2xs hover:shadow-xs active:scale-95 cursor-pointer disabled:opacity-50"
+              title="Ambil data terbaru langsung dari Cloud Firestore tanpa cache"
+            >
+              <RefreshCw size={13} className={cn("text-[#0362D0]", isRefreshing && "animate-spin")} />
+              <span>{isRefreshing ? 'Menyinkronkan...' : 'Sinkronkan Data Cloud'}</span>
+            </button>
+
+            {lastSyncTime && (
+              <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-[10px] font-bold">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span>Live Firestore • {lastSyncTime}</span>
+              </div>
+            )}
+          </div>
+
           <div className="flex items-center gap-1.5 px-3 py-1 bg-slate-50 rounded-xl text-[11px] font-bold text-[#172033] border border-slate-100/80">
             <Calendar size={13} className="text-[#0362D0]" />
             <span>{todayDateString}</span>

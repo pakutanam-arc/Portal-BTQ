@@ -22,7 +22,6 @@ import {
   Calendar, 
   BookOpen, 
   AlertCircle, 
-  ArrowUpRight, 
   TrendingUp, 
   MessageCircle, 
   Printer, 
@@ -249,18 +248,12 @@ export function PublicStudentProfile() {
             </button>
           </div>
 
-          <div className="flex items-center justify-between w-full pt-2 border-t border-slate-100 text-xs">
+          <div className="flex items-center justify-center w-full pt-2 border-t border-slate-100 text-xs">
             <Link 
               to="/student/card/portal" 
               className="text-slate-500 hover:text-[#0362D0] font-bold flex items-center gap-1"
             >
               <Search size={14} /> Pindai Siswa Lain
-            </Link>
-            <Link 
-              to="/login" 
-              className="text-[#0362D0] hover:underline font-bold flex items-center gap-1"
-            >
-              Masuk Guru / Mentor <ArrowUpRight size={14} />
             </Link>
           </div>
         </div>

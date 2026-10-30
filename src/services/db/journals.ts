@@ -10,6 +10,7 @@ import {
   orderBy,
   limit,
   startAfter,
+  onSnapshot,
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { invalidateDbCache } from '../cacheService';
@@ -66,6 +67,29 @@ export async function getTeachingJournals(
     handleFirestoreError(error, OperationType.LIST, 'teaching_journals');
     return { data: [], lastDoc: null, hasMore: false };
   }
+}
+
+/**
+ * Real-time subscription to teaching journals from Cloud Firestore
+ */
+export function subscribeToTeachingJournals(
+  callback: (journals: TeachingJournal[]) => void,
+  limitCount = 100
+): () => void {
+  const q = query(
+    collection(db, 'teaching_journals'),
+    orderBy('date', 'desc'),
+    limit(limitCount)
+  );
+
+  return onSnapshot(q, (snapshot) => {
+    const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TeachingJournal));
+    items.sort((a, b) => (b.meetingNumber || 0) - (a.meetingNumber || 0) || new Date(b.date).getTime() - new Date(a.date).getTime());
+    callback(items);
+  }, (error) => {
+    handleFirestoreError(error, OperationType.LIST, 'teaching_journals');
+    callback([]);
+  });
 }
 
 export async function saveTeachingJournal(journal: TeachingJournal): Promise<string> {

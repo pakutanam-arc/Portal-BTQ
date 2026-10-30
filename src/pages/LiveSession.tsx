@@ -446,12 +446,12 @@ export function LiveSession() {
       const r = typeof updated.reading === 'number' ? updated.reading : parseInt(updated.reading as any) || 0;
       const t = typeof updated.tajwid === 'number' ? updated.tajwid : parseInt(updated.tajwid as any) || 0;
       const w = typeof updated.writing === 'number' ? updated.writing : parseInt(updated.writing as any) || 0;
+      const m = typeof updated.memorization === 'number' ? updated.memorization : parseInt(updated.memorization as any) || 0;
       
-      if (currentGradeId === 'grade3') {
-        if (r > 0) scores.push(r);
-      }
+      if (r > 0) scores.push(r);
       if (t > 0) scores.push(t);
       if (w > 0) scores.push(w);
+      if (m > 0) scores.push(m);
 
       const calculatedTotal = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
       updated.total = calculatedTotal;
@@ -687,6 +687,8 @@ export function LiveSession() {
               reading: p.reading || 0,
               tajwid: p.tajwid || 0,
               memorizedSurah: p.memorizedSurah || '',
+              ayatRange: p.ayatRange || '',
+              notes: p.notes || '',
               memorization: p.memorization || 0,
               writing: p.writing || 0,
               total: p.total || 0,
@@ -768,15 +770,23 @@ export function LiveSession() {
     
     if (status === 'Hadir') {
       text = `Assalamu'alaikum Wr. Wb. Menginformasikan perkembangan KBM BTQ ananda ${student.name} hari ini.\n\n`;
-      text += `Catatan Penilaian:\n`;
-      text += `- Membaca: ${progressData?.reading || 0}\n`;
-      text += `- Tajwid: ${progressData?.tajwid || 0}\n`;
-      if (progressData?.memorization !== undefined) {
-        text += `- Tahfidz: ${progressData?.memorization || 0}\n`;
+      text += `Rincian Penilaian:\n`;
+      text += `• Membaca: ${progressData?.reading || 0}\n`;
+      text += `• Tajwid: ${progressData?.tajwid || 0}\n`;
+      text += `• Menulis: ${progressData?.writing || 0}\n`;
+      if (progressData?.memorization !== undefined && progressData?.memorization > 0) {
+        text += `• Tahfidz/Hafalan: ${progressData?.memorization || 0}\n`;
       }
-      text += `\nKami mohon bantuan motivasi dari ayah/bunda agar ananda lebih semangat belajar dan menghafal. Terima kasih.`;
+      if (progressData?.memorizedSurah) {
+        text += `• Setoran Hafalan: ${progressData.memorizedSurah}${progressData.ayatRange ? ` (${progressData.ayatRange})` : ''}\n`;
+      }
+      text += `• Total Nilai: ${progressData?.total || 0}\n`;
+      if (progressData?.notes) {
+        text += `\nCatatan Mentor: "${progressData.notes}"\n`;
+      }
+      text += `\nKami mohon dukungan dan motivasi dari ayah/bunda agar ananda senantiasa istiqomah membaca dan menghafal Al-Qur'an. Terima kasih.`;
     } else {
-      text += `\n\nMohon kerja sama ayah/bunda untuk memastikan kehadiran dan kelancaran kegiatan belajar ananda. Terima kasih.`;
+      text += `\n\nMohon kerja sama ayah/bunda untuk memastikan kehadiran dan kelancaran kegiatan belajar ananda pada pertemuan berikutnya. Terima kasih.`;
     }
 
     const encoded = encodeURIComponent(text);
@@ -1371,49 +1381,158 @@ export function LiveSession() {
                         ))}
                       </div>
 
-                      {/* Score Summary & Action Drawer Trigger */}
+                      {/* Score Inputs, Juz 30 Surah, & Student Notes Directly on Card */}
                       {isHadir ? (
-                        <div className="pt-2 border-t border-slate-100 flex flex-col gap-2">
+                        <div className="pt-2.5 border-t border-slate-100 flex flex-col gap-3">
+                          {/* Header Nilai & Status Evaluasi */}
                           <div className="flex items-center justify-between text-xs">
-                            <span className="text-[10px] font-black uppercase text-slate-400">Evaluasi Sesi:</span>
-                            <span className={cn("px-2 py-0.5 rounded-lg text-[10px] font-black border", scoreBadge.color)}>
+                            <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1">
+                              <Sparkles size={11} className="text-[#0362D0]" /> Input Nilai KBM
+                            </span>
+                            <span className={cn("px-2 py-0.5 rounded-lg text-[10px] font-black border shadow-2xs", scoreBadge.color)}>
                               {scoreBadge.label}
                             </span>
                           </div>
 
-                          {/* Mini Score Pills */}
-                          <div className="grid grid-cols-3 gap-1.5 text-center">
-                            {currentGradeId === 'grade3' && (
-                              <div className="p-1 bg-slate-50 rounded-lg border border-slate-100">
-                                <span className="text-[9px] text-slate-400 font-bold block">Baca</span>
-                                <span className="text-xs font-black text-[#0362D0]">{p.reading ?? 0}</span>
-                              </div>
-                            )}
-                            <div className="p-1 bg-slate-50 rounded-lg border border-slate-100">
-                              <span className="text-[9px] text-slate-400 font-bold block">Tajwid</span>
-                              <span className="text-xs font-black text-[#C99A2E]">{p.tajwid ?? 0}</span>
+                          {/* 4 Komponen Nilai Angka Langsung */}
+                          <div className="grid grid-cols-4 gap-1.5 text-center">
+                            {/* 1. Tajwid */}
+                            <div className="p-1.5 bg-amber-50/60 rounded-xl border border-amber-200/80 flex flex-col">
+                              <span className="text-[9px] text-amber-900 font-extrabold uppercase mb-1">Tajwid</span>
+                              <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                placeholder="0"
+                                value={p.tajwid ?? ''}
+                                onChange={(e) => {
+                                  const val = e.target.value === '' ? 0 : Math.min(100, Math.max(0, parseInt(e.target.value) || 0));
+                                  handleProgressChange(student.id, 'tajwid', val);
+                                }}
+                                className="w-full text-center font-black text-xs py-1 rounded-lg bg-white border border-amber-300 text-amber-950 focus:ring-1 focus:ring-amber-500 outline-none"
+                              />
                             </div>
-                            <div className="p-1 bg-slate-50 rounded-lg border border-slate-100">
-                              <span className="text-[9px] text-slate-400 font-bold block">Tulis</span>
-                              <span className="text-xs font-black text-slate-700">{p.writing ?? 0}</span>
+
+                            {/* 2. Membaca */}
+                            <div className="p-1.5 bg-blue-50/60 rounded-xl border border-blue-200/80 flex flex-col">
+                              <span className="text-[9px] text-[#0362D0] font-extrabold uppercase mb-1">Baca</span>
+                              <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                placeholder="0"
+                                value={p.reading ?? ''}
+                                onChange={(e) => {
+                                  const val = e.target.value === '' ? 0 : Math.min(100, Math.max(0, parseInt(e.target.value) || 0));
+                                  handleProgressChange(student.id, 'reading', val);
+                                }}
+                                className="w-full text-center font-black text-xs py-1 rounded-lg bg-white border border-blue-300 text-[#0362D0] focus:ring-1 focus:ring-[#0362D0] outline-none"
+                              />
                             </div>
-                            {currentGradeId === 'grade3' && (
-                              <div className="p-1 bg-slate-50 rounded-lg border border-slate-100">
-                                <span className="text-[9px] text-slate-400 font-bold block">Hafal</span>
-                                <span className="text-xs font-black text-emerald-700">{p.memorization ?? 0}</span>
-                              </div>
-                            )}
+
+                            {/* 3. Menulis */}
+                            <div className="p-1.5 bg-slate-100/70 rounded-xl border border-slate-200/80 flex flex-col">
+                              <span className="text-[9px] text-slate-700 font-extrabold uppercase mb-1">Tulis</span>
+                              <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                placeholder="0"
+                                value={p.writing ?? ''}
+                                onChange={(e) => {
+                                  const val = e.target.value === '' ? 0 : Math.min(100, Math.max(0, parseInt(e.target.value) || 0));
+                                  handleProgressChange(student.id, 'writing', val);
+                                }}
+                                className="w-full text-center font-black text-xs py-1 rounded-lg bg-white border border-slate-300 text-slate-900 focus:ring-1 focus:ring-slate-500 outline-none"
+                              />
+                            </div>
+
+                            {/* 4. Hafalan */}
+                            <div className="p-1.5 bg-emerald-50/60 rounded-xl border border-emerald-200/80 flex flex-col">
+                              <span className="text-[9px] text-emerald-900 font-extrabold uppercase mb-1">Hafal</span>
+                              <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                placeholder="0"
+                                value={p.memorization ?? ''}
+                                onChange={(e) => {
+                                  const val = e.target.value === '' ? 0 : Math.min(100, Math.max(0, parseInt(e.target.value) || 0));
+                                  handleProgressChange(student.id, 'memorization', val);
+                                }}
+                                className="w-full text-center font-black text-xs py-1 rounded-lg bg-white border border-emerald-300 text-emerald-950 focus:ring-1 focus:ring-emerald-500 outline-none"
+                              />
+                            </div>
                           </div>
 
-                          {/* Tactile Button to Open Drawer */}
-                          <button
-                            type="button"
-                            onClick={() => setSelectedStudentForDrawer(student)}
-                            className="w-full py-2 bg-gradient-to-r from-[#0362D0] to-[#0250AA] hover:from-[#0250AA] hover:to-[#013F88] text-white rounded-xl text-xs font-black flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer transition-all active:scale-[0.98]"
-                          >
-                            <Sliders size={13} />
-                            <span>Input / Sesuaikan Nilai</span>
-                          </button>
+                          {/* Setoran Hafalan Surat Juz 30 & Rentang Ayat */}
+                          <div className="p-2.5 bg-slate-50/90 rounded-xl border border-slate-200/70 space-y-2">
+                            <div className="flex items-center justify-between text-[11px] font-bold text-slate-700">
+                              <span className="flex items-center gap-1.5 text-[#172033]">
+                                <BookOpen size={12} className="text-emerald-600" />
+                                Setoran Surat (Juz 30)
+                              </span>
+                              {p.memorizedSurah && (
+                                <span className="text-[10px] text-emerald-700 font-extrabold">Terpilih</span>
+                              )}
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-5 gap-1.5">
+                              <select
+                                value={p.memorizedSurah || ''}
+                                onChange={(e) => handleProgressChange(student.id, 'memorizedSurah', e.target.value)}
+                                className="sm:col-span-3 px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-[#172033] focus:border-[#0362D0] focus:ring-1 focus:ring-[#0362D0] outline-none cursor-pointer"
+                              >
+                                <option value="">-- Pilih Surat Juz 30 --</option>
+                                {JUZ_30_SURAHS.map((s) => (
+                                  <option key={s} value={s}>
+                                    {s}
+                                  </option>
+                                ))}
+                              </select>
+
+                              <input
+                                type="text"
+                                placeholder="Ayat (cth: 1-15)"
+                                value={p.ayatRange || ''}
+                                onChange={(e) => handleProgressChange(student.id, 'ayatRange', e.target.value)}
+                                className="sm:col-span-2 px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-[#172033] placeholder:text-slate-400 focus:border-[#0362D0] focus:ring-1 focus:ring-[#0362D0] outline-none"
+                              />
+                            </div>
+                          </div>
+
+                          {/* Catatan Evaluasi Tiap Santri */}
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1">
+                              <Edit3 size={11} className="text-slate-400" /> Catatan Santri
+                            </label>
+                            <textarea
+                              rows={2}
+                              placeholder="Catatan perkembangan KBM / evaluasi santri..."
+                              value={p.notes || ''}
+                              onChange={(e) => {
+                                handleProgressChange(student.id, 'notes', e.target.value);
+                                setAttendance(prev => ({
+                                  ...prev,
+                                  [student.id]: { ...prev[student.id], notes: e.target.value }
+                                }));
+                              }}
+                              className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-[#172033] placeholder:text-slate-400 focus:bg-white focus:border-[#0362D0] focus:ring-1 focus:ring-[#0362D0] outline-none resize-none"
+                            />
+                          </div>
+
+                          {/* Tombol Opsi Lanjutan / Rubrik Detail Drawer */}
+                          <div className="pt-0.5">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedStudentForDrawer(student)}
+                              className="w-full py-1.5 bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-[#0362D0] border border-slate-200/80 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                              title="Buka slider rubrik detail penilaian"
+                            >
+                              <Sliders size={12} />
+                              <span>Rubrik Detail / Preset Slider</span>
+                            </button>
+                          </div>
                         </div>
                       ) : (
                         <div className="pt-2 border-t border-slate-100 text-center py-2">
@@ -1439,6 +1558,14 @@ export function LiveSession() {
         status={selectedStudentForDrawer ? (attendance[selectedStudentForDrawer.id]?.status || 'Alpa') : 'Alpa'}
         onProgressChange={handleProgressChange}
         onStatusChange={handleAttendanceChange}
+        onNotesChange={(studentId, noteVal) => {
+          handleProgressChange(studentId, 'notes', noteVal);
+          setAttendance(prev => ({
+            ...prev,
+            [studentId]: { ...prev[studentId], notes: noteVal }
+          }));
+        }}
+        studentNotes={selectedStudentForDrawer ? (progress[selectedStudentForDrawer.id]?.notes || attendance[selectedStudentForDrawer.id]?.notes || '') : ''}
         currentGrade={currentGradeObj}
         meetingNumber={meetingNumber}
         studentIndex={selectedStudentForDrawer ? students.findIndex(s => s.id === selectedStudentForDrawer.id) : 0}

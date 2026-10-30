@@ -1,6 +1,7 @@
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { db } from './firebase';
 import { addAuditLog } from './db';
+import { handleFirestoreError, OperationType } from './db/types';
 
 export interface SchoolConfig {
   schoolName: string; // e.g. "SMP Negeri 102 Jakarta"
@@ -9,8 +10,8 @@ export interface SchoolConfig {
   headmasterName: string; // e.g. "Dra. Hj. Sri Rahayu, M.Pd."
   headmasterNip: string; // e.g. "19680512 199412 2 001"
   headmasterSignature?: string; // base64 PNG data URL
-  coordinatorName?: string; // e.g. "H. Ahmad Fauzi, S.Pd.I" (Pembina Rohis/Admin)
-  coordinatorNip?: string; // e.g. "19790415 200801 1 012"
+  coordinatorName?: string; // e.g. "Muhamad Sulkhi, S.Pd.I." (Pembina Rohis/Admin)
+  coordinatorNip?: string; // e.g. "199403112023211010"
   coordinatorSignature?: string; // base64 PNG data URL (Tanda tangan Admin/Pembina)
   kkm: number; // e.g. 75 or 78
   academicYear: string; // e.g. "2026/2027"
@@ -28,8 +29,8 @@ export const DEFAULT_SCHOOL_CONFIG: SchoolConfig = {
   headmasterName: 'Dra. Hj. Sri Rahayu, M.Pd.',
   headmasterNip: '19680512 199412 2 001',
   headmasterSignature: '',
-  coordinatorName: 'H. Ahmad Fauzi, S.Pd.I',
-  coordinatorNip: '19790415 200801 1 012',
+  coordinatorName: 'Muhamad Sulkhi, S.Pd.I.',
+  coordinatorNip: '199403112023211010',
   coordinatorSignature: '',
   kkm: 75,
   academicYear: '2026/2027',
@@ -49,6 +50,13 @@ export function getStoredSchoolConfig(): SchoolConfig {
     const raw = localStorage.getItem(LOCAL_STORAGE_SCHOOL_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
+      // Auto-migrasi jika cache lokal masih menyimpan nama placeholder lama
+      if (parsed.coordinatorName === 'H. Ahmad Fauzi, S.Pd.I' || !parsed.coordinatorName) {
+        parsed.coordinatorName = 'Muhamad Sulkhi, S.Pd.I.';
+      }
+      if (parsed.coordinatorNip === '19790415 200801 1 012' || !parsed.coordinatorNip) {
+        parsed.coordinatorNip = '199403112023211010';
+      }
       return {
         ...DEFAULT_SCHOOL_CONFIG,
         ...parsed,
@@ -72,21 +80,98 @@ export async function getSchoolConfig(): Promise<SchoolConfig> {
     const snap = await getDoc(docRef);
     if (snap.exists()) {
       const remoteData = snap.data() as Partial<SchoolConfig>;
+      // Auto-migrasi data cloud jika dokumen Firestore lama masih memuat nama placeholder
+      let hasMigrated = false;
+      if (remoteData.coordinatorName === 'H. Ahmad Fauzi, S.Pd.I' || !remoteData.coordinatorName) {
+        remoteData.coordinatorName = 'Muhamad Sulkhi, S.Pd.I.';
+        hasMigrated = true;
+      }
+      if (remoteData.coordinatorNip === '19790415 200801 1 012' || !remoteData.coordinatorNip) {
+        remoteData.coordinatorNip = '199403112023211010';
+        hasMigrated = true;
+      }
+      
       const merged: SchoolConfig = {
         ...DEFAULT_SCHOOL_CONFIG,
         ...remoteData,
         kkm: Number(remoteData.kkm) || DEFAULT_SCHOOL_CONFIG.kkm,
       };
+      
       try {
         localStorage.setItem(LOCAL_STORAGE_SCHOOL_KEY, JSON.stringify(merged));
       } catch {}
+
+      if (hasMigrated) {
+        // Tulis balik pembaruan ke Firestore agar permanen
+        try {
+          await setDoc(docRef, { coordinatorName: merged.coordinatorName, coordinatorNip: merged.coordinatorNip }, { merge: true });
+        } catch {}
+      }
+
       return merged;
+    } else {
+      // Inisialisasi dokumen konfigurasi sekolah di Firestore jika belum ada
+      try {
+        await setDoc(docRef, DEFAULT_SCHOOL_CONFIG, { merge: true });
+      } catch {}
     }
   } catch (err) {
     console.warn('Firestore offline / izin terbatas saat membaca konfigurasi sekolah:', err);
   }
 
   return cached;
+}
+
+/**
+ * Berlangganan (real-time listener) ke dokumen settings/school_config di Firestore.
+ * Mengembalikan fungsi unsubscribe.
+ */
+export function subscribeToSchoolConfig(callback: (config: SchoolConfig) => void): () => void {
+  const cached = getStoredSchoolConfig();
+  callback(cached);
+
+  const docRef = doc(db, 'settings', 'school_config');
+  const unsubscribe = onSnapshot(
+    docRef,
+    (snap) => {
+      if (snap.exists()) {
+        const remoteData = snap.data() as Partial<SchoolConfig>;
+        let hasMigrated = false;
+        if (remoteData.coordinatorName === 'H. Ahmad Fauzi, S.Pd.I' || !remoteData.coordinatorName) {
+          remoteData.coordinatorName = 'Muhamad Sulkhi, S.Pd.I.';
+          hasMigrated = true;
+        }
+        if (remoteData.coordinatorNip === '19790415 200801 1 012' || !remoteData.coordinatorNip) {
+          remoteData.coordinatorNip = '199403112023211010';
+          hasMigrated = true;
+        }
+
+        const merged: SchoolConfig = {
+          ...DEFAULT_SCHOOL_CONFIG,
+          ...remoteData,
+          kkm: Number(remoteData.kkm) || DEFAULT_SCHOOL_CONFIG.kkm,
+        };
+
+        try {
+          localStorage.setItem(LOCAL_STORAGE_SCHOOL_KEY, JSON.stringify(merged));
+        } catch {}
+
+        if (hasMigrated) {
+          setDoc(docRef, { coordinatorName: merged.coordinatorName, coordinatorNip: merged.coordinatorNip }, { merge: true }).catch(() => {});
+        }
+
+        callback(merged);
+      } else {
+        setDoc(docRef, DEFAULT_SCHOOL_CONFIG, { merge: true }).catch(() => {});
+        callback(DEFAULT_SCHOOL_CONFIG);
+      }
+    },
+    (err) => {
+      handleFirestoreError(err, OperationType.GET, 'settings/school_config');
+    }
+  );
+
+  return unsubscribe;
 }
 
 /**

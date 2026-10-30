@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { db } from '../../services/firebase';
+import { handleFirestoreError, OperationType } from '../../services/db/types';
 import { Student, Group, Mentor, StudentAttendance, StudentProgress } from '../../services/db';
 import { APP_LOGO } from '../../assets/logo';
 import { getPublicStudentUrl } from '../../utils/studentUtils';
 import { format } from 'date-fns';
 import { id as localeId } from 'date-fns/locale';
 import { Printer, Download, Edit3, Check, X, ShieldCheck } from 'lucide-react';
-import { getStoredSchoolConfig, getSchoolConfig, SchoolConfig } from '../../services/schoolConfig';
+import { getStoredSchoolConfig, subscribeToSchoolConfig, SchoolConfig } from '../../services/schoolConfig';
 
 interface OfficialReportSheetProps {
   student: Student;
@@ -43,44 +46,75 @@ export function OfficialReportSheet({
 }: OfficialReportSheetProps) {
   // Read dynamic school configuration
   const [schoolConfig, setSchoolConfig] = useState<SchoolConfig>(() => getStoredSchoolConfig());
+  const [liveMentor, setLiveMentor] = useState<Mentor | null | undefined>(mentor);
 
   useEffect(() => {
-    let isMounted = true;
+    setLiveMentor(mentor);
+  }, [mentor]);
 
-    async function loadFreshConfig() {
-      try {
-        const fresh = await getSchoolConfig();
-        if (isMounted && fresh) {
-          setSchoolConfig(fresh);
-        }
-      } catch {}
-    }
-    loadFreshConfig();
+  // Real-time listener untuk settings/school_config dan mentors/{mentorId}
+  useEffect(() => {
+    // 1. Subscribe to school config real-time updates in Firestore
+    const unsubscribeConfig = subscribeToSchoolConfig((cfg) => {
+      setSchoolConfig(cfg);
+    });
 
+    // Event listener sebagai fallback jika ada event lokal
     const handleConfigUpdate = (e: Event) => {
       const customEvent = e as CustomEvent<SchoolConfig>;
       if (customEvent.detail) {
         setSchoolConfig(customEvent.detail);
-      } else {
-        loadFreshConfig();
       }
     };
     window.addEventListener('school_config_updated', handleConfigUpdate);
     window.addEventListener('storage', handleConfigUpdate);
+
+    // 2. Subscribe to live mentor data in Firestore if mentor ID exists
+    let unsubscribeMentor: (() => void) | null = null;
+    const targetMentorId = mentor?.id || group?.mentorId;
+    if (targetMentorId) {
+      try {
+        const mentorDocRef = doc(db, 'mentors', targetMentorId);
+        unsubscribeMentor = onSnapshot(
+          mentorDocRef,
+          (snap) => {
+            if (snap.exists()) {
+              const remoteData = snap.data() as Partial<Mentor>;
+              setLiveMentor((prev) => ({
+                id: targetMentorId,
+                name: remoteData.name || prev?.name || 'Mentor',
+                email: remoteData.email || prev?.email || '',
+                role: 'mentor',
+                signature: remoteData.signature !== undefined ? remoteData.signature : prev?.signature,
+                groupId: remoteData.groupId || prev?.groupId,
+                ...remoteData,
+              }));
+            }
+          },
+          (err) => {
+            handleFirestoreError(err, OperationType.GET, `mentors/${targetMentorId}`);
+          }
+        );
+      } catch (e) {
+        console.warn('Gagal memasang listener mentor real-time:', e);
+      }
+    }
+
     return () => {
-      isMounted = false;
+      unsubscribeConfig();
+      if (unsubscribeMentor) unsubscribeMentor();
       window.removeEventListener('school_config_updated', handleConfigUpdate);
       window.removeEventListener('storage', handleConfigUpdate);
     };
-  }, []);
+  }, [mentor?.id, group?.mentorId]);
 
   const activeYear = academicYear || schoolConfig.academicYear || '2026/2027';
   const activeSemester = semester || schoolConfig.semester || 'Ganjil';
   const activeHeadmasterName = headmasterName || schoolConfig.headmasterName || 'Dra. Hj. Sri Rahayu, M.Pd.';
   const activeHeadmasterNip = headmasterNip || schoolConfig.headmasterNip || '19680512 199412 2 001';
   const activeHeadmasterSignature = schoolConfig.headmasterSignature || '';
-  const activeCoordinatorName = schoolConfig.coordinatorName || 'H. Ahmad Fauzi, S.Pd.I';
-  const activeCoordinatorNip = schoolConfig.coordinatorNip || '19790415 200801 1 012';
+  const activeCoordinatorName = schoolConfig.coordinatorName || 'Muhamad Sulkhi, S.Pd.I.';
+  const activeCoordinatorNip = schoolConfig.coordinatorNip || '199403112023211010';
   const activeCoordinatorSignature = schoolConfig.coordinatorSignature || '';
   const activeKkm = kkm ?? schoolConfig.kkm ?? 75;
   const activeSchoolName = schoolConfig.schoolName || 'SMP Negeri 102 Jakarta';
@@ -320,35 +354,13 @@ export function OfficialReportSheet({
       >
         {/* 1. KOP SURAT RESMI KEDINASAN */}
         <div className="flex items-center justify-between pb-3 border-b-2 border-black relative">
-          {/* Logo Kiri (Lambang Jaya Raya DKI Jakarta / Pendidikan) */}
+          {/* Logo Kiri (Logo Resmi SMP Negeri 102 Jakarta) */}
           <div className="w-[20mm] h-[20mm] shrink-0 flex items-center justify-center">
-            <svg
-              viewBox="0 0 100 100"
+            <img
+              src="/smp102-logo.jpg"
+              alt="Logo SMP Negeri 102 Jakarta"
               className="w-full h-full object-contain"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              {/* Simplified Official DKI Seal Vector */}
-              <path
-                d="M50 5 L85 22 V55 C85 75 50 95 50 95 C50 95 15 75 15 55 V22 Z"
-                fill="#F8FAFC"
-                stroke="#172033"
-                strokeWidth="3.5"
-              />
-              <path
-                d="M50 12 L78 26 V52 C78 68 50 85 50 85 C50 85 22 68 22 52 V26 Z"
-                fill="#C99A2E"
-                opacity="0.15"
-              />
-              {/* Monas & Gate symbol */}
-              <path d="M47 30 H53 V52 H47 Z" fill="#172033" />
-              <path d="M42 52 H58 V68 H42 Z" fill="#0362D0" opacity="0.3" stroke="#172033" strokeWidth="2" />
-              <circle cx="50" cy="27" r="4" fill="#C99A2E" />
-              <path d="M35 68 H65 V74 H35 Z" fill="#172033" />
-              <path d="M28 74 H72 V78 H28 Z" fill="#172033" />
-              {/* Waves of Jaya Raya */}
-              <path d="M30 82 Q50 86 70 82" stroke="#0362D0" strokeWidth="2.5" strokeLinecap="round" />
-            </svg>
+            />
           </div>
 
           {/* Teks Lembaga & Sekolah */}
@@ -418,7 +430,7 @@ export function OfficialReportSheet({
             </div>
             <div className="flex">
               <span className="w-32 font-bold text-slate-700">Pembimbing / Mentor</span>
-              <span className="font-medium text-black">: {mentor?.name || 'Ustadz Pembina BTQ'}</span>
+              <span className="font-medium text-black">: {liveMentor?.name || 'Ustadz Pembina BTQ'}</span>
             </div>
           </div>
         </div>
@@ -595,9 +607,9 @@ export function OfficialReportSheet({
               </div>
 
               <div className="my-auto flex items-center justify-center min-h-[48px]">
-                {mentor?.signature ? (
+                {liveMentor?.signature ? (
                   <img 
-                    src={mentor.signature} 
+                    src={liveMentor.signature} 
                     alt="Tanda Tangan Mentor" 
                     className="max-h-14 max-w-[130px] object-contain mx-auto" 
                   />
@@ -608,7 +620,7 @@ export function OfficialReportSheet({
 
               <div>
                 <div className="border-b border-black w-40 mx-auto mb-1"></div>
-                <p className="font-bold text-black underline">{mentor?.name || 'Ustadz Pembimbing'}</p>
+                <p className="font-bold text-black underline">{liveMentor?.name || 'Ustadz Pembimbing'}</p>
                 <p className="text-[10px] text-slate-500 font-sans italic">Mentor Halaqah</p>
               </div>
             </div>

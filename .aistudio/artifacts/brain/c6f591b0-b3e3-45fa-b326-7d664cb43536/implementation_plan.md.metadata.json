@@ -1,6 +1,6 @@
 {
-  "summary":  "Implementation plan for ensuring all popups and modals are layered above top header and bottom navbar with z-index z-[60] and max-height max-h-[85vh] with internal scrolling.",
-  "updatedAt":  "2026-10-26T11:20:33.792825071Z",
+  "summary":  "Rencana implementasi sinkronisasi data profil dan tanda tangan Pembina Rohis, Kepala Sekolah, serta Mentor secara real-time dari koleksi Firestore settings/school_config dan mentors/{mentorId} ke lembar rapor siswa.",
+  "updatedAt":  "2026-10-28T11:50:06.359735622Z",
   "requestFeedback":  true,
   "userFacing":  true
 }

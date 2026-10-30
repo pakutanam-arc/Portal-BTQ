@@ -125,6 +125,8 @@ export interface StudentProgress {
   memorizedSurah?: string;
   writing: number;
   total: number;
+  notes?: string;
+  ayatRange?: string;
 }
 
 export interface AppNotification {

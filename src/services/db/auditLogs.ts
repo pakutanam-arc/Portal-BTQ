@@ -73,7 +73,7 @@ export async function logSystemActivity(
   }
 }
 
-export async function getSystemActivities(): Promise<SystemActivity[]> {
+export async function getSystemActivities(limitCount: number = 30): Promise<SystemActivity[]> {
   const activities: SystemActivity[] = [];
 
   const iconMap: Record<string, string> = {
@@ -102,7 +102,7 @@ export async function getSystemActivities(): Promise<SystemActivity[]> {
 
   try {
     const actCol = collection(db, 'system_activities');
-    const actSnap = await getDocs(query(actCol, orderBy('createdAt', 'desc'), limit(30)));
+    const actSnap = await getDocs(query(actCol, orderBy('createdAt', 'desc'), limit(limitCount)));
     if (!actSnap.empty) {
       actSnap.docs.forEach(docSnap => {
         const data = docSnap.data();
